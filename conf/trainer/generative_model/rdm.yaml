@@ -1,0 +1,46 @@
+_target_: bayesflow.simulation.GenerativeModel
+prior:
+  _target_: bayesflow.simulation.Prior
+  prior_fun:
+    _target_: priors.rdm_prior_simple
+    _partial_: true
+    drift_mean_loc: 3
+    drift_mean_scale: 0.5
+    drift_diff_loc: 1.5
+    drift_diff_scale: 0.5
+    sd_true_loc: 1
+    sd_true_scale: 0.5
+    threshold_shape: 10
+    threshold_scale: 0.2
+    t0_loc: 0.3
+    t0_scale: 0.2
+    rng:
+      _target_: utils.get_default_rng
+  param_names:
+    - $v_{mean}$
+    - $v_{diff}$
+    - $s_{true}$
+    - a
+    - $t_{0}$
+simulator:
+  _target_: bayesflow.simulation.Simulator
+  simulator_fun:
+    _target_: simulation.rdm_experiment_simple
+    _partial_: true
+    rng:
+      _target_: numpy.random.default_rng
+      seed: ${seed}
+  context_generator:
+    _target_: bayesflow.simulation.ContextGenerator
+    non_batchable_context_fun:
+      _target_: design.random_num_obs_discrete
+      _partial_: true
+      values:
+      - 100
+      - 250
+      - 500
+      - 1000
+      rng:
+        _target_: numpy.random.default_rng
+        seed: ${seed}
+skip_test: false

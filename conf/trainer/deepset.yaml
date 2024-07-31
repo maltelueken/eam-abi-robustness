@@ -1,0 +1,15 @@
+defaults:
+  - _trainer
+
+amortizer:
+  summary_net:
+    _target_: bayesflow.summary_networks.DeepSet
+    summary_dim: 32
+    num_dense_s1: 2
+    num_dense_s2: 2
+    num_dense_s3: 2
+    num_equiv: 2
+    dense_s1_args: null
+    dense_s2_args: null
+    dense_s3_args: null
+    pooling_fun: mean

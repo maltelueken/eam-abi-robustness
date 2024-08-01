@@ -6,18 +6,18 @@ def rdm_experiment_simple(
 ):
     """Simulates data from a single subject in a multi-alternative response times experiment."""
     num_accumulators = 2
-    v_mean = theta[0]
-    v_diff = theta[1]
+    v_intercept = theta[0]
+    v_slope = theta[1]
     s_true = theta[2]
     s_false = 1.0
-    a = theta[3]
+    B = theta[3]
     t0 = theta[4]
 
-    v = np.hstack([v_mean + 0.5*v_diff, v_mean - 0.5*v_diff])
+    v = np.hstack([v_intercept, v_intercept + v_slope])
     s = np.hstack([s_true, s_false])
 
-    mu = a / v
-    lam = (a / s) ** 2
+    mu = B / v
+    lam = (B / s) ** 2
 
     # First passage time
     fpt = np.zeros((num_accumulators, num_obs))

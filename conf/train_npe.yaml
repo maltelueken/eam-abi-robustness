@@ -6,8 +6,12 @@ hydra:
 
 defaults:
   - _self_
+  - prior_stats: rdm
   - trainer: settransformer
 
 tags: ["train_npe"]
 
 seed: 2024
+
+diag_batch_size: 1000
+diag_num_posterior_samples: 1000

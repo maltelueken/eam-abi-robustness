@@ -3,7 +3,7 @@ import os
 import pickle
 
 import numpy as np
-from scipy import stats
+from scipy import special, stats
 
 logger = logging.getLogger(__name__)
 
@@ -50,11 +50,57 @@ def truncated_normal_rvs(
     )
 
 
+def truncated_normal_moments(loc: float, scale: float, moment: str):
+    a = (0 - loc) / scale
+
+    result = stats.truncnorm.stats(a, np.inf, loc=loc, scale=scale, moments=moment)
+
+    if moment == "v":
+        return np.sqrt(result)
+
+    return result
+
+
+def log_truncated_normal_moments(loc: float, scale: float, moment: str, size=1000000):
+    a = (0 - loc) / scale
+
+    x = np.log(stats.truncnorm.rvs(a, np.inf, loc=loc, scale=scale, size=size))
+
+    if moment == "v":
+        return np.std(x)
+
+    return x.mean()
+
+
+def gamma_moments(shape: float, scale: float, moment: str):
+    result = stats.gamma.stats(a=shape, scale=scale, moments=moment)
+
+    if moment == "v":
+        return np.sqrt(result)
+
+    return result
+
+
+def log_gamma_mean(shape, scale):
+    return special.digamma(shape) + np.log(scale)
+
+
+def log_gamma_sd(shape):
+    return np.sqrt(special.polygamma(1, shape))
+
+
+def log_gamma_moments(shape: float, scale: float, moment: str):
+    if moment == "v":
+        return log_gamma_sd(shape)
+
+    return log_gamma_mean(shape, scale)
+
+
 def rdm_prior_simple(
-    drift_mean_loc,
-    drift_mean_scale,
-    drift_diff_loc,
-    drift_diff_scale,
+    drift_intercept_loc,
+    drift_intercept_scale,
+    drift_slope_loc,
+    drift_slope_scale,
     sd_true_loc,
     sd_true_scale,
     threshold_shape,
@@ -64,10 +110,10 @@ def rdm_prior_simple(
     rng=None,
 ):
     drift_mean = truncated_normal_rvs(
-        drift_mean_loc, drift_mean_scale, random_state=rng
+        drift_intercept_loc, drift_intercept_scale, random_state=rng
     )
     drift_diff = truncated_normal_rvs(
-        drift_diff_loc, drift_diff_scale, random_state=rng
+        drift_slope_loc, drift_slope_scale, random_state=rng
     )
     sd_true = truncated_normal_rvs(
         sd_true_loc, sd_true_scale, random_state=rng

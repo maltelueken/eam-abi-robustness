@@ -1,17 +1,17 @@
 import numpy as np
 
 
-def rdm_configurator_simple(forward_dict):
+def rdm_configurator_simple(forward_dict, prior_means, prior_stds, transform_fun):
     """Configure the output of the GenerativeModel for a BayesFlow setup."""
 
     # Prepare placeholder dict
     out_dict = {}
 
     # Get data generating parameters
-    out_dict["parameters"] = forward_dict["prior_draws"].astype(np.float32)
+    params = transform_fun(forward_dict["prior_draws"].astype(np.float32))
 
     # Standardize parameters
-    # out_dict["parameters"] = (params - prior_means) / prior_stds
+    out_dict["parameters"] = (params - prior_means) / prior_stds
 
     # Extract simulated response times
     data = forward_dict["sim_data"]

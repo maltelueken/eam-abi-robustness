@@ -13,6 +13,11 @@ amortizer:
 configurator:
   _target_: configuration.rdm_configurator_simple
   _partial_: true
+  prior_means: ${prior_stats.prior_means}
+  prior_stds: ${prior_stats.prior_stds}
+  transform_fun:
+    _target_: numpy.log
+    _partial_: true
 default_lr: 0.00005
 checkpoint_path: checkpoints
 skip_checks: false

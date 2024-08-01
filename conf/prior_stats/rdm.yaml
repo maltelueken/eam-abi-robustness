@@ -1,0 +1,46 @@
+prior_means:
+  _target_: numpy.array
+  object:
+    - _target_: priors.log_truncated_normal_moments
+      loc: ${trainer.generative_model.prior.prior_fun.drift_intercept_loc}
+      scale: ${trainer.generative_model.prior.prior_fun.drift_intercept_scale}
+      moment: m
+    - _target_: priors.log_truncated_normal_moments
+      loc: ${trainer.generative_model.prior.prior_fun.drift_slope_loc}
+      scale: ${trainer.generative_model.prior.prior_fun.drift_slope_scale}
+      moment: m
+    - _target_: priors.log_truncated_normal_moments
+      loc: ${trainer.generative_model.prior.prior_fun.sd_true_loc}
+      scale: ${trainer.generative_model.prior.prior_fun.sd_true_scale}
+      moment: m
+    - _target_: priors.log_gamma_moments
+      shape: ${trainer.generative_model.prior.prior_fun.threshold_shape}
+      scale: ${trainer.generative_model.prior.prior_fun.threshold_scale}
+      moment: m
+    - _target_: priors.log_truncated_normal_moments
+      loc: ${trainer.generative_model.prior.prior_fun.t0_loc}
+      scale: ${trainer.generative_model.prior.prior_fun.t0_scale}
+      moment: m
+prior_stds:
+  _target_: numpy.array
+  object:
+    - _target_: priors.log_truncated_normal_moments
+      loc: ${trainer.generative_model.prior.prior_fun.drift_intercept_loc}
+      scale: ${trainer.generative_model.prior.prior_fun.drift_intercept_scale}
+      moment: v
+    - _target_: priors.log_truncated_normal_moments
+      loc: ${trainer.generative_model.prior.prior_fun.drift_slope_loc}
+      scale: ${trainer.generative_model.prior.prior_fun.drift_slope_scale}
+      moment: v
+    - _target_: priors.log_truncated_normal_moments
+      loc: ${trainer.generative_model.prior.prior_fun.sd_true_loc}
+      scale: ${trainer.generative_model.prior.prior_fun.sd_true_scale}
+      moment: v
+    - _target_: priors.log_gamma_moments
+      shape: ${trainer.generative_model.prior.prior_fun.threshold_shape}
+      scale: ${trainer.generative_model.prior.prior_fun.threshold_scale}
+      moment: v
+    - _target_: priors.log_truncated_normal_moments
+      loc: ${trainer.generative_model.prior.prior_fun.t0_loc}
+      scale: ${trainer.generative_model.prior.prior_fun.t0_scale}
+      moment: v

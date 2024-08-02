@@ -24,7 +24,7 @@ def check_npe_diagnostics(cfg: DictConfig):
     prior_means = instantiate(cfg["prior_stats"]["prior_means"])
     prior_stds = instantiate(cfg["prior_stats"]["prior_stds"])
 
-    sample_sizes = instantiate(cfg["num_obs_diag"])
+    sample_sizes = instantiate(cfg["diag_num_obs"])
 
     for t in sample_sizes:
         logger.info("Creating diag data for sample size %s", t)

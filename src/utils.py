@@ -37,23 +37,25 @@ def create_pushforward_plot(sims, check_dist=False):
     fig, axarr = plt.subplots(2, 5, figsize=(12, 4))
     for i, ax in enumerate(axarr.flat):
         rt = sims["sim_data"][i, :, 0].flatten()
+        resp = sims["sim_data"][i, :, 1].flatten()
         sns.histplot(
-            rt, color="maroon", alpha=0.75, ax=ax
+            rt[resp == 1], color="darkgreen", alpha=0.5, ax=ax
+        )
+        sns.histplot(
+            rt[resp == 0], color="maroon", alpha=0.5, ax=ax
         )
         sns.despine(ax=ax)
+        ax.vlines([rt[resp == 1].mean(), rt[resp == 0].mean()], ymin = 0, ymax = 1, color = ["darkgreen", "maroon"], linestyle = '-', 
+           transform=ax.get_xaxis_transform())
         ax.text(
             0.9,
             0.9,
-            np.round(sims["sim_data"][i, :, 1].mean(), 2),
+            np.round(resp.mean(), 2),
             horizontalalignment="center",
             verticalalignment="center",
             transform=ax.transAxes,
         )
-        if check_dist:
-            valid_rt_dist = check_rt_dist(rt)
-            ax.text(0.7, 0.9, valid_rt_dist, horizontalalignment="center",
-                verticalalignment="center",
-                transform=ax.transAxes,)
+        # ax.legend(labels=["False", "True"])
         ax.set_ylabel("")
         ax.set_yticks([])
         if i > 4:

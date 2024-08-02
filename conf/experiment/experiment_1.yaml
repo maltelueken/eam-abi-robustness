@@ -1,9 +1,9 @@
 # @package _global_
 hydra:
   run:
-    dir: outputs/experiment-1/${hydra.job.override_dirname}
+    dir: outputs/experiment_1/${hydra.job.override_dirname}
   sweep:
-    dir: multirun/experiment-1
+    dir: multirun/experiment_1
     subdir: ${hydra.job.override_dirname}
   job:
     config:

@@ -8,7 +8,7 @@ amortizer:
     attention_settings:
       num_heads: 4
       key_dim: 32
-      dropout: 0.1
+      dropout: 0.0
     dense_settings: null
     use_layer_norm: false
     num_dense_fc: 2

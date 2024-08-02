@@ -33,10 +33,11 @@ def truncated_t_rvs(
 def truncated_normal_rvs(
     loc: float,
     scale: float,
+    lower: float = 0.0,
     size: int = 1,
     random_state: int = None,
 ) -> np.ndarray:
-    quantile_l = stats.norm.cdf(0, loc=loc, scale=scale)
+    quantile_l = stats.norm.cdf(lower, loc=loc, scale=scale)
 
     if random_state is not None:
         probs = random_state.uniform(quantile_l, 1.0, size=size)
@@ -50,8 +51,8 @@ def truncated_normal_rvs(
     )
 
 
-def truncated_normal_moments(loc: float, scale: float, moment: str):
-    a = (0 - loc) / scale
+def truncated_normal_moments(loc: float, scale: float, lower: float = 0.0, moment: str = "m"):
+    a = (lower - loc) / scale
 
     result = stats.truncnorm.stats(a, np.inf, loc=loc, scale=scale, moments=moment)
 
@@ -61,8 +62,8 @@ def truncated_normal_moments(loc: float, scale: float, moment: str):
     return result
 
 
-def log_truncated_normal_moments(loc: float, scale: float, moment: str, size=1000000):
-    a = (0 - loc) / scale
+def log_truncated_normal_moments(loc: float, scale: float, lower: float = 0.0, moment: str = "m", size=1000000):
+    a = (lower - loc) / scale
 
     x = np.log(stats.truncnorm.rvs(a, np.inf, loc=loc, scale=scale, size=size))
 
@@ -107,6 +108,7 @@ def rdm_prior_simple(
     threshold_scale,
     t0_loc,
     t0_scale,
+    t0_lower,
     rng=None,
 ):
     drift_mean = truncated_normal_rvs(
@@ -121,6 +123,6 @@ def rdm_prior_simple(
     threshold = rng.gamma(
         shape=threshold_shape, scale=threshold_scale
     )
-    t0 = truncated_normal_rvs(t0_loc, t0_scale, random_state=rng)
+    t0 = truncated_normal_rvs(t0_loc, t0_scale, lower=t0_lower, random_state=rng)
 
     return np.hstack((drift_mean, drift_diff, sd_true, threshold, t0))

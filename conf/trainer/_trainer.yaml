@@ -2,6 +2,7 @@ defaults:
   - generative_model: rdm
 
 _target_: bayesflow.trainers.Trainer
+# _target_: trainer.CustomTrainer
 amortizer:
   _target_: bayesflow.amortizers.AmortizedPosterior
   inference_net:
@@ -10,6 +11,7 @@ amortizer:
     num_coupling_layers: 6
     coupling_design: affine
   summary_net:
+  summary_loss_fun: MMD
 configurator:
   _target_: configuration.rdm_configurator_simple
   _partial_: true

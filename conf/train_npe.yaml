@@ -1,8 +1,10 @@
 # @package _global_
 
 hydra:
+  job:
+    chdir: True
   run:
-    dir: outputs/${hydra.job.name}
+    dir: outputs/${hydra.job.override_dirname}
 
 defaults:
   - _self_
@@ -14,4 +16,14 @@ tags: ["train_npe"]
 seed: 2024
 
 diag_batch_size: 1000
-diag_num_posterior_samples: 1000
+diag_sbc_num_posterior_samples: 100
+diag_sens_num_posterior_samples: 1000
+diag_transform: true
+
+num_obs_diag:
+  _target_: numpy.array
+  object: ${trainer.generative_model.simulator.context_generator.non_batchable_context_fun.values}
+
+epochs: 5
+iterations_per_epoch: 500
+batch_size: 128

@@ -10,14 +10,15 @@ def rdm_experiment_simple(
     v_slope = theta[1]
     s_true = theta[2]
     s_false = 1.0
-    B = theta[3]
+    b = theta[3]
     t0 = theta[4]
 
+    # Acc1 = false, Acc2 = true
     v = np.hstack([v_intercept, v_intercept + v_slope])
-    s = np.hstack([s_true, s_false])
+    s = np.hstack([s_false, s_true])
 
-    mu = B / v
-    lam = (B / s) ** 2
+    mu = b / v
+    lam = (b / s) ** 2
 
     # First passage time
     fpt = np.zeros((num_accumulators, num_obs))

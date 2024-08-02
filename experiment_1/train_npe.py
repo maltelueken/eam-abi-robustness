@@ -13,7 +13,7 @@ def train_npe(cfg: DictConfig):
     trainer = instantiate(cfg["trainer"])
 
     # logger.info("Starting training with: %s", cfg["trainer"]["dynamic"])
-    history = trainer.train_online(epochs=10, iterations_per_epoch=500, batch_size=64)
+    history = trainer.train_online(epochs=cfg["epochs"], iterations_per_epoch=cfg["iterations_per_epoch"], batch_size=cfg["batch_size"], reuse_optimizer=True)
     # logger.info("Finished training")
 
     history.to_csv("history.csv")

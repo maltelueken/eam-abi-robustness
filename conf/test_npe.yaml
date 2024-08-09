@@ -3,11 +3,6 @@
 hydra:
   job:
     chdir: True
-    config:
-        override_dirname:
-          exclude_keys:
-            - i
-            - t
   run:
     dir: outputs/${hydra.job.override_dirname}
   job_logging:
@@ -26,7 +21,14 @@ seed: 2024
 
 test_batch_size: 1000
 test_transform: true
+test_num_posterior_samples: 2000
 
 test_num_obs:
   _target_: numpy.array
   object: ${trainer.generative_model.simulator.context_generator.non_batchable_context_fun.values}
+
+mcmc_model_fun:
+  _target_: pymc_models.rdm_model_simple
+  _partial_: true
+
+mcmc_chains: 4

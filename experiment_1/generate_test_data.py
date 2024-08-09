@@ -3,10 +3,12 @@ import logging
 import pickle
 
 import hydra
+import deepdish as dd
 import numpy as np
 from hydra.utils import instantiate
 from omegaconf import DictConfig
 
+from data import save_hdf5
 from utils import create_missing_dirs
 
 logger = logging.getLogger(__name__)
@@ -29,7 +31,9 @@ def generate_test_data(cfg: DictConfig):
         )
         data["sim_non_batchable_context"] = t
 
-        np.savez_compressed(os.path.join("test_data", f"test_data_sample_size_{t}.npz"), data)
+        # with open(os.path.join("test_data", f"test_data_sample_size_{t}.pkl"), "wb") as file:
+            # pickle.dump(data, file)
+        save_hdf5(os.path.join("test_data", f"test_data_sample_size_{t}.hdf5"), data)
 
         logger.info("Shape of generated data set: %s", data["sim_data"].shape)
 

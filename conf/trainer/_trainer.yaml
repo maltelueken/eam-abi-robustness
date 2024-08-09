@@ -20,6 +20,6 @@ configurator:
   transform_fun:
     _target_: numpy.log
     _partial_: true
-default_lr: 0.00005
+default_lr: 0.005 # Lower LR is important
 checkpoint_path: checkpoints
 skip_checks: false

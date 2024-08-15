@@ -1,10 +1,15 @@
 
 import os
 
+import blackjax
+import jax
+import jax.numpy as jnp
 import numpy as np
 import pymc as pm
 import pytensor
 import pytensor.tensor as pt
+
+from datetime import date
 
 from pytensor.tensor.random.op import RandomVariable
 from pymc.distributions import transforms
@@ -12,6 +17,7 @@ from pymc.distributions.dist_math import check_parameters
 from pymc.distributions.distribution import DIST_PARAMETER_TYPES, Continuous
 from pymc.distributions.shape_utils import rv_size_is_none
 from pymc.distributions.transforms import _default_transform
+from pymc.sampling_jax import get_jaxified_logp
 
 
 def inv_gauss_logpdf(t, mu, lam):
@@ -64,11 +70,11 @@ class RdmSimpleRV(RandomVariable):
         return rt, resp
 
 
-wald = RdmSimpleRV()
+rdm = RdmSimpleRV()
 
 
 class RdmSimple(Continuous):
-    rv_op = wald
+    rv_op = rdm
 
     @classmethod
     def dist(
@@ -131,7 +137,7 @@ def pos_cont_transform(op, rv):
     return transforms.log
 
 
-def rdm_model_simple(sim_data, **kwargs):
+def rdm_model_simple(sim_data):
     # home_dir = os.environ["HOME"]
     # # os.environ["PYTENSOR_FLAGS"] = f"compiledir_format=compiledir_mcmc_{index},base_compiledir={home_dir}/.pytensor"
 
@@ -153,6 +159,44 @@ def rdm_model_simple(sim_data, **kwargs):
         RdmSimple("ll_true", drift_winner=v_true, drift_loser=v_false, s_winner=s_true, s_loser=1.0, threshold=b, ndt=t0, observed=rt_true)
         RdmSimple("ll_false", drift_winner=v_false, drift_loser=v_true, s_winner=1.0, s_loser=s_true, threshold=b, ndt=t0, observed=rt_false)
 
-        trace = pm.sample(step=pm.step_methods.HamiltonianMC(), initvals={"v_intercept": 2, "v_slope": 1, "s_true": 1.0, "b": 2, "t0": 0.2}, **kwargs)
+    return get_jaxified_logp(model)
+
+
+def inference_loop(rng_key, kernel, initial_state, num_samples):
+    @jax.jit
+    def one_step(state, rng_key):
+        state, info = kernel(rng_key, state)
+        return state, (state, info)
+
+    keys = jax.random.split(rng_key, num_samples)
+    _, (states, infos) = jax.lax.scan(one_step, initial_state, keys)
+
+    return states, infos
+
+
+def warmup(sampler_fun, logdensity_fun, init_position, num_steps, rng_key, **kwargs):
+    adapt = blackjax.window_adaptation(sampler_fun, logdensity_fun, **kwargs)
+    (last_state, parameters), _ = adapt.run(rng_key, init_position, num_steps=num_steps)
+    kernel = sampler_fun(logdensity_fun, **parameters).step
+    return kernel, last_state, parameters
+
+
+def run_mcmc(sampler_fun, logdensity_fun, init_position, num_chains, num_steps_warmup, num_steps_sampling, rng_key=None, **kwargs):
+    if rng_key is None:
+        rng_key = jax.random.key(int(date.today().strftime("%Y%m%d")))
+
+    rng_key, warmup_key = jax.random.split(rng_key)
+
+    kernel, last_state, _ = warmup(sampler_fun, logdensity_fun, init_position, num_steps_warmup, warmup_key, **kwargs)
+
+    last_states = jax.vmap(lambda x: last_state)(np.arange(num_chains))
+
+    sample_keys = jax.random.split(rng_key, num_chains)
+
+    inference_loop_multiple_chains = jax.pmap(inference_loop, in_axes=(0, None, 0, None), static_broadcasted_argnums=(1, 3))
+
+    trace = inference_loop_multiple_chains(
+        sample_keys, kernel, last_states, num_steps_sampling
+    )
 
     return trace

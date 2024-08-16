@@ -112,11 +112,13 @@ class RdmSimple(Continuous):
         lam_winner = (threshold/s_winner)**2
         lam_loser = (threshold/s_loser)**2
 
-        f = inv_gauss_logpdf(value, mu_winner, lam_winner)
-
-        S = inv_gauss_logsf(value, mu_loser, lam_loser)
-
-        logp = f + S
+        logp = pt.switch(
+            value > 0.0,
+            # Log pdf of winner
+            inv_gauss_logpdf(value, mu_winner, lam_winner) + 
+            # Log survival of loser
+            inv_gauss_logsf(value, mu_loser, lam_loser), pt.log(min_p)
+        )
 
         logp = pt.maximum(pt.switch(pt.isinf(logp) | pt.isnan(logp), pt.log(min_p), logp), pt.log(min_p))
 
@@ -138,11 +140,6 @@ def pos_cont_transform(op, rv):
 
 
 def rdm_model_simple(sim_data):
-    # home_dir = os.environ["HOME"]
-    # # os.environ["PYTENSOR_FLAGS"] = f"compiledir_format=compiledir_mcmc_{index},base_compiledir={home_dir}/.pytensor"
-
-    # pytensor.config.compile_dir = f"{home_dir}/.pytensor/compiledir_mcmc_{index}"
-
     rt_true = sim_data[sim_data[:, 1] == 1, 0]
     rt_false = sim_data[sim_data[:, 1] == 0, 0]
 
@@ -181,13 +178,13 @@ def warmup(sampler_fun, logdensity_fun, init_position, num_steps, rng_key, **kwa
     return kernel, last_state, parameters
 
 
-def run_mcmc(sampler_fun, logdensity_fun, init_position, num_chains, num_steps_warmup, num_steps_sampling, rng_key=None, **kwargs):
+def run_mcmc(logdensity_fun, sampler_fun, init_position, num_chains, num_steps_warmup, num_steps_sampling, rng_key=None, **kwargs):
     if rng_key is None:
         rng_key = jax.random.key(int(date.today().strftime("%Y%m%d")))
-
+    
     rng_key, warmup_key = jax.random.split(rng_key)
 
-    kernel, last_state, _ = warmup(sampler_fun, logdensity_fun, init_position, num_steps_warmup, warmup_key, **kwargs)
+    kernel, last_state, _ = warmup(sampler_fun, logdensity_fun, jnp.log(init_position), num_steps_warmup, warmup_key, **kwargs)
 
     last_states = jax.vmap(lambda x: last_state)(np.arange(num_chains))
 

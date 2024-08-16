@@ -19,16 +19,36 @@ tags: ["test_npe"]
 
 seed: 2024
 
-test_batch_size: 1000
+test_batch_size: 50
 test_transform: true
 test_num_posterior_samples: 2000
 
 test_num_obs:
   _target_: numpy.array
-  object: ${trainer.generative_model.simulator.context_generator.non_batchable_context_fun.values}
+  object: # ${trainer.generative_model.simulator.context_generator.non_batchable_context_fun.values}
+    - 1000
 
 mcmc_model_fun:
   _target_: pymc_models.rdm_model_simple
   _partial_: true
 
-mcmc_chains: 4
+mcmc_sampler: blackjax.nuts
+
+mcmc_sampling_fun:
+  _target_: pymc_models.run_mcmc
+  _partial_: true
+  _convert_: object
+  init_position:
+    _target_: numpy.array
+    object:
+      - 2
+      - 2
+      - 1
+      - 2
+      - 0.05
+  num_chains: 4
+  num_steps_warmup: 2000
+  num_steps_sampling: ${test_num_posterior_samples}
+  rng_key:
+    _target_: jax.random.key
+    seed: 2024

@@ -5,6 +5,7 @@ from typing import Iterable
 import arviz as az
 import matplotlib.pyplot as plt
 import numpy as np
+import pandas as pd
 import scipy.stats as stats
 import seaborn as sns
 
@@ -62,3 +63,74 @@ def create_pushforward_plot(sims, check_dist=False):
             ax.set_xlabel("Simulated RTs (seconds)")
     fig.tight_layout()
     return fig
+
+
+def create_robustness_2d_plot(
+    posterior_draws_npe,
+    posterior_draws_mcmc,
+    prior_draws=None,
+    param_names=None,
+    height=3,
+    label_fontsize=14,
+    legend_fontsize=16,
+    tick_fontsize=12,
+    npe_color="#8f2727",
+    mcmc_color="darkgreen",
+    prior_color="gray",
+    post_alpha=0.9,
+    prior_alpha=0.7,
+):
+    _, n_params = posterior_draws_npe.shape
+
+    # Pack posterior draws into a dataframe
+    posterior_draws_npe_df = pd.DataFrame(posterior_draws_npe, columns=param_names)
+
+    # Add posterior
+    g = sns.PairGrid(posterior_draws_npe_df, height=height)
+    g.map_diag(sns.histplot, fill=True, color=npe_color, alpha=post_alpha, kde=True)
+    g.map_lower(sns.kdeplot, fill=True, color=npe_color, alpha=post_alpha)
+
+    # Add prior, if given
+    if posterior_draws_mcmc is not None:
+        posterior_draws_mcmc_df = pd.DataFrame(posterior_draws_mcmc, columns=param_names)
+        g.data = posterior_draws_mcmc_df
+        g.map_diag(sns.histplot, fill=True, color=mcmc_color, alpha=post_alpha, kde=True, zorder=-2)
+        g.map_lower(sns.kdeplot, fill=True, color=mcmc_color, alpha=post_alpha, zorder=-2)
+
+    # Add prior, if given
+    if prior_draws is not None:
+        prior_draws_df = pd.DataFrame(prior_draws, columns=param_names)
+        g.data = prior_draws_df
+        g.map_diag(sns.histplot, fill=True, color=prior_color, alpha=prior_alpha, kde=True, zorder=-1)
+        g.map_lower(sns.kdeplot, fill=True, color=prior_color, alpha=prior_alpha, zorder=-1)
+
+    # Add legend, if prior also given
+    # if prior_draws is not None or prior is not None:
+    #     handles = [
+    #         Line2D(xdata=[], ydata=[], color=post_color, lw=3, alpha=post_alpha),
+    #         Line2D(xdata=[], ydata=[], color=prior_color, lw=3, alpha=prior_alpha),
+    #     ]
+    #     g.fig.legend(handles, ["Posterior", "Prior"], fontsize=legend_fontsize, loc="center right")
+
+    # Remove upper axis
+    for i, j in zip(*np.triu_indices_from(g.axes, 1)):
+        g.axes[i, j].axis("off")
+
+    # Modify tick sizes
+    for i, j in zip(*np.tril_indices_from(g.axes, 1)):
+        g.axes[i, j].tick_params(axis="both", which="major", labelsize=tick_fontsize)
+        g.axes[i, j].tick_params(axis="both", which="minor", labelsize=tick_fontsize)
+
+    # Add nice labels
+    for i, param_name in enumerate(param_names):
+        g.axes[i, 0].set_ylabel(param_name, fontsize=label_fontsize)
+        g.axes[len(param_names) - 1, i].set_xlabel(param_name, fontsize=label_fontsize)
+
+    # Add grids
+    for i in range(n_params):
+        for j in range(n_params):
+            g.axes[i, j].grid(alpha=0.5)
+
+    g.tight_layout()
+
+    return g.figure

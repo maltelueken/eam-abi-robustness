@@ -10,5 +10,3 @@ hydra:
       override_dirname:
         exclude_keys:
           - experiment
-          - i
-          - t

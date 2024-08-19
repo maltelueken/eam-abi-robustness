@@ -10,6 +10,7 @@ import scipy.stats as stats
 import seaborn as sns
 
 from hydra.utils import instantiate
+from matplotlib.lines import Line2D
 
 
 def create_missing_dirs(dir_list):
@@ -69,14 +70,16 @@ def create_robustness_2d_plot(
     posterior_draws_npe,
     posterior_draws_mcmc,
     prior_draws=None,
+    true_values=None,
     param_names=None,
     height=3,
     label_fontsize=14,
     legend_fontsize=16,
     tick_fontsize=12,
-    npe_color="#8f2727",
-    mcmc_color="darkgreen",
-    prior_color="gray",
+    npe_color="maroon",
+    mcmc_color="steelblue",
+    prior_color="gold",
+    true_color="black",
     post_alpha=0.9,
     prior_alpha=0.7,
 ):
@@ -87,15 +90,15 @@ def create_robustness_2d_plot(
 
     # Add posterior
     g = sns.PairGrid(posterior_draws_npe_df, height=height)
-    g.map_diag(sns.histplot, fill=True, color=npe_color, alpha=post_alpha, kde=True)
-    g.map_lower(sns.kdeplot, fill=True, color=npe_color, alpha=post_alpha)
+    g.map_diag(sns.histplot, fill=True, color=npe_color, alpha=post_alpha, kde=True, zorder=0)
+    g.map_lower(sns.kdeplot, fill=True, color=npe_color, alpha=post_alpha, zorder=0)
 
     # Add prior, if given
     if posterior_draws_mcmc is not None:
         posterior_draws_mcmc_df = pd.DataFrame(posterior_draws_mcmc, columns=param_names)
         g.data = posterior_draws_mcmc_df
-        g.map_diag(sns.histplot, fill=True, color=mcmc_color, alpha=post_alpha, kde=True, zorder=-2)
-        g.map_lower(sns.kdeplot, fill=True, color=mcmc_color, alpha=post_alpha, zorder=-2)
+        g.map_diag(sns.histplot, fill=True, color=mcmc_color, alpha=post_alpha, kde=True, zorder=1)
+        g.map_lower(sns.kdeplot, fill=True, color=mcmc_color, alpha=post_alpha, zorder=1)
 
     # Add prior, if given
     if prior_draws is not None:
@@ -104,13 +107,19 @@ def create_robustness_2d_plot(
         g.map_diag(sns.histplot, fill=True, color=prior_color, alpha=prior_alpha, kde=True, zorder=-1)
         g.map_lower(sns.kdeplot, fill=True, color=prior_color, alpha=prior_alpha, zorder=-1)
 
+    if true_values is not None:
+        true_values_df = pd.DataFrame(np.expand_dims(true_values, 0), columns=param_names)
+        g.data = true_values_df
+        g.map_diag(sns.rugplot, color=true_color, height=0.1, zorder=2)
+        g.map_lower(sns.scatterplot, color=true_color, marker="X", zorder=2)
+
     # Add legend, if prior also given
-    # if prior_draws is not None or prior is not None:
-    #     handles = [
-    #         Line2D(xdata=[], ydata=[], color=post_color, lw=3, alpha=post_alpha),
-    #         Line2D(xdata=[], ydata=[], color=prior_color, lw=3, alpha=prior_alpha),
-    #     ]
-    #     g.fig.legend(handles, ["Posterior", "Prior"], fontsize=legend_fontsize, loc="center right")
+    handles = [
+        Line2D(xdata=[], ydata=[], color=npe_color, lw=3, alpha=post_alpha),
+        Line2D(xdata=[], ydata=[], color=mcmc_color, lw=3, alpha=post_alpha),
+        Line2D(xdata=[], ydata=[], color=prior_color, lw=3, alpha=prior_alpha),
+    ]
+    g.fig.legend(handles, ["Posterior NPE", "Posterior MCMC", "Prior"], fontsize=legend_fontsize, loc="center right")
 
     # Remove upper axis
     for i, j in zip(*np.triu_indices_from(g.axes, 1)):

@@ -27,14 +27,16 @@ def check_robustness(cfg: DictConfig):
 
         mcmc_samples = load_hdf5(os.path.join("mcmc_samples", f"fit_mcmc_sample_size_{t}.hdf5"))
 
-        posterior_mcmc = mcmc_samples["position"]
+        posterior_mcmc = mcmc_samples["samples"]
         is_converged = np.all(blackjax.diagnostics.potential_scale_reduction(posterior_mcmc, chain_axis=1, sample_axis=2) < 1.01, axis=1)
         posterior_mcmc = np.exp(np.reshape(posterior_mcmc, (posterior_mcmc.shape[0], -1, posterior_mcmc.shape[3])))[is_converged,:,:]
         prior_samples = data["prior_draws"][is_converged,:]
         npe_samples = load_hdf5(os.path.join("npe_samples", f"posterior_samples_sample_size_{t}.hdf5"))
         posterior_npe = np.exp(npe_samples["samples"])
 
-        fig = create_robustness_2d_plot(posterior_npe[0,:,:], posterior_mcmc[0,:,:], prior_samples, param_names)
+        idx = 1
+
+        fig = create_robustness_2d_plot(posterior_npe[idx,:,:], posterior_mcmc[idx,:,:], prior_samples, prior_samples[idx,:], param_names)
         fig.savefig(os.path.join("robustness", f"robustness_2d_sample_size_{t}.png"))
 
         logger.info("%s datasets did not converge: %s", 1.0-is_converged.mean(), np.where(~is_converged))

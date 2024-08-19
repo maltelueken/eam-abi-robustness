@@ -19,7 +19,7 @@ tags: ["test_npe"]
 
 seed: 2024
 
-test_batch_size: 50
+test_batch_size: 100
 test_transform: true
 test_num_posterior_samples: 2000
 

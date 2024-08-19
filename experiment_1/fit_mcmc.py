@@ -40,13 +40,21 @@ def fit_mcmc(cfg: DictConfig):
 
         trace_data = {}
 
-        with concurrent.futures.ThreadPoolExecutor(max_workers=sim_data.shape[0]) as executor:
+        logger.info("Vectorizing model function over %s datasets", sim_data.shape[0])
+        model_fun_vec = np.vectorize(model_fun, signature="(m,n)->()")
+
+        model_funs_with_data = model_fun_vec(sim_data)
+
+        num_workers = int(multiprocessing.cpu_count()/cfg["mcmc_sampling_fun"]["num_chains"])
+
+        logger.info("Estimating posteriors with MCMC across %s workers", num_workers)
+        with concurrent.futures.ThreadPoolExecutor(max_workers=num_workers) as executor:
             future_to_idx = {
                 executor.submit(
                     sampling_fun,
-                    model_fun(sim_data[i, :, :])
+                    fun
                 ): i
-                for i in range(sim_data.shape[0])
+                for i, fun in enumerate(model_funs_with_data)
             }
 
             for future in tqdm.tqdm(concurrent.futures.as_completed(future_to_idx), total=len(future_to_idx)):
@@ -61,8 +69,7 @@ def fit_mcmc(cfg: DictConfig):
         # Sort results so that order matches that of test data
         trace_data = dict(sorted(trace_data.items()))
 
-        print(trace_data.keys())
-
+        # Save to hdf5 file
         save_hdf5(os.path.join("mcmc_samples", f"fit_mcmc_sample_size_{t}.hdf5"), {"samples": np.array(list(trace_data.values()))})
 
 

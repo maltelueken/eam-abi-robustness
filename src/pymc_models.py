@@ -22,26 +22,29 @@ from pymc.sampling_jax import get_jaxified_logp
 
 def inv_gauss_logpdf(t, mu, lam):
 
-    e = -(lam/(2*t)) * (t**2/mu**2 - 2*t/mu  + 1)
+    e = -(lam / (2 * t)) * (t**2 / mu**2 - 2 * t / mu  + 1)
 
-    x = e + .5*pt.log(lam) - .5*pt.log(2*t**3*pt.pi)
+    x = e + 0.5 * pt.log(lam) - 0.5 * pt.log(2 * t**3 * pt.pi)
 
     return x
 
 
 def standard_normal_logcdf(t):
-    return pt.log(0.5 * (1 + pt.erf(t/pt.sqrt(2))))
+    return pt.switch(
+        pt.lt(t, -1.0),
+        pt.log(pt.erfcx(-t / pt.sqrt(2.0)) / 2.0) - pt.sqr(t) / 2.0,
+        pt.log1p(-pt.erfc(t / pt.sqrt(2.0)) / 2.0),
+    )
 
 
 def inv_gauss_logsf(t, mu, lam):
     """https://journal.r-project.org/archive/2016-1/giner-smyth.pdf"""
-    lam = 1/lam
-    qm = t/mu
-    lamm = lam*mu
-    r = pt.sqrt(t*lam)
-    a = standard_normal_logcdf(-(qm - 1.0)/r)
-    b = 2.0/lamm + standard_normal_logcdf(-(qm + 1.0)/r)
-    return a + pt.log1p(-pt.exp(b - a))
+    mu = mu / lam
+    t = t / lam
+    r = 1.0 / pt.sqrt(t)
+    a = standard_normal_logcdf(-r * ((t / mu) - 1.0))
+    b = 2.0 / mu + standard_normal_logcdf(-r * (t + mu) / mu)
+    return pt.switch(pt.isposinf(t), -np.inf, pt.switch(pt.gt(t, 0.0), a + pt.log1p(-pt.exp(b - a)), 0.0))
 
 
 class RdmSimpleRV(RandomVariable):

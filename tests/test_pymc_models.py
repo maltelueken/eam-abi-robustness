@@ -4,12 +4,15 @@ import pytest
 
 import scipy.stats as stats
 
-from pymc_models import inv_gauss_logpdf, inv_gauss_logsf
+from pymc_models import inv_gauss_logpdf, inv_gauss_logsf, standard_normal_logcdf
 
 
-def test_inv_gauss_logpdf():
-    x = np.array([-1, 0, 0.01, 0.5, 1.0, 2.0, 10.0, 100.0, 500.0, np.inf, -np.inf])
+@pytest.fixture()
+def x():
+    return np.array([-1, 0, 0.01, 0.5, 1.0, 2.0, 10.0, 100.0, 500.0, np.inf, -np.inf])
 
+
+def test_inv_gauss_logpdf(x):
     mu = np.array([0.01, 1.0, 2.0, 10.0, 100.0])
     lam = np.array([0.01, 1.0, 2.0, 10.0, 100.0])
 
@@ -18,19 +21,24 @@ def test_inv_gauss_logpdf():
             ref = stats.invgauss.logpdf(x, mu=m/l, scale=l)
             res = inv_gauss_logpdf(x, m, l).eval()
 
-            assert pytest.approx(res[np.isfinite(res)] == ref[np.isfinite(ref)])
+            assert np.all(pytest.approx(res[np.isfinite(res)]) == ref[np.isfinite(ref)])
+
+
+def test_standard_normal_logcdf(x):
+    ref = stats.norm.logcdf(x)
+    res = standard_normal_logcdf(x).eval()
+    assert np.all(pytest.approx(res) == ref)
 
 
 # @pytest.mark.xfail()
-def test_inv_gauss_logsf():
-    x = np.array([-1, 0, 0.01, 0.5, 1.0, 2.0, 10.0, 100.0, 500.0, np.inf, -np.inf])
+def test_inv_gauss_logsf(x):
 
     mu = np.array([0.01, 1.0, 2.0, 10.0, 100.0])
     lam = np.array([0.01, 1.0, 2.0, 10.0, 100.0])
 
     for m in mu:
         for l in lam:
-            ref = stats.invgauss.logsf(x, mu=2/2, scale=2)
-            res = inv_gauss_logsf(x, 2, 2).eval()
+            ref = stats.invgauss.logsf(x, mu=m/l, scale=l)
+            res = inv_gauss_logsf(x, m, l).eval()
 
-            assert np.all(res == ref)
+            assert np.all(pytest.approx(ref) == res)

@@ -12,6 +12,15 @@ classifiers = [
     "License :: OSI Approved :: MIT License",
     "Operating System :: OS Independent",
 ]
+dependencies = [
+  "bayesflow",
+  "pymc",
+  "jax",
+  "blackjax",
+  "tensorflow[and-cuda]",
+  "hydra-core",
+  "pytest"
+]
 
 [build-system]
 requires = ["setuptools>=61.0"]

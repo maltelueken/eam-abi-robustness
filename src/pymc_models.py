@@ -106,7 +106,7 @@ class RdmSimple(Continuous):
         return drift_winner
 
 
-    def logp(value, drift_winner, drift_loser, s_winner, s_loser, threshold, ndt, min_p = 1e-14):
+    def logp(value, drift_winner, drift_loser, s_winner, s_loser, threshold, ndt, min_p = 1e-22):
         value = value - ndt
         value = pt.maximum(0.0, value)
 
@@ -175,19 +175,20 @@ def inference_loop(rng_key, kernel, initial_state, num_samples):
 
 
 def warmup(sampler_fun, logdensity_fun, init_position, num_steps, rng_key, **kwargs):
+    print(init_position)
     adapt = blackjax.window_adaptation(sampler_fun, logdensity_fun, **kwargs)
     (last_state, parameters), _ = adapt.run(rng_key, init_position, num_steps=num_steps)
     kernel = sampler_fun(logdensity_fun, **parameters).step
     return kernel, last_state, parameters
 
 
-def run_mcmc(logdensity_fun, sampler_fun, init_position, num_chains, num_steps_warmup, num_steps_sampling, rng_key=None, **kwargs):
+def run_mcmc(logdensity_fun, sampler_fun, init_position, num_chains, num_steps_warmup, num_steps_sampling, min_rt=None, rng_key=None, **kwargs):
     if rng_key is None:
         rng_key = jax.random.key(int(date.today().strftime("%Y%m%d")))
     
     rng_key, warmup_key = jax.random.split(rng_key)
 
-    kernel, last_state, _ = warmup(sampler_fun, logdensity_fun, jnp.log(init_position), num_steps_warmup, warmup_key, **kwargs)
+    kernel, last_state, _ = warmup(sampler_fun, logdensity_fun, init_position, num_steps_warmup, warmup_key, **kwargs)
 
     last_states = jax.vmap(lambda x: last_state)(np.arange(num_chains))
 
@@ -199,4 +200,30 @@ def run_mcmc(logdensity_fun, sampler_fun, init_position, num_chains, num_steps_w
         sample_keys, kernel, last_states, num_steps_sampling
     )
 
+    return trace
+
+
+def run_mcmc_robust(logdensity_fun, sampler_fun, init_position, num_chains, num_steps_warmup, num_steps_sampling, min_rt=None, rng_key=None, **kwargs):
+    
+    is_converged = False
+    iter = 0
+    max_iter = 10
+
+    if min_rt is not None:
+        init_position[-1] = 0.5 * min_rt
+
+    init_position = np.log(init_position)
+
+    while iter < max_iter and not is_converged:
+        if iter > 0:
+            new_init_position = init_position + np.random.normal(size=len(init_position))
+        else:
+            new_init_position = init_position
+
+        trace = run_mcmc(logdensity_fun, sampler_fun, new_init_position, num_chains, num_steps_warmup, num_steps_sampling, rng_key, **kwargs)
+
+        is_converged = np.all(blackjax.diagnostics.potential_scale_reduction(trace[0].position) < 1.01)
+
+        iter += 1
+    
     return trace

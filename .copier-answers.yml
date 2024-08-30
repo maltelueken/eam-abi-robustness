@@ -1,0 +1,24 @@
+# Changes here will be overwritten by Copier
+SelectCitation:
+- AddCitationFile_flag
+SelectCodeQualityFeatures:
+- AddLocalTests_flag
+- AddLinting_flag
+- AddEditorConfig_flag
+SelectCommunityFeatures: []
+SelectDocumentationFeatures: []
+SelectPublishReleaseFeatures:
+- SelectCitation_flag
+_commit: 0.5.0-371-gcd751a0
+_src_path: https://github.com/nlesc/python-template.git
+copyright_holder: Malte Luken
+email: mluken@esciencecenter.nl
+full_name: Malte Luken
+github_organization: maltelueken
+keywords: ''
+license: Apachev2
+package_name: eam_abi_robustness
+package_short_description: Model training and analysis pipeline for assessing the
+    robustness of amortized Bayesian inference for evidence accumulation models.
+template_profile: ask
+version: 0.0.1

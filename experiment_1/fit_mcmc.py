@@ -38,6 +38,8 @@ def fit_mcmc(cfg: DictConfig):
         # Need to pass sampler_fun here because it is not a function or class
         sampling_fun = instantiate(cfg["mcmc_sampling_fun"], sampler_fun=get_object(cfg["mcmc_sampler"]))
 
+        prior_fun = instantiate(cfg["trainer"]["generative_model"]["prior"]["prior_fun"], rng = np.random.default_rng(cfg["seed"] + 1))
+
         trace_data = {}
 
         logger.info("Vectorizing model function over %s datasets", sim_data.shape[0])
@@ -54,6 +56,7 @@ def fit_mcmc(cfg: DictConfig):
                 executor.submit(
                     sampling_fun,
                     fun,
+                    # prior_fun=prior_fun,
                     min_rt=min_rt[i]
                 ): i
                 for i, fun in enumerate(model_funs_with_data)

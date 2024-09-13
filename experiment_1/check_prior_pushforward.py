@@ -18,9 +18,9 @@ def prior_pushforward(cfg: DictConfig):
     fig = trainer.generative_model.prior.plot_prior2d(n_samples=500)
     fig.savefig("prior2d.png")
 
-    example_sim = trainer.generative_model(batch_size=10, **{"sim_args": {"num_obs": 500}})
+    example_sim = trainer.generative_model(batch_size=25, **{"sim_args": {"num_obs": 500}})
 
-    fig = create_pushforward_plot(example_sim)
+    fig = create_pushforward_plot(example_sim, param_names=trainer.generative_model.prior.param_names)
     fig.savefig("prior_pushforward.png")
 
 

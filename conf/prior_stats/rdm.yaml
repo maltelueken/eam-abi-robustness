@@ -11,8 +11,8 @@ prior_means:
         loc: ${trainer.generative_model.prior.prior_fun.drift_slope_loc}
         scale: ${trainer.generative_model.prior.prior_fun.drift_slope_scale}
         moment: m
-      - _target_: priors.log_truncated_normal_moments
-        loc: ${trainer.generative_model.prior.prior_fun.sd_true_loc}
+      - _target_: priors.log_gamma_moments
+        shape: ${trainer.generative_model.prior.prior_fun.sd_true_shape}
         scale: ${trainer.generative_model.prior.prior_fun.sd_true_scale}
         moment: m
       - _target_: priors.log_gamma_moments
@@ -23,7 +23,7 @@ prior_means:
         loc: ${trainer.generative_model.prior.prior_fun.t0_loc}
         scale: ${trainer.generative_model.prior.prior_fun.t0_scale}
         moment: m
-  decimals: 1
+  decimals: 2
 prior_stds:
   _target_: numpy.round
   a:
@@ -37,8 +37,8 @@ prior_stds:
         loc: ${trainer.generative_model.prior.prior_fun.drift_slope_loc}
         scale: ${trainer.generative_model.prior.prior_fun.drift_slope_scale}
         moment: v
-      - _target_: priors.log_truncated_normal_moments
-        loc: ${trainer.generative_model.prior.prior_fun.sd_true_loc}
+      - _target_: priors.log_gamma_moments
+        shape: ${trainer.generative_model.prior.prior_fun.sd_true_shape}
         scale: ${trainer.generative_model.prior.prior_fun.sd_true_scale}
         moment: v
       - _target_: priors.log_gamma_moments
@@ -49,4 +49,4 @@ prior_stds:
         loc: ${trainer.generative_model.prior.prior_fun.t0_loc}
         scale: ${trainer.generative_model.prior.prior_fun.t0_scale}
         moment: v
-  decimals: 1
+  decimals: 2

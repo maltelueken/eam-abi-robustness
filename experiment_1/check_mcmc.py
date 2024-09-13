@@ -29,8 +29,9 @@ def check_mcmc(cfg: DictConfig):
         mcmc_samples = load_hdf5(os.path.join("mcmc_samples", f"fit_mcmc_sample_size_{t}.hdf5"))
 
         posterior_samples = mcmc_samples["samples"]
-        is_converged = np.all(blackjax.diagnostics.potential_scale_reduction(posterior_samples, chain_axis=1, sample_axis=2) < 1.01, axis=1)
+        is_converged = np.all(blackjax.diagnostics.potential_scale_reduction(posterior_samples, chain_axis=1, sample_axis=2) < cfg["psrf_threshold"], axis=1)
         posterior_samples = np.exp(np.reshape(posterior_samples, (posterior_samples.shape[0], -1, posterior_samples.shape[3])))[is_converged,:,:]
+        # posterior_samples[:, :, -1] += 0.1
         prior_samples = data["prior_draws"][is_converged,:]
 
         logger.info("%s datasets did not converge: %s", 1.0-is_converged.mean(), np.where(~is_converged))

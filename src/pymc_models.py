@@ -1,4 +1,5 @@
 
+import logging
 import os
 
 import blackjax
@@ -18,6 +19,9 @@ from pymc.distributions.distribution import DIST_PARAMETER_TYPES, Continuous
 from pymc.distributions.shape_utils import rv_size_is_none
 from pymc.distributions.transforms import _default_transform
 from pymc.sampling_jax import get_jaxified_logp
+
+
+logger = logging.getLogger(__name__)
 
 
 def inv_gauss_logpdf(t, mu, lam):
@@ -106,7 +110,7 @@ class RdmSimple(Continuous):
         return drift_winner
 
 
-    def logp(value, drift_winner, drift_loser, s_winner, s_loser, threshold, ndt, min_p = 1e-22):
+    def logp(value, drift_winner, drift_loser, s_winner, s_loser, threshold, ndt, min_p = 1e-10):
         value = value - ndt
         value = pt.maximum(0.0, value)
 
@@ -147,11 +151,11 @@ def rdm_model_simple(sim_data):
     rt_false = sim_data[sim_data[:, 1] == 0, 0]
 
     with pm.Model() as model:
-        v_intercept = pm.Truncated("v_intercept", pm.Normal.dist(3, 0.5), lower=0)
-        v_slope = pm.Truncated("v_slope", pm.Normal.dist(2, 0.5), lower=0)
-        s_true = pm.Truncated("s_true", pm.Normal.dist(1, 0.5), lower=0)
-        b = pm.Gamma("b", 10, 0.2)
-        t0 = pm.Truncated("t0", pm.Normal.dist(0.3, 0.2), lower=0)
+        v_intercept = pm.TruncatedNormal("v_intercept", mu=1.0, sigma=0.5, lower=0)
+        v_slope = pm.TruncatedNormal("v_slope", mu=1.5, sigma=0.5, lower=0)
+        s_true = pm.Gamma("s_true", alpha=12, beta=1.0 / 0.1)
+        b = pm.Gamma("b", alpha=8, beta=1.0 / 0.15)
+        t0 = pm.TruncatedNormal("t0", mu=0.3, sigma=0.3, lower=0)
 
         v_true = v_intercept+v_slope
         v_false = v_intercept
@@ -175,9 +179,11 @@ def inference_loop(rng_key, kernel, initial_state, num_samples):
 
 
 def warmup(sampler_fun, logdensity_fun, init_position, num_steps, rng_key, **kwargs):
-    print(init_position)
+    logger.debug("Warmup initial position: %s", np.exp(init_position))
     adapt = blackjax.window_adaptation(sampler_fun, logdensity_fun, **kwargs)
     (last_state, parameters), _ = adapt.run(rng_key, init_position, num_steps=num_steps)
+    logger.debug("Warmup return state: %s", np.exp(last_state.position))
+    # logger.debug("Warmup return parameters: %s", parameters)
     kernel = sampler_fun(logdensity_fun, **parameters).step
     return kernel, last_state, parameters
 
@@ -188,7 +194,10 @@ def run_mcmc(logdensity_fun, sampler_fun, init_position, num_chains, num_steps_w
     
     rng_key, warmup_key = jax.random.split(rng_key)
 
-    kernel, last_state, _ = warmup(sampler_fun, logdensity_fun, init_position, num_steps_warmup, warmup_key, **kwargs)
+    if min_rt is not None:
+        init_position[-1] = 0.5 * min_rt
+
+    kernel, last_state, _ = warmup(sampler_fun, logdensity_fun, np.log(init_position), num_steps_warmup, warmup_key, **kwargs)
 
     last_states = jax.vmap(lambda x: last_state)(np.arange(num_chains))
 
@@ -200,30 +209,41 @@ def run_mcmc(logdensity_fun, sampler_fun, init_position, num_chains, num_steps_w
         sample_keys, kernel, last_states, num_steps_sampling
     )
 
+    # _ = trace[0].position[0, 0, 0].block_unitl_ready()
+
     return trace
 
 
-def run_mcmc_robust(logdensity_fun, sampler_fun, init_position, num_chains, num_steps_warmup, num_steps_sampling, min_rt=None, rng_key=None, **kwargs):
+def run_mcmc_robust(logdensity_fun, sampler_fun, prior_fun, init_position, num_chains, num_steps_warmup, num_steps_sampling, min_rt=None, rng_key=None, **kwargs):
     
     is_converged = False
     iter = 0
-    max_iter = 10
+    max_iter = 20
 
     if min_rt is not None:
         init_position[-1] = 0.5 * min_rt
 
-    init_position = np.log(init_position)
+    # init_position = np.log(init_position)
 
     while iter < max_iter and not is_converged:
         if iter > 0:
-            new_init_position = init_position + np.random.normal(size=len(init_position))
+            logger.info("Generating new initial parameters and trying sampling again")
+            logger.info("PSRF last sampling run: %s", psrf)
+            new_init_position = prior_fun()
         else:
             new_init_position = init_position
 
+        new_init_position = np.log(new_init_position)
+
         trace = run_mcmc(logdensity_fun, sampler_fun, new_init_position, num_chains, num_steps_warmup, num_steps_sampling, rng_key, **kwargs)
 
-        is_converged = np.all(blackjax.diagnostics.potential_scale_reduction(trace[0].position) < 1.01)
+        psrf = blackjax.diagnostics.potential_scale_reduction(trace[0].position)
+
+        is_converged = np.all(psrf < 1.01) and np.all(np.var(trace[0].position, axis=(0, 1)) > 10e-8)
 
         iter += 1
     
+    if not is_converged:
+        logger.info("Sampler not converged")
+
     return trace

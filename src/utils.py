@@ -3,6 +3,7 @@ import os
 from typing import Iterable
 
 import arviz as az
+import jax
 import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
@@ -35,11 +36,12 @@ def sub_instantiate(cfg):
     return {k: instantiate(v) if isinstance(v, Iterable) and "_target_" in v else v for k, v in cfg.items()}
 
 
-def create_pushforward_plot(sims, check_dist=False):
-    fig, axarr = plt.subplots(2, 5, figsize=(12, 4))
+def create_pushforward_plot(sims, param_names=None):
+    fig, axarr = plt.subplots(5, 5, figsize=(12, 12))
     for i, ax in enumerate(axarr.flat):
         rt = sims["sim_data"][i, :, 0].flatten()
         resp = sims["sim_data"][i, :, 1].flatten()
+        params = sims["prior_draws"][i, :]
         sns.histplot(
             rt[resp == 1], color="darkgreen", alpha=0.5, ax=ax
         )
@@ -52,15 +54,29 @@ def create_pushforward_plot(sims, check_dist=False):
         ax.text(
             0.9,
             0.9,
-            np.round(resp.mean(), 2),
+            "Acc: " + str(np.round(resp.mean(), 2)),
             horizontalalignment="center",
             verticalalignment="center",
             transform=ax.transAxes,
         )
+        for i, p in enumerate(params):
+            if param_names is not None:
+                ps = param_names[i] + ": " + str(np.round(p, 2))
+            else:
+                ps = np.round(p, 2)
+            ax.text(
+                0.9,
+                0.8 - i * 0.1,
+                ps,
+                horizontalalignment="center",
+                verticalalignment="center",
+                transform=ax.transAxes,
+            )
+
         # ax.legend(labels=["False", "True"])
         ax.set_ylabel("")
         ax.set_yticks([])
-        if i > 4:
+        if i > 19:
             ax.set_xlabel("Simulated RTs (seconds)")
     fig.tight_layout()
     return fig
@@ -143,3 +159,29 @@ def create_robustness_2d_plot(
     g.tight_layout()
 
     return g.figure
+
+
+def create_profile_likelihood_plot(ll_fun, prior_draws, param_names=None, p_range=0.5, num_points=100):
+    p_grid = np.linspace(prior_draws - p_range / 2, prior_draws + p_range / 2, num_points)
+
+    x = np.tile(prior_draws, (num_points*len(prior_draws), 1))
+
+    for i in range(len(prior_draws)):
+        x[(i*num_points):((i+1)*num_points),i] = p_grid[:, i]
+
+    ll_prior = ll_fun(prior_draws)
+
+    ll = jax.vmap(ll_fun)(x)
+
+    fig, axes = plt.subplots(1, 5, figsize=(10, 2))
+
+    for i, ax in enumerate(axes):
+        ax.plot(x[(i*num_points):((i+1)*num_points), i], ll[(i*num_points):((i+1)*num_points)])
+        ax.plot(prior_draws[i], ll_fun(prior_draws), "o", color="red")
+        if param_names is not None:
+            ax.set_xlabel(param_names[i])
+        ax.set_ylabel("Log-likelihood")
+
+    fig.tight_layout()
+
+    return fig

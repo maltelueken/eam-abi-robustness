@@ -102,7 +102,7 @@ def rdm_prior_simple(
     drift_intercept_scale,
     drift_slope_loc,
     drift_slope_scale,
-    sd_true_loc,
+    sd_true_shape,
     sd_true_scale,
     threshold_shape,
     threshold_scale,
@@ -117,8 +117,8 @@ def rdm_prior_simple(
     drift_diff = truncated_normal_rvs(
         drift_slope_loc, drift_slope_scale, random_state=rng
     )
-    sd_true = truncated_normal_rvs(
-        sd_true_loc, sd_true_scale, random_state=rng
+    sd_true = rng.gamma(
+        shape=sd_true_shape, scale=sd_true_scale
     )
     threshold = rng.gamma(
         shape=threshold_shape, scale=threshold_scale

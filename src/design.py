@@ -1,8 +1,8 @@
 import numpy as np
 
 
-def random_num_obs_discrete(values, rng) -> int:
-    return rng.choice(values)
+def random_num_obs_discrete(batch_shape, values, rng) -> int:
+    return {"num_obs": np.tile(rng.choice(values), batch_shape)}
 
 
 def random_num_obs_range(start, end, step, rng) -> int:

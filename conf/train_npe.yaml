@@ -3,6 +3,8 @@
 hydra:
   job:
     chdir: True
+    env_set:
+      KERAS_BACKEND: jax
   run:
     dir: outputs/${hydra.job.override_dirname}
   job_logging:
@@ -12,22 +14,23 @@ hydra:
 
 defaults:
   - _self_
-  - prior_stats: rdm
-  - trainer: settransformer
+  - approximator: continuous_approximator
+  - simulator: rdm
+  - optimizer: adam
+  - callbacks: tensorboard
 
 tags: ["train_npe"]
 
 seed: 2024
 
-diag_batch_size: 1000
+diag_batch_size: 100
 diag_sbc_num_posterior_samples: 100
-diag_sens_num_posterior_samples: 1000
-diag_transform: true
+diag_sens_num_posterior_samples: 100
 
 diag_num_obs:
   _target_: numpy.array
-  object: ${trainer.generative_model.simulator.context_generator.non_batchable_context_fun.values}
+  object: ${simulator.design_fun.values}
 
-epochs: 5
+epochs: 100
 iterations_per_epoch: 500
-batch_size: 128
+batch_size: 64

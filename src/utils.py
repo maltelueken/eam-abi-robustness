@@ -36,12 +36,49 @@ def sub_instantiate(cfg):
     return {k: instantiate(v) if isinstance(v, Iterable) and "_target_" in v else v for k, v in cfg.items()}
 
 
-def create_pushforward_plot(sims, param_names=None):
+def convert_samples(forward_dict, param_names):
+    return np.array([forward_dict[key] for key in param_names]).squeeze().T
+
+
+def create_prior_2d_plot(prior_samples, param_names, height=2.5, color="#8f2727", **kwargs):
+    # Get latent dimensionality and prepare titles
+    dim = prior_samples.shape[-1]
+
+    # Convert samples to a pandas data frame
+    if param_names is None:
+        titles = [f"Prior Param. {i}" for i in range(1, dim + 1)]
+    else:
+        titles = [f"Prior {p}" for p in param_names]
+    data_to_plot = pd.DataFrame(prior_samples, columns=titles)
+
+    # Generate plots
+    g = sns.PairGrid(data_to_plot, height=height, **kwargs)
+    g.map_diag(sns.histplot, fill=True, color=color, alpha=0.9, kde=True)
+
+    # Kernel density estimation (KDE) may not always be possible
+    # (e.g. with parameters whose correlation is close to 1 or -1).
+    # In this scenario, a scatter-plot is generated instead.
+    try:
+        g.map_lower(sns.kdeplot, fill=True, color=color, alpha=0.9)
+    except Exception as e:
+        logging.warning("KDE failed due to the following exception:\n" + repr(e) + "\nSubstituting scatter plot.")
+        g.map_lower(sns.scatterplot, alpha=0.6, s=40, edgecolor="k", color=color)
+    g.map_upper(sns.scatterplot, alpha=0.6, s=40, edgecolor="k", color=color)
+
+    # Add grids
+    for i in range(dim):
+        for j in range(dim):
+            g.axes[i, j].grid(alpha=0.5)
+    g.tight_layout()
+    return g.fig
+
+
+def create_pushforward_plot(data, prior_samples, param_names=None):
     fig, axarr = plt.subplots(5, 5, figsize=(12, 12))
     for i, ax in enumerate(axarr.flat):
-        rt = sims["sim_data"][i, :, 0].flatten()
-        resp = sims["sim_data"][i, :, 1].flatten()
-        params = sims["prior_draws"][i, :]
+        rt = data[i, :, 0].flatten()
+        resp = data[i, :, 1].flatten()
+        params = prior_samples[i, :]
         sns.histplot(
             rt[resp == 1], color="darkgreen", alpha=0.5, ax=ax
         )

@@ -1,0 +1,6 @@
+defaults:
+- data_adapter: rdm_simple
+- inference_network: flow_matching
+- summary_network: set_transformer
+
+_target_: bayesflow.ContinuousApproximator

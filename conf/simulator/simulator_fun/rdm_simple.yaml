@@ -1,0 +1,10 @@
+_target_: simulation.batch_simulator
+_partial_: true
+simulator_fun:
+  _target_: simulation.rdm_experiment_simple
+  _partial_: true
+  s_false: 1
+  rng:
+    _target_: numpy.random.default_rng
+    seed: ${seed}
+    

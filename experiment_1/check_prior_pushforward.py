@@ -1,26 +1,32 @@
 import logging
 
-import bayesflow as bf
 import hydra
+import numpy as np
 from hydra.utils import instantiate
 from omegaconf import DictConfig
 
-from utils import create_pushforward_plot
+from utils import convert_samples, create_prior_2d_plot, create_pushforward_plot
 
 logger = logging.getLogger(__name__)
 
 
 @hydra.main(version_base=None, config_path="../conf", config_name="train_npe")
 def prior_pushforward(cfg: DictConfig):
-    trainer = instantiate(cfg["trainer"])
-    trainer.generative_model.simulator.context_gen = None
+    simulator = instantiate(cfg["simulator"])
+    data_adapter = instantiate(cfg["approximator"]["data_adapter"])
 
-    fig = trainer.generative_model.prior.plot_prior2d(n_samples=500)
+    param_names = data_adapter.keys["inference_variables"]
+
+    forward_dict = simulator.sample((500,), num_obs=np.tile(np.array([500]), (500,)))
+
+    prior_samples = convert_samples(forward_dict, param_names)
+
+    fig = create_prior_2d_plot(prior_samples, param_names)
     fig.savefig("prior2d.png")
 
-    example_sim = trainer.generative_model(batch_size=25, **{"sim_args": {"num_obs": 500}})
+    data = forward_dict[data_adapter.keys["summary_variables"][0]]
 
-    fig = create_pushforward_plot(example_sim, param_names=trainer.generative_model.prior.param_names)
+    fig = create_pushforward_plot(data[:25, :, :], prior_samples, param_names)
     fig.savefig("prior_pushforward.png")
 
 

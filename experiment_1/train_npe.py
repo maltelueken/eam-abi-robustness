@@ -1,24 +1,35 @@
+import os
+if "KERAS_BACKEND" not in os.environ:
+    # set this to "torch", "tensorflow", or "jax"
+    os.environ["KERAS_BACKEND"] = "jax"
 import logging
 
-import bayesflow as bf
 import hydra
 from hydra.utils import instantiate
-from omegaconf import DictConfig
+from omegaconf import DictConfig, OmegaConf
 
 logger = logging.getLogger(__name__)
 
 
 @hydra.main(version_base=None, config_path="../conf", config_name="train_npe")
 def train_npe(cfg: DictConfig):
-    trainer = instantiate(cfg["trainer"])
+    cfg = OmegaConf.to_object(cfg)
+    approximator = instantiate(cfg["approximator"])
+    approximator.data_adapter.transforms = [t for t in approximator.data_adapter.transforms]
+    simulator = instantiate(cfg["simulator"])
+    optimizer = instantiate(cfg["optimizer"])
 
-    history = trainer.train_online(epochs=cfg["epochs"], iterations_per_epoch=cfg["iterations_per_epoch"], batch_size=cfg["batch_size"], reuse_optimizer=True)
+    approximator.compile(optimizer=optimizer)
 
-    history.to_csv("history.csv")
+    callbacks = [callback for callback in instantiate(cfg["callbacks"])] # [keras.callbacks.TensorBoard()]
 
-    fig = bf.diagnostics.plot_losses(history)
-
-    fig.savefig("training_loss.png")
+    approximator.fit(
+        simulator=simulator,
+        epochs=cfg["epochs"],
+        num_batches=cfg["iterations_per_epoch"],
+        batch_size=cfg["batch_size"],
+        callbacks=callbacks,
+    )
 
 
 if __name__ == "__main__":

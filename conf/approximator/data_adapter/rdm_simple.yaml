@@ -1,0 +1,15 @@
+_target_: bayesflow.ContinuousApproximator.build_data_adapter
+inference_variables: ["v_intercept", "v_slope", "s_true", "b", "t0"]
+inference_conditions:
+- num_obs
+summary_variables:
+- x
+transforms:
+- _target_: bayesflow.data_adapters.transforms.Standardize
+  _args_:
+  - ["v_intercept", "v_slope", "s_true", "b", "t0"]
+- _target_: bayesflow.data_adapters.transforms.NumpyTransform
+  _args_:
+  - num_obs
+  forward: sqrt
+  inverse: square

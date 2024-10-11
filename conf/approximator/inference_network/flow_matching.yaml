@@ -1,0 +1,10 @@
+_target_: bayesflow.networks.FlowMatching
+subnet: mlp
+subnet_kwargs:
+  _target_: builtins.dict
+  depth: 6
+  width: 256
+base_distribution: normal
+integrator: euler
+use_optimal_transport: false
+optimal_transport_kwargs: null

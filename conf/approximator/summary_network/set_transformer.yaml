@@ -1,0 +1,19 @@
+defaults:
+- base_summary_network
+
+_target_: bayesflow.networks.SetTransformer
+summary_dim: 16
+num_attention_blocks: 2
+num_inducing_points: null
+num_seeds: 1
+key_dim: 32
+num_heads: 4
+dropout: 0.05
+num_dense_feedforward: 2
+dense_units: 128
+dense_activation: gelu
+kernel_initializer: he_normal
+use_bias: true
+layer_norm: true
+set_attention_output_dim: null
+seed_dim: null

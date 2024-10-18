@@ -1,52 +1,52 @@
 prior_means:
-  _target_: numpy.round
-  a:
-    _target_: numpy.array
-    object:
-      - _target_: priors.log_truncated_normal_moments
-        loc: ${trainer.generative_model.prior.prior_fun.drift_intercept_loc}
-        scale: ${trainer.generative_model.prior.prior_fun.drift_intercept_scale}
-        moment: m
-      - _target_: priors.log_truncated_normal_moments
-        loc: ${trainer.generative_model.prior.prior_fun.drift_slope_loc}
-        scale: ${trainer.generative_model.prior.prior_fun.drift_slope_scale}
-        moment: m
-      - _target_: priors.log_gamma_moments
-        shape: ${trainer.generative_model.prior.prior_fun.sd_true_shape}
-        scale: ${trainer.generative_model.prior.prior_fun.sd_true_scale}
-        moment: m
-      - _target_: priors.log_gamma_moments
-        shape: ${trainer.generative_model.prior.prior_fun.threshold_shape}
-        scale: ${trainer.generative_model.prior.prior_fun.threshold_scale}
-        moment: m
-      - _target_: priors.log_truncated_normal_moments
-        loc: ${trainer.generative_model.prior.prior_fun.t0_loc}
-        scale: ${trainer.generative_model.prior.prior_fun.t0_scale}
-        moment: m
-  decimals: 2
+  v_intercept:
+    _target_: priors.log_truncated_normal_moments
+    loc: ${simulator.prior_fun.drift_intercept_loc}
+    scale: ${simulator.prior_fun.drift_intercept_scale}
+    moment: m
+  v_slope:
+    _target_: priors.log_truncated_normal_moments
+    loc: ${simulator.prior_fun.drift_slope_loc}
+    scale: ${simulator.prior_fun.drift_slope_scale}
+    moment: m
+  s_true:
+    _target_: priors.log_gamma_moments
+    shape: ${simulator.prior_fun.sd_true_shape}
+    scale: ${simulator.prior_fun.sd_true_scale}
+    moment: m
+  b:
+    _target_: priors.log_gamma_moments
+    shape: ${simulator.prior_fun.threshold_shape}
+    scale: ${simulator.prior_fun.threshold_scale}
+    moment: m
+  t0:
+    _target_: priors.log_truncated_normal_moments
+    loc: ${simulator.prior_fun.t0_loc}
+    scale: ${simulator.prior_fun.t0_scale}
+    moment: m
 prior_stds:
-  _target_: numpy.round
-  a:
-    _target_: numpy.array
-    object:
-      - _target_: priors.log_truncated_normal_moments
-        loc: ${trainer.generative_model.prior.prior_fun.drift_intercept_loc}
-        scale: ${trainer.generative_model.prior.prior_fun.drift_intercept_scale}
-        moment: v
-      - _target_: priors.log_truncated_normal_moments
-        loc: ${trainer.generative_model.prior.prior_fun.drift_slope_loc}
-        scale: ${trainer.generative_model.prior.prior_fun.drift_slope_scale}
-        moment: v
-      - _target_: priors.log_gamma_moments
-        shape: ${trainer.generative_model.prior.prior_fun.sd_true_shape}
-        scale: ${trainer.generative_model.prior.prior_fun.sd_true_scale}
-        moment: v
-      - _target_: priors.log_gamma_moments
-        shape: ${trainer.generative_model.prior.prior_fun.threshold_shape}
-        scale: ${trainer.generative_model.prior.prior_fun.threshold_scale}
-        moment: v
-      - _target_: priors.log_truncated_normal_moments
-        loc: ${trainer.generative_model.prior.prior_fun.t0_loc}
-        scale: ${trainer.generative_model.prior.prior_fun.t0_scale}
-        moment: v
-  decimals: 2
+  v_intercept:
+    _target_: priors.log_truncated_normal_moments
+    loc: ${simulator.prior_fun.drift_intercept_loc}
+    scale: ${simulator.prior_fun.drift_intercept_scale}
+    moment: v
+  v_slope:
+    _target_: priors.log_truncated_normal_moments
+    loc: ${simulator.prior_fun.drift_slope_loc}
+    scale: ${simulator.prior_fun.drift_slope_scale}
+    moment: v
+  s_true:
+    _target_: priors.log_gamma_moments
+    shape: ${simulator.prior_fun.sd_true_shape}
+    scale: ${simulator.prior_fun.sd_true_scale}
+    moment: v
+  b:
+    _target_: priors.log_gamma_moments
+    shape: ${simulator.prior_fun.threshold_shape}
+    scale: ${simulator.prior_fun.threshold_scale}
+    moment: v
+  t0:
+    _target_: priors.log_truncated_normal_moments
+    loc: ${simulator.prior_fun.t0_loc}
+    scale: ${simulator.prior_fun.t0_scale}
+    moment: v

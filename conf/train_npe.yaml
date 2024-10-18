@@ -18,6 +18,7 @@ defaults:
   - simulator: rdm
   - optimizer: adam
   - callbacks: tensorboard
+  - prior_stats: rdm
 
 tags: ["train_npe"]
 

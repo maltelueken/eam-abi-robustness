@@ -2,7 +2,7 @@
   write_graph: false
 - _target_: keras.callbacks.ModelCheckpoint
   filepath: checkpoints/model.weights.h5
-  save_weights_only: false
+  save_weights_only: true
   monitor: loss
   mode: min
   save_best_only: true

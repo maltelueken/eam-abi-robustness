@@ -1,0 +1,12 @@
+_target_: bayesflow.networks.CouplingFlow
+depth: 6
+subnet: mlp
+transform: affine
+permutation: random
+use_actnorm: true
+base_distribution: normal
+# coupling_kwargs:
+#   subnet_kwargs:
+#     kernel_initializer: he_normal
+#     dropout: 0
+#     spectral_normalization: true # Not working in BayesFlow

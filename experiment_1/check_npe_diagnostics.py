@@ -9,7 +9,7 @@ from hydra.utils import instantiate
 from omegaconf import DictConfig
 
 from bayesflow_plots import *
-from utils import convert_samples, create_missing_dirs
+from utils import convert_posterior_samples, convert_prior_samples, create_missing_dirs
 
 logger = logging.getLogger(__name__)
 
@@ -42,15 +42,15 @@ def check_npe_diagnostics(cfg: DictConfig):
             batch_shape=(cfg["diag_batch_size"],), num_obs=np.tile([t], (cfg["diag_batch_size"],))
         )
 
-        prior_samples = convert_samples(forward_dict, param_names)
+        prior_samples = convert_prior_samples(forward_dict, param_names)
 
         sample_dict = {k: v for k, v in forward_dict.items() if k not in data_adapter.keys["inference_variables"]}
 
-        posterior_samples_sbc = convert_samples(approximator.sample(
+        posterior_samples_sbc = convert_posterior_samples(approximator.sample(
             conditions=sample_dict, num_samples=cfg["diag_sbc_num_posterior_samples"]
         ), param_names)
 
-        posterior_samples_sens = convert_samples(approximator.sample(
+        posterior_samples_sens = convert_posterior_samples(approximator.sample(
             conditions=sample_dict, num_samples=cfg["diag_sens_num_posterior_samples"]
         ), param_names)
 

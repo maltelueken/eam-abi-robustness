@@ -13,15 +13,14 @@ logger = logging.getLogger(__name__)
 
 @hydra.main(version_base=None, config_path="../conf", config_name="train_npe")
 def train_npe(cfg: DictConfig):
-    cfg = OmegaConf.to_object(cfg)
-    approximator = instantiate(cfg["approximator"])
-    approximator.data_adapter.transforms = [t for t in approximator.data_adapter.transforms]
+    # cfg = OmegaConf.to_object(cfg)
+    approximator = instantiate(cfg["approximator"], _convert_="partial")
     simulator = instantiate(cfg["simulator"])
     optimizer = instantiate(cfg["optimizer"])
 
     approximator.compile(optimizer=optimizer)
 
-    callbacks = [callback for callback in instantiate(cfg["callbacks"])] # [keras.callbacks.TensorBoard()]
+    callbacks = instantiate(cfg["callbacks"], _convert_="partial") # [keras.callbacks.TensorBoard()]
 
     approximator.fit(
         simulator=simulator,

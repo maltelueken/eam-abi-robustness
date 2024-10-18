@@ -1,7 +1,7 @@
 # @package _global_
 hydra:
   run:
-    dir: outputs/experiment_1/${hydra.job.override_dirname}
+    dir: outputs/experiment_1/coupling_flow/${hydra.job.override_dirname}
   sweep:
     dir: multirun/experiment_1
     subdir: ${hydra.job.override_dirname}
@@ -10,3 +10,10 @@ hydra:
       override_dirname:
         exclude_keys:
           - experiment
+
+
+defaults:
+- override /approximator/inference_network: coupling_flow
+
+optimizer/learning_rate: 1e-3
+

@@ -25,13 +25,18 @@ def check_npe_diagnostics(cfg: DictConfig):
     )
 
     if not approximator.built:
-        dataset = data_adapter.configure(forward_dict)
-        dataset = keras.tree.map_structure(lambda x: keras.ops.convert_to_tensor(x, dtype="float32"), dataset)
+        dataset = approximator.build_dataset(
+            simulator=simulator,
+            data_adapter=data_adapter,
+            num_batches=cfg["iterations_per_epoch"],
+            batch_size=cfg["batch_size"],
+        )
+        dataset = keras.tree.map_structure(lambda x: keras.ops.convert_to_tensor(x, dtype="float32"), dataset[0])
         approximator.build_from_data(dataset)
 
     approximator.load_weights(cfg["callbacks"][1]["filepath"])
 
-    param_names = data_adapter.keys["inference_variables"]
+    param_names = cfg["approximator"]["data_adapter"]["inference_variables"]
 
     sample_sizes = instantiate(cfg["diag_num_obs"])
 
@@ -44,14 +49,14 @@ def check_npe_diagnostics(cfg: DictConfig):
 
         prior_samples = convert_prior_samples(forward_dict, param_names)
 
-        sample_dict = {k: v for k, v in forward_dict.items() if k not in data_adapter.keys["inference_variables"]}
+        sample_dict = {k: v for k, v in forward_dict.items() if k not in param_names}
 
         posterior_samples_sbc = convert_posterior_samples(approximator.sample(
-            conditions=sample_dict, num_samples=cfg["diag_sbc_num_posterior_samples"]
+            conditions=sample_dict, batch_size=cfg["diag_batch_size"], num_samples=cfg["diag_sbc_num_posterior_samples"]
         ), param_names)
 
         posterior_samples_sens = convert_posterior_samples(approximator.sample(
-            conditions=sample_dict, num_samples=cfg["diag_sens_num_posterior_samples"]
+            conditions=sample_dict, batch_size=cfg["diag_batch_size"], num_samples=cfg["diag_sens_num_posterior_samples"]
         ), param_names)
 
         create_missing_dirs(["histograms", "ecdf", "recovery", "contraction", "posterior_2d"])

@@ -41,7 +41,11 @@ def convert_prior_samples(forward_dict, param_names):
 
 
 def convert_posterior_samples(forward_dict, param_names):
-    return np.swapaxes(convert_prior_samples(forward_dict, param_names), 0, 1)
+    return convert_prior_samples(forward_dict, param_names)
+
+
+def get_decay_steps(num_epochs, num_batches):
+    return num_epochs * num_batches
 
 
 def create_prior_2d_plot(prior_samples, param_names, height=2.5, color="#8f2727", **kwargs):

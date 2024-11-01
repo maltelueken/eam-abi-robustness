@@ -4,12 +4,11 @@ import bayesflow as bf
 import numpy as np
 
 from bayesflow.utils import batched_call, tree_stack
-
-
 from bayesflow.types import Shape
+from numba import njit, prange
 
 
-class RdmSimulator(bf.simulators.Simulator):
+class CustomSimulator(bf.simulators.Simulator):
     def __init__(self, prior_fun: Callable, design_fun: Callable, simulator_fun: Callable):
         self.prior_fun = prior_fun
         self.design_fun = design_fun
@@ -70,3 +69,114 @@ def rdm_experiment_simple(
     rt = fpt.min(axis=0) + t0
 
     return {"x": np.c_[rt, resp]}
+
+
+@njit(parallel=True)
+def find_min_and_argmin(arr):
+    rows, cols = arr.shape
+    min_vals = np.empty(cols, dtype=arr.dtype)
+    min_idxs = np.empty(cols, dtype=np.int64)
+    
+    for j in prange(cols):
+        min_val = arr[0, j]
+        min_idx = 0
+        for i in range(1, rows):
+            if arr[i, j] < min_val:
+                min_val = min_val
+                min_idx = i
+        min_vals[j] = min_val
+        min_idxs[j] = min_idx
+    
+    return min_vals, min_idxs
+
+
+@njit(parallel=True)
+def rdmc_experiment_simple_numba(mu, b, s, t0, num_obs, t_max, seed):
+    # np.random.seed(seed)
+
+    num_accumulators = mu.shape[0]
+
+    fpt = np.zeros((num_accumulators, num_obs), dtype=np.float64)
+    
+    for n in prange(num_obs):
+        for i in prange(num_accumulators):
+            xt = 0.0
+            for t in range(t_max):
+                xt += mu[i, t] + (s[i] * np.random.randn())
+                if xt > b:
+                    fpt[i, n] = t
+                    break
+
+    rt, resp = find_min_and_argmin(fpt)
+    rt += t0
+
+    return rt, resp
+
+
+def rdmc_experiment_simple(v_c_intercept, v_c_slope, amp, tau, s_true, s_false, b, t0, a_shape, num_obs, t_max, seed):
+    mu_c = np.hstack([v_c_intercept, v_c_intercept + v_c_slope])
+    s = np.hstack([s_false, s_true])
+    
+    t = np.arange(1, t_max + 1, 1)
+
+    eq4 = (
+        amp
+        * np.exp(-t / tau)
+        * (np.exp(1) * t / (a_shape - 1) / tau) ** (a_shape - 1)
+    ) * ((a_shape - 1) / t - 1 / tau)
+
+    data = np.zeros((num_obs, 3))
+
+    num_obs_h = int(num_obs/2)
+
+    for m in range(mu_c.shape[0]):
+        mu = np.tile(mu_c, (t_max, 1)).T
+        mu[m, :] += eq4
+        rt, resp = rdmc_experiment_simple_numba(mu, b, s, float(t0), num_obs_h, t_max, seed)
+        data[(m * num_obs_h):((m + 1) * num_obs_h), 0] = rt
+        data[(m * num_obs_h):((m + 1) * num_obs_h), 1] = resp
+        data[(m * num_obs_h):((m + 1) * num_obs_h), 2] = m
+
+    return {"x": data}
+
+
+def create_data_adapter(inference_variables, inference_conditions=None, summary_variables=None, transforms=None):
+    adapter = (bf.data_adapters.DataAdapter()
+        .to_array()
+        .convert_dtype("float64", "float32")
+    )
+
+    for transform in transforms:
+        adapter = adapter.add_transform(transform)
+
+    adapter = adapter.concatenate(inference_variables, into="inference_variables")
+
+    if inference_conditions is not None:
+        adapter = adapter.concatenate(inference_conditions, into="inference_conditions")
+
+    if summary_variables is not None:
+        adapter = adapter.as_set(summary_variables).concatenate(
+            summary_variables, into="summary_variables"
+        )
+
+    adapter = adapter.keep(
+        ["inference_variables", "inference_conditions", "summary_variables"]
+    )
+
+    return adapter
+    
+
+def log_transform(x, batch_size=None):
+    return np.log(x)
+
+
+def inverse_log_transform(x, batch_size=None):
+    return np.exp(x)
+
+
+def sqrt_transform(x, batch_size=None):
+    return np.sqrt(x)
+
+
+def inverse_sqrt_transform(x, batch_size=None):
+    return np.square(x)

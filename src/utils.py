@@ -81,7 +81,8 @@ def create_prior_2d_plot(prior_samples, param_names, height=2.5, color="#8f2727"
     return g.fig
 
 
-def create_pushforward_plot(data, prior_samples, param_names=None):
+def create_pushforward_plot_rdm(data, prior_samples, param_names=None):
+    print(data)
     fig, axarr = plt.subplots(5, 5, figsize=(12, 12))
     for i, ax in enumerate(axarr.flat):
         rt = data[i, :, 0].flatten()
@@ -119,6 +120,64 @@ def create_pushforward_plot(data, prior_samples, param_names=None):
             )
 
         # ax.legend(labels=["False", "True"])
+        ax.set_ylabel("")
+        ax.set_yticks([])
+        if i > 19:
+            ax.set_xlabel("Simulated RTs (seconds)")
+    fig.tight_layout()
+    return fig
+
+
+def create_pushforward_plot_rdmc(data, prior_samples, param_names=None):
+    fig, axarr = plt.subplots(5, 2, figsize=(12, 12))
+    for i, ax in enumerate(axarr.flat):
+        rt = data[i, :, 0]
+        resp = data[i, :, 1]
+        cond = data[i, :, 2]
+
+        params = prior_samples[i, :]
+        sns.histplot(
+            rt[np.bitwise_and(resp == 1, cond == 0)], color="darkgreen", alpha=0.5, ax=ax
+        )
+        sns.histplot(
+            rt[np.bitwise_and(resp == 0, cond == 0)], color="maroon", alpha=0.5, ax=ax
+        )
+        for p in ax.patches:  # turn the histogram upside down
+            p.set_height(-p.get_height())
+        sns.histplot(
+            rt[np.bitwise_and(resp == 1, cond == 1)], color="darkgreen", alpha=0.5, ax=ax
+        )
+        sns.histplot(
+            rt[np.bitwise_and(resp == 0, cond == 1)], color="maroon", alpha=0.5, ax=ax
+        )
+        sns.despine(ax=ax)
+        ax.vlines([rt[resp == 1].mean(), rt[resp == 0].mean()], ymin = 0, ymax = 1, color = ["darkgreen", "maroon"], linestyle = '-', 
+           transform=ax.get_xaxis_transform())
+        ax.text(
+            0.9,
+            0.9,
+            "Acc: " + str(np.round(resp.mean(), 2)),
+            horizontalalignment="center",
+            verticalalignment="center",
+            transform=ax.transAxes,
+        )
+        for i, p in enumerate(params):
+            if param_names is not None:
+                ps = param_names[i] + ": " + str(np.round(p, 2))
+            else:
+                ps = np.round(p, 2)
+            ax.text(
+                0.9,
+                0.8 - i * 0.1,
+                ps,
+                horizontalalignment="center",
+                verticalalignment="center",
+                transform=ax.transAxes,
+            )
+
+        ax.spines['bottom'].set_position('zero')
+
+        ax.set_ylim((-50, 50))
         ax.set_ylabel("")
         ax.set_yticks([])
         if i > 19:

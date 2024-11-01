@@ -139,3 +139,31 @@ def rdm_prior_multivariate(
     cov_mat = np.diag(stds).dot(corr_mat).dot(np.diag(stds))
 
     return np.exp(stats.multivariate_normal(means, cov_mat).rvs(random_state=rng, size=size))
+
+
+def rdmc_prior_simple(
+    drift_c_intercept_loc,
+    drift_c_intercept_scale,
+    drift_c_slope_loc,
+    drift_c_slope_scale,
+    amp_shape,
+    amp_scale,
+    tau_shape,
+    tau_scale,
+    sd_true_shape,
+    sd_true_scale,
+    threshold_shape,
+    threshold_scale,
+    t0_loc,
+    t0_scale,
+    rng,
+):
+    drift_c_intercept = truncated_normal_rvs(drift_c_intercept_loc, drift_c_intercept_scale, random_state=rng)
+    drift_c_slope = truncated_normal_rvs(drift_c_slope_loc, drift_c_slope_scale, random_state=rng)
+    amp = rng.gamma(shape=amp_shape, scale=amp_scale)
+    tau = rng.gamma(shape=tau_shape, scale=tau_scale)
+    s_true = rng.gamma(shape=sd_true_shape, scale=sd_true_scale)
+    b = rng.gamma(shape=threshold_shape, scale=threshold_scale)
+    t0 = truncated_normal_rvs(t0_loc, t0_scale, random_state=rng)
+
+    return {"v_c_intercept": drift_c_intercept, "v_c_slope": drift_c_slope, "amp": amp, "tau": tau, "s_true": s_true, "b": b, "t0": t0}

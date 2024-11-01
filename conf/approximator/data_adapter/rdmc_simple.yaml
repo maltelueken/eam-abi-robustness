@@ -1,0 +1,77 @@
+_target_: simulation.create_data_adapter
+inference_variables: ["v_c_intercept", "v_c_slope", "amp", "tau", "s_true", "b", "t0"]
+inference_conditions:
+- num_obs
+summary_variables:
+- x
+transforms:
+- _target_: bayesflow.data_adapters.transforms.MapTransform
+  transform_map:
+    v_c_intercept:
+      _target_: bayesflow.data_adapters.transforms.LambdaTransform
+      forward:
+        _target_: simulation.log_transform
+        _partial_: true
+      inverse:
+        _target_: simulation.inverse_log_transform
+        _partial_: true
+    v_c_slope:
+      _target_: bayesflow.data_adapters.transforms.LambdaTransform
+      forward:
+        _target_: simulation.log_transform
+        _partial_: true
+      inverse:
+        _target_: simulation.inverse_log_transform
+        _partial_: true
+    amp:
+      _target_: bayesflow.data_adapters.transforms.LambdaTransform
+      forward:
+        _target_: simulation.log_transform
+        _partial_: true
+      inverse:
+        _target_: simulation.inverse_log_transform
+        _partial_: true
+    tau:
+      _target_: bayesflow.data_adapters.transforms.LambdaTransform
+      forward:
+        _target_: simulation.log_transform
+        _partial_: true
+      inverse:
+        _target_: simulation.inverse_log_transform
+        _partial_: true
+    s_true:
+      _target_: bayesflow.data_adapters.transforms.LambdaTransform
+      forward:
+        _target_: simulation.log_transform
+        _partial_: true
+      inverse:
+        _target_: simulation.inverse_log_transform
+        _partial_: true
+    b:
+      _target_: bayesflow.data_adapters.transforms.LambdaTransform
+      forward:
+        _target_: simulation.log_transform
+        _partial_: true
+      inverse:
+        _target_: simulation.inverse_log_transform
+        _partial_: true
+    t0:
+      _target_: bayesflow.data_adapters.transforms.LambdaTransform
+      forward:
+        _target_: simulation.log_transform
+        _partial_: true
+      inverse:
+        _target_: simulation.inverse_log_transform
+        _partial_: true
+    num_obs:
+      _target_: bayesflow.data_adapters.transforms.LambdaTransform
+      forward:
+        _target_: simulation.sqrt_transform
+        _partial_: true
+      inverse:
+        _target_: simulation.inverse_sqrt_transform
+        _partial_: true
+
+# - _target_: bayesflow.data_adapters.transforms.MapTransform
+#   transform_map:
+

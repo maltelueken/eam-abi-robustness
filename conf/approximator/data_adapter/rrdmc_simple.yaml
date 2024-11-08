@@ -1,0 +1,200 @@
+_target_: simulation.create_data_adapter
+inference_variables: ["v_c_intercept", "v_c_slope", "v_a_intercept", "v_a_slope", "A0", "k", "s_true", "b", "t0"]
+inference_conditions:
+- num_obs
+summary_variables:
+- x
+transforms:
+- _target_: bayesflow.data_adapters.transforms.MapTransform
+  transform_map:
+    v_c_intercept:
+      _target_: bayesflow.data_adapters.transforms.LambdaTransform
+      forward:
+        _target_: simulation.log_transform
+        _partial_: true
+      inverse:
+        _target_: simulation.inverse_log_transform
+        _partial_: true
+    v_c_slope:
+      _target_: bayesflow.data_adapters.transforms.LambdaTransform
+      forward:
+        _target_: simulation.log_transform
+        _partial_: true
+      inverse:
+        _target_: simulation.inverse_log_transform
+        _partial_: true
+    v_a_intercept:
+      _target_: bayesflow.data_adapters.transforms.LambdaTransform
+      forward:
+        _target_: simulation.log_transform
+        _partial_: true
+      inverse:
+        _target_: simulation.inverse_log_transform
+        _partial_: true
+    v_a_slope:
+      _target_: bayesflow.data_adapters.transforms.LambdaTransform
+      forward:
+        _target_: simulation.log_transform
+        _partial_: true
+      inverse:
+        _target_: simulation.inverse_log_transform
+        _partial_: true
+    A0:
+      _target_: bayesflow.data_adapters.transforms.LambdaTransform
+      forward:
+        _target_: simulation.probit_transform
+        _partial_: true
+      inverse:
+        _target_: simulation.inverse_probit_transform
+        _partial_: true
+    k:
+      _target_: bayesflow.data_adapters.transforms.LambdaTransform
+      forward:
+        _target_: simulation.log_transform
+        _partial_: true
+      inverse:
+        _target_: simulation.inverse_log_transform
+        _partial_: true
+    s_true:
+      _target_: bayesflow.data_adapters.transforms.LambdaTransform
+      forward:
+        _target_: simulation.log_transform
+        _partial_: true
+      inverse:
+        _target_: simulation.inverse_log_transform
+        _partial_: true
+    b:
+      _target_: bayesflow.data_adapters.transforms.LambdaTransform
+      forward:
+        _target_: simulation.log_transform
+        _partial_: true
+      inverse:
+        _target_: simulation.inverse_log_transform
+        _partial_: true
+    t0:
+      _target_: bayesflow.data_adapters.transforms.LambdaTransform
+      forward:
+        _target_: simulation.log_transform
+        _partial_: true
+      inverse:
+        _target_: simulation.inverse_log_transform
+        _partial_: true
+    num_obs:
+      _target_: bayesflow.data_adapters.transforms.LambdaTransform
+      forward:
+        _target_: simulation.sqrt_transform
+        _partial_: true
+      inverse:
+        _target_: simulation.inverse_sqrt_transform
+        _partial_: true
+
+- _target_: bayesflow.data_adapters.transforms.MapTransform
+  transform_map:
+    v_c_intercept:
+      _target_: bayesflow.data_adapters.transforms.Standardize
+      mean:
+        _target_: priors.log_truncated_normal_moments
+        loc: ${simulator.prior_fun.drift_c_intercept_loc}
+        scale: ${simulator.prior_fun.drift_c_intercept_scale}
+        moment: m
+      std:
+        _target_: priors.log_truncated_normal_moments
+        loc: ${simulator.prior_fun.drift_c_intercept_loc}
+        scale: ${simulator.prior_fun.drift_c_intercept_scale}
+        moment: v
+    v_c_slope:
+      _target_: bayesflow.data_adapters.transforms.Standardize
+      mean:
+        _target_: priors.log_truncated_normal_moments
+        loc: ${simulator.prior_fun.drift_c_slope_loc}
+        scale: ${simulator.prior_fun.drift_c_slope_scale}
+        moment: m
+      std:
+        _target_: priors.log_truncated_normal_moments
+        loc: ${simulator.prior_fun.drift_c_slope_loc}
+        scale: ${simulator.prior_fun.drift_c_slope_scale}
+        moment: v
+    v_a_intercept:
+      _target_: bayesflow.data_adapters.transforms.Standardize
+      mean:
+        _target_: priors.log_truncated_normal_moments
+        loc: ${simulator.prior_fun.drift_a_intercept_loc}
+        scale: ${simulator.prior_fun.drift_a_intercept_scale}
+        moment: m
+      std:
+        _target_: priors.log_truncated_normal_moments
+        loc: ${simulator.prior_fun.drift_a_intercept_loc}
+        scale: ${simulator.prior_fun.drift_a_intercept_scale}
+        moment: v
+    v_a_slope:
+      _target_: bayesflow.data_adapters.transforms.Standardize
+      mean:
+        _target_: priors.log_truncated_normal_moments
+        loc: ${simulator.prior_fun.drift_a_slope_loc}
+        scale: ${simulator.prior_fun.drift_a_slope_scale}
+        moment: m
+      std:
+        _target_: priors.log_truncated_normal_moments
+        loc: ${simulator.prior_fun.drift_a_slope_loc}
+        scale: ${simulator.prior_fun.drift_a_slope_scale}
+        moment: v
+    A0:
+      _target_: bayesflow.data_adapters.transforms.Standardize
+      mean:
+        _target_: priors.probit_beta_moments
+        shape: ${simulator.prior_fun.initial_shape}
+        scale: ${simulator.prior_fun.initial_scale}
+        moment: m
+      std:
+        _target_: priors.probit_beta_moments
+        shape: ${simulator.prior_fun.initial_shape}
+        scale: ${simulator.prior_fun.initial_scale}
+        moment: v
+    k:
+      _target_: bayesflow.data_adapters.transforms.Standardize
+      mean:
+        _target_: priors.log_gamma_moments
+        shape: ${simulator.prior_fun.decay_shape}
+        scale: ${simulator.prior_fun.decay_scale}
+        moment: m
+      std:
+        _target_: priors.log_gamma_moments
+        shape: ${simulator.prior_fun.decay_shape}
+        scale: ${simulator.prior_fun.decay_scale}
+        moment: v
+    s_true:
+      _target_: bayesflow.data_adapters.transforms.Standardize
+      mean:
+        _target_: priors.log_gamma_moments
+        shape: ${simulator.prior_fun.sd_true_shape}
+        scale: ${simulator.prior_fun.sd_true_scale}
+        moment: m
+      std:
+        _target_: priors.log_gamma_moments
+        shape: ${simulator.prior_fun.sd_true_shape}
+        scale: ${simulator.prior_fun.sd_true_scale}
+        moment: v
+    b:
+      _target_: bayesflow.data_adapters.transforms.Standardize
+      mean:
+        _target_: priors.log_gamma_moments
+        shape: ${simulator.prior_fun.threshold_shape}
+        scale: ${simulator.prior_fun.threshold_scale}
+        moment: m
+      std:
+        _target_: priors.log_gamma_moments
+        shape: ${simulator.prior_fun.threshold_shape}
+        scale: ${simulator.prior_fun.threshold_scale}
+        moment: v
+    t0:
+      _target_: bayesflow.data_adapters.transforms.Standardize
+      mean:
+        _target_: priors.log_truncated_normal_moments
+        loc: ${simulator.prior_fun.t0_loc}
+        scale: ${simulator.prior_fun.t0_scale}
+        moment: m
+      std:
+        _target_: priors.log_truncated_normal_moments
+        loc: ${simulator.prior_fun.t0_loc}
+        scale: ${simulator.prior_fun.t0_scale}
+        moment: v

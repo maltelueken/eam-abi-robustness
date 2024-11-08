@@ -97,6 +97,15 @@ def log_gamma_moments(shape: float, scale: float, moment: str):
     return log_gamma_mean(shape, scale)
 
 
+def probit_beta_moments(shape: float, scale: float, moment: str, size=1000000):
+    x = stats.norm.ppf(stats.beta.rvs(shape, scale, size=size))
+
+    if moment == "v":
+        return np.std(x)
+
+    return x.mean()
+
+
 def rdm_prior_simple(
     batch_shape,
     drift_intercept_loc,
@@ -142,6 +151,7 @@ def rdm_prior_multivariate(
 
 
 def rdmc_prior_simple(
+    batch_shape,
     drift_c_intercept_loc,
     drift_c_intercept_scale,
     drift_c_slope_loc,
@@ -158,12 +168,47 @@ def rdmc_prior_simple(
     t0_scale,
     rng,
 ):
-    drift_c_intercept = truncated_normal_rvs(drift_c_intercept_loc, drift_c_intercept_scale, random_state=rng)
-    drift_c_slope = truncated_normal_rvs(drift_c_slope_loc, drift_c_slope_scale, random_state=rng)
-    amp = rng.gamma(shape=amp_shape, scale=amp_scale)
-    tau = rng.gamma(shape=tau_shape, scale=tau_scale)
-    s_true = rng.gamma(shape=sd_true_shape, scale=sd_true_scale)
-    b = rng.gamma(shape=threshold_shape, scale=threshold_scale)
-    t0 = truncated_normal_rvs(t0_loc, t0_scale, random_state=rng)
+    drift_c_intercept = truncated_normal_rvs(drift_c_intercept_loc, drift_c_intercept_scale, size=batch_shape, random_state=rng)
+    drift_c_slope = truncated_normal_rvs(drift_c_slope_loc, drift_c_slope_scale, size=batch_shape, random_state=rng)
+    amp = rng.gamma(shape=amp_shape, scale=amp_scale, size=batch_shape)
+    tau = rng.gamma(shape=tau_shape, scale=tau_scale, size=batch_shape)
+    s_true = rng.gamma(shape=sd_true_shape, scale=sd_true_scale, size=batch_shape)
+    b = rng.gamma(shape=threshold_shape, scale=threshold_scale, size=batch_shape)
+    t0 = truncated_normal_rvs(t0_loc, t0_scale, size=batch_shape, random_state=rng)
 
     return {"v_c_intercept": drift_c_intercept, "v_c_slope": drift_c_slope, "amp": amp, "tau": tau, "s_true": s_true, "b": b, "t0": t0}
+
+
+def rrdmc_prior_simple(
+    batch_shape,
+    drift_c_intercept_loc,
+    drift_c_intercept_scale,
+    drift_c_slope_loc,
+    drift_c_slope_scale,
+    drift_a_intercept_loc,
+    drift_a_intercept_scale,
+    drift_a_slope_loc,
+    drift_a_slope_scale,
+    initial_shape,
+    initial_scale,
+    decay_shape,
+    decay_scale,
+    sd_true_shape,
+    sd_true_scale,
+    threshold_shape,
+    threshold_scale,
+    t0_loc,
+    t0_scale,
+    rng,
+):
+    drift_c_intercept = truncated_normal_rvs(drift_c_intercept_loc, drift_c_intercept_scale, size=batch_shape, random_state=rng)
+    drift_c_slope = truncated_normal_rvs(drift_c_slope_loc, drift_c_slope_scale, size=batch_shape, random_state=rng)
+    drift_a_intercept = truncated_normal_rvs(drift_a_intercept_loc, drift_a_intercept_scale, size=batch_shape, random_state=rng)
+    drift_a_slope = truncated_normal_rvs(drift_a_slope_loc, drift_a_slope_scale, size=batch_shape, random_state=rng)
+    A0 = rng.beta(initial_shape, initial_scale, size=batch_shape)
+    k = rng.gamma(shape=decay_shape, scale=decay_scale, size=batch_shape)
+    s_true = rng.gamma(shape=sd_true_shape, scale=sd_true_scale, size=batch_shape)
+    b = rng.gamma(shape=threshold_shape, scale=threshold_scale, size=batch_shape)
+    t0 = truncated_normal_rvs(t0_loc, t0_scale, size=batch_shape, random_state=rng)
+
+    return {"v_c_intercept": drift_c_intercept, "v_c_slope": drift_c_slope, "v_a_intercept": drift_a_intercept, "v_a_slope": drift_a_slope, "A0": A0, "k": k, "s_true": s_true, "b": b, "t0": t0}

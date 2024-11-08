@@ -14,7 +14,7 @@ from utils import convert_posterior_samples, convert_prior_samples, create_missi
 logger = logging.getLogger(__name__)
 
 
-@hydra.main(version_base=None, config_path="../conf", config_name="train_npe")
+@hydra.main(version_base=None, config_path="../conf", config_name="config")
 def check_npe_diagnostics(cfg: DictConfig):
     simulator = instantiate(cfg["simulator"])
     approximator = instantiate(cfg["approximator"])

@@ -13,7 +13,7 @@ from utils import create_missing_dirs, create_profile_likelihood_plot
 
 logger = logging.getLogger(__name__)
 
-@hydra.main(version_base=None, config_path="../conf", config_name="test_npe")
+@hydra.main(version_base=None, config_path="../conf", config_name="config")
 def check_profile_likelihood(cfg: DictConfig):
     sample_sizes = instantiate(cfg["test_num_obs"])
 

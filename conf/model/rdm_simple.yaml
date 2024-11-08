@@ -1,0 +1,5 @@
+# @package _global_
+
+defaults:
+- override /simulator: rdm
+- override /approximator/data_adapter: rdm_simple

@@ -12,7 +12,7 @@ from utils import create_missing_dirs
 logger = logging.getLogger(__name__)
 
 
-@hydra.main(version_base=None, config_path="../conf", config_name="test_npe")
+@hydra.main(version_base=None, config_path="../conf", config_name="config")
 def generate_test_data(cfg: DictConfig):
     trainer = instantiate(cfg["trainer"])
     # Disable context generator because we set num_obs manually

@@ -1,0 +1,6 @@
+# @package _global_
+
+defaults:
+- override /approximator/inference_network: coupling_flow
+
+optimizer/learning_rate: 1e-3

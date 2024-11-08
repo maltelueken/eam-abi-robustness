@@ -1,24 +1,43 @@
 # @package _global_
 
 hydra:
+  run:
+    dir: outputs/${hydra:runtime.choices.experiment}/${hydra:runtime.choices.model}/${hydra:runtime.choices.method}/${hydra.job.override_dirname}
+  sweep:
+    dir: multirun
+    subdir: ${hydra:runtime.choices.experiment}/${hydra:runtime.choices.model}/${hydra:runtime.choices.method}/${hydra.job.override_dirname}
   job:
     chdir: True
-  run:
-    dir: outputs/${hydra.job.override_dirname}
+    env_set:
+      KERAS_BACKEND: jax
+    config:
+      override_dirname:
+        exclude_keys:
+          - experiment
+          - model
+          - method
   job_logging:
     handlers:
       file:
         mode: w
-  verbose: [__main__,pymc_models]
 
 defaults:
-  - _self_
-  - prior_stats: rdm
-  - trainer: settransformer
-
-tags: ["test_npe"]
+  - override /model: rdm_simple
+  - override /method: flow_matching
 
 seed: 2024
+
+diag_batch_size: 100
+diag_sbc_num_posterior_samples: 100
+diag_sens_num_posterior_samples: 100
+
+diag_num_obs:
+  _target_: numpy.array
+  object: ${simulator.design_fun.values}
+
+epochs: 100
+iterations_per_epoch: 500
+batch_size: 64
 
 test_batch_size: 100
 test_transform: true

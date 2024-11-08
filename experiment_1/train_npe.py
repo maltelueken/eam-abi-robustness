@@ -11,7 +11,7 @@ from omegaconf import DictConfig, OmegaConf
 logger = logging.getLogger(__name__)
 
 
-@hydra.main(version_base=None, config_path="../conf", config_name="train_npe")
+@hydra.main(version_base=None, config_path="../conf", config_name="config")
 def train_npe(cfg: DictConfig):
     # cfg = OmegaConf.to_object(cfg)
     approximator = instantiate(cfg["approximator"], _convert_="partial")

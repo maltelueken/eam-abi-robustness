@@ -1,0 +1,11 @@
+# @package _global_
+
+defaults:
+  - _self_
+  - approximator: continuous_approximator
+  - optimizer: adam
+  - simulator: rdm
+  - callbacks: tensorboard
+  - model: rdm_simple # Overrides simulator and approximator
+  - method: flow_matching # Overrides approximator
+  - experiment: experiment_1 # This must be last because it overrides model and method

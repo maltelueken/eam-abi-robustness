@@ -2,6 +2,7 @@ from typing import Callable
 
 import bayesflow as bf
 import numpy as np
+import scipy.stats as stats
 
 from bayesflow.utils import batched_call, tree_stack
 from bayesflow.types import Shape
@@ -125,19 +126,28 @@ def rdmc_experiment_simple(v_c_intercept, v_c_slope, amp, tau, s_true, s_false, 
         * (np.exp(1) * t / (a_shape - 1) / tau) ** (a_shape - 1)
     ) * ((a_shape - 1) / t - 1 / tau)
 
-    data = np.zeros((num_obs, 3))
+    mu = np.tile(mu_c, (t_max, 1)).T
+    mu[0, :] += eq4
+    rt, resp = rdmc_experiment_simple_numba(mu, b, s, float(t0), num_obs, t_max, seed)
 
-    num_obs_h = int(num_obs/2)
+    return {"x": np.c_[rt, resp]}
 
-    for m in range(mu_c.shape[0]):
-        mu = np.tile(mu_c, (t_max, 1)).T
-        mu[m, :] += eq4
-        rt, resp = rdmc_experiment_simple_numba(mu, b, s, float(t0), num_obs_h, t_max, seed)
-        data[(m * num_obs_h):((m + 1) * num_obs_h), 0] = rt
-        data[(m * num_obs_h):((m + 1) * num_obs_h), 1] = resp
-        data[(m * num_obs_h):((m + 1) * num_obs_h), 2] = m
 
-    return {"x": data}
+def rrdmc_experiment_simple(v_c_intercept, v_c_slope, v_a_intercept, v_a_slope, A0, k, s_true, s_false, b, t0, num_obs, t_max, seed):
+    mu_c = np.hstack([v_c_intercept, v_c_intercept + v_c_slope])
+    mu_a = np.hstack([v_a_intercept, v_a_intercept + v_a_slope])
+    s = np.hstack([s_false, s_true])
+    
+    t = np.arange(1, t_max + 1, 1)
+
+    weigth_a = A0 * np.exp(-k*t)
+    weight_c = 1.0 - weigth_a
+
+    mu = weigth_a[None, :] * mu_a[:, None] + weight_c[None, :] * mu_c[:, None]
+
+    rt, resp = rdmc_experiment_simple_numba(mu, b, s, float(t0), num_obs, t_max, seed)
+
+    return {"x": np.c_[rt, resp]}
 
 
 def create_data_adapter(inference_variables, inference_conditions=None, summary_variables=None, transforms=None):
@@ -180,3 +190,11 @@ def sqrt_transform(x, batch_size=None):
 
 def inverse_sqrt_transform(x, batch_size=None):
     return np.square(x)
+
+
+def probit_transform(x, batch_size=None):
+    return stats.norm.ppf(x)
+
+
+def inverse_probit_transform(x, batch_size=None):
+    return stats.norm.cdf(x)

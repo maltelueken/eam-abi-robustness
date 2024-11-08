@@ -1,0 +1,6 @@
+defaults:
+- design_fun: random_num_obs_discrete
+- prior_fun: rrdmc_simple
+- simulator_fun: rrdmc_simple
+
+_target_: simulation.CustomSimulator

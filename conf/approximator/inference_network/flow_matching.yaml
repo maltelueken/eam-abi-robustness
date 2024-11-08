@@ -2,8 +2,8 @@ _target_: bayesflow.networks.FlowMatching
 subnet: mlp
 subnet_kwargs:
   _target_: builtins.dict
-  widths: [512, 512, 512]
-  dropout: 0.05
+  widths: [256, 256, 256, 256, 256, 256]
+  dropout: 0.00
 base_distribution: normal
 integrator: euler
 use_optimal_transport: false

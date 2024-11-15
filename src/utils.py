@@ -37,11 +37,11 @@ def sub_instantiate(cfg):
 
 
 def convert_prior_samples(forward_dict, param_names):
-    return np.array([forward_dict[key] for key in param_names]).squeeze().T
+    return np.moveaxis(np.array([forward_dict[key] for key in param_names]).squeeze(), [0, 1], [1, 0])
 
 
 def convert_posterior_samples(forward_dict, param_names):
-    return convert_prior_samples(forward_dict, param_names)
+    return np.moveaxis(np.array([forward_dict[key] for key in param_names]).squeeze(), [0, 1, 2], [2, 0, 1])
 
 
 def get_decay_steps(num_epochs, num_batches):

@@ -34,6 +34,42 @@ class CustomSimulator(bf.simulators.Simulator):
         return data
 
 
+class CustomMetaSimulator(bf.simulators.Simulator):
+    def __init__(self, meta_fun: Callable, prior_fun: Callable, design_fun: Callable, simulator_fun: Callable):
+        self.meta_fun = meta_fun
+        self.prior_fun = prior_fun
+        self.design_fun = design_fun
+        self.simulator_fun = simulator_fun
+
+
+    @staticmethod
+    def update_existing(d: dict, **kwargs):
+        """Update dictionary only with kwargs that match existing keys."""
+        d.update((k, v) for k, v in kwargs.items() if k in d)
+
+
+    def sample(self, batch_shape: Shape, **kwargs) -> dict[str, np.ndarray]:
+        meta_dict = self.meta_fun(batch_shape)
+
+        self.update_existing(meta_dict, **kwargs)
+
+        prior_dict = self.prior_fun(batch_shape, **meta_dict)
+
+        design_dict = self.design_fun(batch_shape)
+
+        self.update_existing(design_dict, **kwargs)
+
+        sims_dict = self.simulator_fun(batch_shape, **prior_dict, **design_dict)
+
+        data = meta_dict | prior_dict | design_dict | sims_dict
+
+        data = {
+            key: np.expand_dims(value, axis=-1) if np.ndim(value) == 1 else value for key, value in data.items()
+        }
+
+        return data
+
+
 def batch_simulator(batch_shape, simulator_fun, **kwargs):
     data = batched_call(simulator_fun, batch_shape, kwargs=kwargs, flatten=True)
     data = tree_stack(data, axis=0, numpy=True)
@@ -51,6 +87,9 @@ def rdm_experiment_simple(
     rng
 ):
     """Simulates data from a single subject in a multi-alternative response times experiment."""
+    if np.any(np.array((v_intercept, v_slope, s_true, s_false, b, t0)) <= 0):
+        raise ValueError("Model parameters must be positive")
+
     num_accumulators = 2
 
     # Acc1 = false, Acc2 = true
@@ -91,10 +130,13 @@ def find_min_and_argmin(arr):
     return min_vals, min_idxs
 
 
-@njit(parallel=True)
-def rdmc_experiment_simple_numba(mu, b, s, t0, num_obs, t_max, seed):
-    # np.random.seed(seed)
+@njit
+def set_seed_numba(value):
+    np.random.seed(value)
 
+
+@njit(parallel=True)
+def rdmc_experiment_simple_numba(mu, b, s, t0, num_obs, t_max):
     num_accumulators = mu.shape[0]
 
     fpt = np.zeros((num_accumulators, num_obs), dtype=np.float64)
@@ -115,6 +157,9 @@ def rdmc_experiment_simple_numba(mu, b, s, t0, num_obs, t_max, seed):
 
 
 def rdmc_experiment_simple(v_c_intercept, v_c_slope, amp, tau, s_true, s_false, b, t0, a_shape, num_obs, t_max, seed):
+    if np.any(np.array((v_c_intercept, v_c_slope, amp, tau, s_true, s_false, b, t0, a_shape)) <= 0):
+        raise ValueError("Model parameters must be positive")
+    
     mu_c = np.hstack([v_c_intercept, v_c_intercept + v_c_slope])
     s = np.hstack([s_false, s_true])
     
@@ -128,12 +173,18 @@ def rdmc_experiment_simple(v_c_intercept, v_c_slope, amp, tau, s_true, s_false, 
 
     mu = np.tile(mu_c, (t_max, 1)).T
     mu[0, :] += eq4
-    rt, resp = rdmc_experiment_simple_numba(mu, b, s, float(t0), num_obs, t_max, seed)
+
+    set_seed_numba(seed)
+
+    rt, resp = rdmc_experiment_simple_numba(mu, b, s, float(t0), num_obs, t_max)
 
     return {"x": np.c_[rt, resp]}
 
 
 def rrdmc_experiment_simple(v_c_intercept, v_c_slope, v_a_intercept, v_a_slope, A0, k, s_true, s_false, b, t0, num_obs, t_max, seed):
+    if np.any(np.array((v_c_intercept, v_c_slope, v_a_intercept, v_a_slope, A0, k, s_true, s_false, b, t0)) <= 0):
+        raise ValueError("Model parameters must be positive")
+    
     mu_c = np.hstack([v_c_intercept, v_c_intercept + v_c_slope])
     mu_a = np.hstack([v_a_intercept, v_a_intercept + v_a_slope])
     s = np.hstack([s_false, s_true])
@@ -145,13 +196,15 @@ def rrdmc_experiment_simple(v_c_intercept, v_c_slope, v_a_intercept, v_a_slope, 
 
     mu = weigth_a[None, :] * mu_a[:, None] + weight_c[None, :] * mu_c[:, None]
 
-    rt, resp = rdmc_experiment_simple_numba(mu, b, s, float(t0), num_obs, t_max, seed)
+    set_seed_numba(seed)
+
+    rt, resp = rdmc_experiment_simple_numba(mu, b, s, float(t0), num_obs, t_max)
 
     return {"x": np.c_[rt, resp]}
 
 
 def create_data_adapter(inference_variables, inference_conditions=None, summary_variables=None, transforms=None):
-    adapter = (bf.data_adapters.DataAdapter()
+    adapter = (bf.adapters.Adapter()
         .to_array()
         .convert_dtype("float64", "float32")
     )

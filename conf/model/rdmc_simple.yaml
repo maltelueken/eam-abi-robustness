@@ -2,4 +2,4 @@
 
 defaults:
 - override /simulator: rdmc
-- override /approximator/data_adapter: rdmc_simple
+- override /approximator/adapter: rdmc_simple

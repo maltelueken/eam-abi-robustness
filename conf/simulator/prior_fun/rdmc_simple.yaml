@@ -1,6 +1,6 @@
 _target_: priors.rdmc_prior_simple
 _partial_: true
-drift_c_intercept_loc: 0.2
+drift_c_intercept_loc: 0.4
 drift_c_intercept_scale: 0.05
 drift_c_slope_loc: 0.3
 drift_c_slope_scale: 0.05

@@ -18,7 +18,7 @@ logger = logging.getLogger(__name__)
 def check_npe_diagnostics(cfg: DictConfig):
     simulator = instantiate(cfg["simulator"])
     approximator = instantiate(cfg["approximator"])
-    data_adapter = approximator.data_adapter
+    data_adapter = approximator.adapter
 
     forward_dict = simulator.sample(
         batch_shape=(cfg["diag_batch_size"],), num_obs=np.tile([500], (cfg["diag_batch_size"],))
@@ -27,7 +27,7 @@ def check_npe_diagnostics(cfg: DictConfig):
     if not approximator.built:
         dataset = approximator.build_dataset(
             simulator=simulator,
-            data_adapter=data_adapter,
+            adapter=data_adapter,
             num_batches=cfg["iterations_per_epoch"],
             batch_size=cfg["batch_size"],
         )
@@ -36,7 +36,7 @@ def check_npe_diagnostics(cfg: DictConfig):
 
     approximator.load_weights(cfg["callbacks"][1]["filepath"])
 
-    param_names = cfg["approximator"]["data_adapter"]["inference_variables"]
+    param_names = cfg["approximator"]["adapter"]["inference_variables"]
 
     sample_sizes = instantiate(cfg["diag_num_obs"])
 

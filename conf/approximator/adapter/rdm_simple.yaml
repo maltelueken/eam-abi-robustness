@@ -5,10 +5,10 @@ inference_conditions:
 summary_variables:
 - x
 transforms:
-- _target_: bayesflow.data_adapters.transforms.MapTransform
+- _target_: bayesflow.adapters.transforms.MapTransform
   transform_map:
     v_intercept:
-      _target_: bayesflow.data_adapters.transforms.LambdaTransform
+      _target_: bayesflow.adapters.transforms.LambdaTransform
       forward:
         _target_: simulation.log_transform
         _partial_: true
@@ -16,7 +16,7 @@ transforms:
         _target_: simulation.inverse_log_transform
         _partial_: true
     v_slope:
-      _target_: bayesflow.data_adapters.transforms.LambdaTransform
+      _target_: bayesflow.adapters.transforms.LambdaTransform
       forward:
         _target_: simulation.log_transform
         _partial_: true
@@ -24,7 +24,7 @@ transforms:
         _target_: simulation.inverse_log_transform
         _partial_: true
     s_true:
-      _target_: bayesflow.data_adapters.transforms.LambdaTransform
+      _target_: bayesflow.adapters.transforms.LambdaTransform
       forward:
         _target_: simulation.log_transform
         _partial_: true
@@ -32,7 +32,7 @@ transforms:
         _target_: simulation.inverse_log_transform
         _partial_: true
     b:
-      _target_: bayesflow.data_adapters.transforms.LambdaTransform
+      _target_: bayesflow.adapters.transforms.LambdaTransform
       forward:
         _target_: simulation.log_transform
         _partial_: true
@@ -40,7 +40,7 @@ transforms:
         _target_: simulation.inverse_log_transform
         _partial_: true
     t0:
-      _target_: bayesflow.data_adapters.transforms.LambdaTransform
+      _target_: bayesflow.adapters.transforms.LambdaTransform
       forward:
         _target_: simulation.log_transform
         _partial_: true
@@ -48,7 +48,7 @@ transforms:
         _target_: simulation.inverse_log_transform
         _partial_: true
     num_obs:
-      _target_: bayesflow.data_adapters.transforms.LambdaTransform
+      _target_: bayesflow.adapters.transforms.LambdaTransform
       forward:
         _target_: simulation.sqrt_transform
         _partial_: true
@@ -56,10 +56,12 @@ transforms:
         _target_: simulation.inverse_sqrt_transform
         _partial_: true
 
-- _target_: bayesflow.data_adapters.transforms.MapTransform
+- _target_: bayesflow.adapters.transforms.MapTransform
   transform_map:
+    x:
+      _target_: bayesflow.adapters.transforms.Standardize
     v_intercept:
-      _target_: bayesflow.data_adapters.transforms.Standardize
+      _target_: bayesflow.adapters.transforms.Standardize
       mean:
         _target_: priors.log_truncated_normal_moments
         loc: ${simulator.prior_fun.drift_intercept_loc}
@@ -71,7 +73,7 @@ transforms:
         scale: ${simulator.prior_fun.drift_intercept_scale}
         moment: v
     v_slope:
-      _target_: bayesflow.data_adapters.transforms.Standardize
+      _target_: bayesflow.adapters.transforms.Standardize
       mean:
         _target_: priors.log_truncated_normal_moments
         loc: ${simulator.prior_fun.drift_slope_loc}
@@ -83,7 +85,7 @@ transforms:
         scale: ${simulator.prior_fun.drift_slope_scale}
         moment: v
     s_true:
-      _target_: bayesflow.data_adapters.transforms.Standardize
+      _target_: bayesflow.adapters.transforms.Standardize
       mean:
         _target_: priors.log_gamma_moments
         shape: ${simulator.prior_fun.sd_true_shape}
@@ -95,7 +97,7 @@ transforms:
         scale: ${simulator.prior_fun.sd_true_scale}
         moment: v
     b:
-      _target_: bayesflow.data_adapters.transforms.Standardize
+      _target_: bayesflow.adapters.transforms.Standardize
       mean:
         _target_: priors.log_gamma_moments
         shape: ${simulator.prior_fun.threshold_shape}
@@ -107,7 +109,7 @@ transforms:
         scale: ${simulator.prior_fun.threshold_scale}
         moment: v
     t0:
-      _target_: bayesflow.data_adapters.transforms.Standardize
+      _target_: bayesflow.adapters.transforms.Standardize
       mean:
         _target_: priors.log_truncated_normal_moments
         loc: ${simulator.prior_fun.t0_loc}

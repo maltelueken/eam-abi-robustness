@@ -1,0 +1,12 @@
+defaults:
+  - rdm_simple
+
+inference_conditions:
+  - num_obs
+  - ${meta_param_name_1}
+  - ${meta_param_name_2}
+
+# transforms: ${transforms} + [
+#   _target_: bayesflow.adapters.transforms.MapTransform
+#   transform_map:
+# ]

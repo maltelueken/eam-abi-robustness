@@ -1,0 +1,8 @@
+_target_: simulation.create_data_adapter
+inference_variables: ["x"]
+inference_conditions: ["v_intercept", "v_slope", "s_true", "b", "t0"]
+transforms:
+- _target_: bayesflow.adapters.transforms.Broadcast
+  keys: ["v_intercept", "v_slope", "s_true", "b", "t0"]
+  to: "x"
+  expand: 1

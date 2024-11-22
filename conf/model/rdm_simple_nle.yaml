@@ -1,0 +1,6 @@
+# @package _global_
+
+defaults:
+- override /simulator: rdm
+- override /approximator/adapter: rdm_simple_nle
+- override /approximator/summary_network: null

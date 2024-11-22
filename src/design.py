@@ -21,3 +21,12 @@ def fixed_num_obs_range(start, end, step) -> np.ndarray:
 
 def random_num_accumulators(min_n, max_n, probs, rng):
     return rng.choice(max_n, p=probs)+min_n
+
+
+def random_prior_meta_continuous(batch_shape, min_value, max_value, name, rng):
+    return {name: rng.uniform(min_value, max_value, size=batch_shape)}
+
+
+def random_prior_meta_continuous_multivariate(batch_shape, min_value, max_value, name, rng):
+    x = rng.uniform(low=min_value, high=max_value, size=(*batch_shape, 2)).T
+    return {key: val for key, val in zip(name, x)}

@@ -1,0 +1,22 @@
+# @package _global_
+
+defaults:
+  - experiment_1
+  - override /model: rdm_simple_meta
+
+diag_num_obs: 500
+
+diag_drift_slope_loc:
+  _target_: numpy.linspace
+  start: 0.5
+  stop: 4.0
+  num: 3
+
+diag_threshold_scale:
+  _target_: numpy.linspace
+  start: 0.05
+  stop: 0.5
+  num: 3
+
+meta_param_name_1: drift_slope_loc
+meta_param_name_2: threshold_scale

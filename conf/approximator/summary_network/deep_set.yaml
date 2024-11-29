@@ -1,13 +1,16 @@
-defaults:
-- base_summary_network
+# defaults:
+# - base_summary_network
 
-_target_: bayesflow.summary_networks.DeepSet
+_target_: bayesflow.networks.DeepSet
 summary_dim: 16
-num_dense_s1: 2
-num_dense_s2: 2
-num_dense_s3: 2
-num_equiv: 2
-dense_s1_args: null
-dense_s2_args: null
-dense_s3_args: null
-pooling_fun: mean
+depth: 2
+inner_pooling: mean
+output_pooling: mean
+mlp_widths_equivariant: [64, 64]
+mlp_widths_invariant_inner: [64, 64]
+mlp_widths_invariant_outer: [64, 64]
+mlp_widths_invariant_last: [64, 64]
+activation: gelu
+kernel_initializer: he_normal
+dropout: 0.00
+spectral_normalization: false

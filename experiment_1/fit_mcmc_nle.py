@@ -2,15 +2,22 @@ import concurrent.futures
 import logging
 import multiprocessing
 import os
+if "KERAS_BACKEND" not in os.environ:
+    # set this to "torch", "tensorflow", or "jax"
+    os.environ["KERAS_BACKEND"] = "jax"
 
-os.environ["XLA_FLAGS"] = "--xla_force_host_platform_device_count={}".format(
-    multiprocessing.cpu_count()
-)
-os.environ["JAX_PLATFORMS"] = "cpu"
+# os.environ["XLA_FLAGS"] = "--xla_force_host_platform_device_count={}".format(
+#     multiprocessing.cpu_count()
+# )
+# os.environ["JAX_PLATFORMS"] = "cuda"
 
 import hydra
+import keras
 import numpy as np
 import tqdm
+
+from functools import partial
+
 from hydra.utils import get_object, instantiate
 from omegaconf import DictConfig
 
@@ -20,8 +27,52 @@ from utils import create_missing_dirs
 logger = logging.getLogger(__name__)
 
 
+def split_dict_values(input_dict):
+    # Get the length of the longest value
+    max_length = max(len(str(val)) if isinstance(val, (int, float)) 
+                    else len(val) for val in input_dict.values())
+    
+    # Initialize result list
+    result = []
+    
+    # Create a dictionary for each position
+    for i in range(max_length):
+        new_dict = {}
+        for key, value in input_dict.items():
+            # Convert value to string if it's a number
+            if isinstance(value, (int, float)):
+                value = str(value)
+            
+            # Handle lists/tuples
+            if isinstance(value, (list, tuple)):
+                new_dict[key] = [value[i]] if i < len(value) else ['']
+            # Handle strings and other iterables
+            else:
+                new_dict[key] = value[i:i+1] if i < len(value) else ''
+                
+        result.append(new_dict)
+
+    return result
+
+
 @hydra.main(version_base=None, config_path="../conf", config_name="config")
 def fit_mcmc(cfg: DictConfig):
+    simulator = instantiate(cfg["simulator"])
+    approximator = instantiate(cfg["approximator"])
+    data_adapter = approximator.adapter
+
+    if not approximator.built:
+        dataset = approximator.build_dataset(
+            simulator=simulator,
+            adapter=data_adapter,
+            num_batches=cfg["iterations_per_epoch"],
+            batch_size=cfg["batch_size"],
+        )
+        dataset = keras.tree.map_structure(lambda x: keras.ops.convert_to_tensor(x, dtype="float32"), dataset[0])
+        approximator.build_from_data(dataset)
+
+    approximator.load_weights(cfg["callbacks"][1]["filepath"])
+
     sample_sizes = instantiate(cfg["test_num_obs"])
 
     create_missing_dirs(["mcmc_samples"])
@@ -31,9 +82,9 @@ def fit_mcmc(cfg: DictConfig):
 
         data = load_hdf5(os.path.join("test_data", f"test_data_sample_size_{t}.hdf5"))
     
-        sim_data = data["x"]
+        # sim_data = data["x"][:1, :, :]
 
-        model_fun = instantiate(cfg["mcmc_model_fun"])
+        model_fun = partial(instantiate(cfg["mcmc_model_fun"]), approximator=approximator, num_obs=t)
 
         # Need to pass sampler_fun here because it is not a function or class
         sampling_fun = instantiate(cfg["mcmc_sampling_fun"], sampler_fun=get_object(cfg["mcmc_sampler"]))
@@ -42,11 +93,9 @@ def fit_mcmc(cfg: DictConfig):
 
         trace_data = {}
 
-        logger.info("Vectorizing model function over %s datasets", sim_data.shape[0])
-        model_fun_vec = np.vectorize(model_fun, signature="(m,n)->()")
-
-        model_funs_with_data = model_fun_vec(sim_data)
-        min_rt = sim_data[:, :, 0].min(axis=1)
+        # logger.info("Vectorizing model function over %s datasets", sim_data.shape[0])
+        model_funs_with_data = [model_fun(d) for d in split_dict_values(data)[:1]]
+        # min_rt = sim_data[:, :, 0].min(axis=1)
 
         num_workers = int(multiprocessing.cpu_count()/cfg["mcmc_sampling_fun"]["num_chains"])
 
@@ -57,7 +106,7 @@ def fit_mcmc(cfg: DictConfig):
                     sampling_fun,
                     fun,
                     # prior_fun=prior_fun,
-                    min_rt=min_rt[i]
+                    min_rt=None
                 ): i
                 for i, fun in enumerate(model_funs_with_data)
             }

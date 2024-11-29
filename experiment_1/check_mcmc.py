@@ -17,7 +17,7 @@ logger = logging.getLogger(__name__)
 def check_mcmc(cfg: DictConfig):
     sample_sizes = instantiate(cfg["test_num_obs"])
 
-    param_names = cfg["trainer"]["generative_model"]["prior"]["param_names"]
+    param_names = cfg["approximator"]["adapter"]["inference_variables"]
 
     create_missing_dirs(["mcmc_recovery"])
 
@@ -29,25 +29,21 @@ def check_mcmc(cfg: DictConfig):
         mcmc_samples = load_hdf5(os.path.join("mcmc_samples", f"fit_mcmc_sample_size_{t}.hdf5"))
 
         posterior_samples = mcmc_samples["samples"]
+        
         is_converged = np.all(blackjax.diagnostics.potential_scale_reduction(posterior_samples, chain_axis=1, sample_axis=2) < cfg["psrf_threshold"], axis=1)
+        
         posterior_samples = np.exp(np.reshape(posterior_samples, (posterior_samples.shape[0], -1, posterior_samples.shape[3])))[is_converged,:,:]
-        # posterior_samples[:, :, -1] += 0.1
-        prior_samples = data["prior_draws"][is_converged,:]
+
+        posterior_samples = posterior_samples[:, :, [3, 2, 4, 0, 1]]
+
+        prior_samples = np.moveaxis([val for key, val in data.items() if key in param_names], [0, 1, 2], [2, 0, 1]).squeeze()[is_converged,:]
 
         logger.info("%s datasets did not converge: %s", 1.0-is_converged.mean(), np.where(~is_converged))
-
-        fig = bf.diagnostics.plot_sbc_histograms(
-            posterior_samples,
-            prior_samples,
-            param_names=param_names,
-            num_bins=10
-        )
-        fig.savefig(os.path.join("mcmc_recovery", f"mcmc_histograms_sample_size_{t}.png"))
 
         fig = bf.diagnostics.plot_sbc_ecdf(
             posterior_samples,
             prior_samples,
-            param_names=param_names,
+            variable_names=param_names,
             stacked=False,
             difference=True
         )
@@ -56,7 +52,7 @@ def check_mcmc(cfg: DictConfig):
         fig = bf.diagnostics.plot_recovery(
             posterior_samples,
             prior_samples,
-            param_names=param_names,
+            variable_names=param_names,
             point_agg=np.mean,
             uncertainty_agg=np.std
         )
@@ -65,16 +61,16 @@ def check_mcmc(cfg: DictConfig):
         fig = bf.diagnostics.plot_z_score_contraction(
             posterior_samples,
             prior_samples,
-            param_names=param_names
+            variable_names=param_names
         )
         fig.savefig(os.path.join("mcmc_recovery", f"mcmc_z_score_contraction_sample_size_{t}.png"))
 
-        fig = bf.diagnostics.plot_posterior_2d(
-            posterior_samples[1,-2000:,:],
-            prior_draws=prior_samples,
-            param_names=param_names
-        )
-        fig.savefig(os.path.join("mcmc_recovery", f"mcmc_posterior_2d_sample_size_{t}.png"))
+        # fig = bf.diagnostics.plot_posterior_2d(
+        #     posterior_samples[1,-2000:,:],
+        #     prior_samples=prior_samples,
+        #     variable_names=param_names
+        # )
+        # fig.savefig(os.path.join("mcmc_recovery", f"mcmc_posterior_2d_sample_size_{t}.png"))
 
 
 if __name__ == "__main__":

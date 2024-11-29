@@ -5,12 +5,14 @@ import os
 import blackjax
 import jax
 import jax.numpy as jnp
+import keras
 import numpy as np
 import pymc as pm
 import pytensor
 import pytensor.tensor as pt
 
 from datetime import date
+from functools import partial
 
 from pytensor.tensor.random.op import RandomVariable
 from pymc.distributions import transforms
@@ -166,6 +168,25 @@ def rdm_model_simple(sim_data):
     return get_jaxified_logp(model)
 
 
+def model_nle(sim_data, approximator, num_obs):
+    sim_data = keras.tree.map_structure(keras.ops.convert_to_tensor, approximator.adapter(sim_data, strict=True, stage="inference"))
+
+    print(sim_data.keys())
+    print(sim_data["inference_conditions"].shape)
+
+    @jax.jit
+    def nle_logdensity_fun(x):
+        sim_data["inference_conditions"] = jnp.tile(x, (1, num_obs, 1))
+
+        ll = jnp.sum(approximator._log_prob(**sim_data))
+
+        # jax.debug.print(ll)
+
+        return ll
+
+    return nle_logdensity_fun
+
+
 def inference_loop(rng_key, kernel, initial_state, num_samples):
     @jax.jit
     def one_step(state, rng_key):
@@ -197,7 +218,7 @@ def run_mcmc(logdensity_fun, sampler_fun, init_position, num_chains, num_steps_w
     if min_rt is not None:
         init_position[-1] = 0.5 * min_rt
 
-    kernel, last_state, _ = warmup(sampler_fun, logdensity_fun, np.log(init_position), num_steps_warmup, warmup_key, **kwargs)
+    kernel, last_state, _ = warmup(sampler_fun, logdensity_fun, jnp.log(init_position), num_steps_warmup, warmup_key, **kwargs)
 
     last_states = jax.vmap(lambda x: last_state)(np.arange(num_chains))
 

@@ -9,3 +9,4 @@ defaults:
   - model: rdm_simple # Overrides simulator and approximator
   - method: flow_matching # Overrides approximator
   - experiment: experiment_1 # This must be last because it overrides model and method
+  - mcmc_model_fun: rdm

@@ -15,7 +15,8 @@ hydra:
         exclude_keys:
           - experiment
           - model
-          - method
+          - method,
+          - mcmc_model_fun
   job_logging:
     handlers:
       file:
@@ -50,10 +51,6 @@ test_num_obs:
   object: # ${trainer.generative_model.simulator.context_generator.non_batchable_context_fun.values}
     - 1000
 
-mcmc_model_fun:
-  _target_: pymc_models.rdm_model_simple
-  _partial_: true
-
 mcmc_sampler: blackjax.nuts
 
 mcmc_sampling_fun:
@@ -68,7 +65,7 @@ mcmc_sampling_fun:
       - 1
       - 1
       - 0.2
-  num_chains: 4
+  num_chains: 1
   num_steps_warmup: 2000
   num_steps_sampling: ${test_num_posterior_samples}
   rng_key:

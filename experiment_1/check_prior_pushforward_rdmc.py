@@ -1,4 +1,9 @@
 import logging
+import os
+
+if "KERAS_BACKEND" not in os.environ:
+    # set this to "torch", "tensorflow", or "jax"
+    os.environ["KERAS_BACKEND"] = "jax"
 
 import hydra
 import numpy as np

@@ -157,7 +157,7 @@ def rdm_model_simple(sim_data):
         v_slope = pm.TruncatedNormal("v_slope", mu=1.5, sigma=0.5, lower=0)
         s_true = pm.Gamma("s_true", alpha=12, beta=1.0 / 0.1)
         b = pm.Gamma("b", alpha=8, beta=1.0 / 0.15)
-        t0 = pm.TruncatedNormal("t0", mu=0.3, sigma=0.3, lower=0)
+        t0 = pm.TruncatedNormal("t0", mu=0.3, sigma=0.2, lower=0)
 
         v_true = v_intercept+v_slope
         v_false = v_intercept

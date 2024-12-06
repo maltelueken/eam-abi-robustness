@@ -1,6 +1,10 @@
 import logging
 import os
 
+if "KERAS_BACKEND" not in os.environ:
+    # set this to "torch", "tensorflow", or "jax"
+    os.environ["KERAS_BACKEND"] = "jax"
+
 import hydra
 import keras
 import numpy as np
@@ -40,8 +44,8 @@ def generate_test_data(cfg: DictConfig):
 
     sample_sizes = instantiate(cfg["test_num_obs"])
 
-    create_missing_dirs(["test_data"])
-    create_missing_dirs(["npe_samples"])
+    create_missing_dirs([os.path.join(cfg["test_data_path"], "test_data")])
+    # create_missing_dirs(["npe_samples"])
 
     for t in sample_sizes:
         logger.info("Creating test data set for sample size %s", t)
@@ -55,8 +59,9 @@ def generate_test_data(cfg: DictConfig):
         # posterior_samples = approximator.sample(
         #     conditions=sample_dict, batch_size=cfg["test_batch_size"], num_samples=cfg["test_num_posterior_samples"]
         # )
-
-        save_hdf5(os.path.join("test_data", f"test_data_sample_size_{t}.hdf5"), forward_dict)
+        test_data_path = os.path.join(cfg["test_data_path"], "test_data", f"test_data_sample_size_{t}.hdf5")
+        logger.info("Saving test data to %s", os.path.abspath(test_data_path))
+        save_hdf5(test_data_path, forward_dict)
         # save_hdf5(os.path.join("npe_samples", f"posterior_samples_sample_size_{t}.hdf5"), {"samples": posterior_samples})
 
 

@@ -5,118 +5,26 @@ inference_conditions:
 summary_variables:
 - x
 transforms:
-- _target_: bayesflow.adapters.transforms.MapTransform
-  transform_map:
-    v_intercept:
-      _target_: bayesflow.adapters.transforms.LambdaTransform
-      forward:
-        _target_: simulation.log_transform
-        _partial_: true
-      inverse:
-        _target_: simulation.inverse_log_transform
-        _partial_: true
-    v_slope:
-      _target_: bayesflow.adapters.transforms.LambdaTransform
-      forward:
-        _target_: simulation.log_transform
-        _partial_: true
-      inverse:
-        _target_: simulation.inverse_log_transform
-        _partial_: true
-    s_true:
-      _target_: bayesflow.adapters.transforms.LambdaTransform
-      forward:
-        _target_: simulation.log_transform
-        _partial_: true
-      inverse:
-        _target_: simulation.inverse_log_transform
-        _partial_: true
-    b:
-      _target_: bayesflow.adapters.transforms.LambdaTransform
-      forward:
-        _target_: simulation.log_transform
-        _partial_: true
-      inverse:
-        _target_: simulation.inverse_log_transform
-        _partial_: true
-    t0:
-      _target_: bayesflow.adapters.transforms.LambdaTransform
-      forward:
-        _target_: simulation.log_transform
-        _partial_: true
-      inverse:
-        _target_: simulation.inverse_log_transform
-        _partial_: true
-    num_obs:
-      _target_: bayesflow.adapters.transforms.LambdaTransform
-      forward:
-        _target_: simulation.sqrt_transform
-        _partial_: true
-      inverse:
-        _target_: simulation.inverse_sqrt_transform
-        _partial_: true
-
-- _target_: bayesflow.adapters.transforms.MapTransform
-  transform_map:
-    x:
-      _target_: bayesflow.adapters.transforms.Standardize
-    v_intercept:
-      _target_: bayesflow.adapters.transforms.Standardize
-      mean:
-        _target_: priors.log_truncated_normal_moments
-        loc: ${simulator.prior_fun.drift_intercept_loc}
-        scale: ${simulator.prior_fun.drift_intercept_scale}
-        moment: m
-      std:
-        _target_: priors.log_truncated_normal_moments
-        loc: ${simulator.prior_fun.drift_intercept_loc}
-        scale: ${simulator.prior_fun.drift_intercept_scale}
-        moment: v
-    v_slope:
-      _target_: bayesflow.adapters.transforms.Standardize
-      mean:
-        _target_: priors.log_truncated_normal_moments
-        loc: ${simulator.prior_fun.drift_slope_loc}
-        scale: ${simulator.prior_fun.drift_slope_scale}
-        moment: m
-      std:
-        _target_: priors.log_truncated_normal_moments
-        loc: ${simulator.prior_fun.drift_slope_loc}
-        scale: ${simulator.prior_fun.drift_slope_scale}
-        moment: v
-    s_true:
-      _target_: bayesflow.adapters.transforms.Standardize
-      mean:
-        _target_: priors.log_gamma_moments
-        shape: ${simulator.prior_fun.sd_true_shape}
-        scale: ${simulator.prior_fun.sd_true_scale}
-        moment: m
-      std:
-        _target_: priors.log_gamma_moments
-        shape: ${simulator.prior_fun.sd_true_shape}
-        scale: ${simulator.prior_fun.sd_true_scale}
-        moment: v
-    b:
-      _target_: bayesflow.adapters.transforms.Standardize
-      mean:
-        _target_: priors.log_gamma_moments
-        shape: ${simulator.prior_fun.threshold_shape}
-        scale: ${simulator.prior_fun.threshold_scale}
-        moment: m
-      std:
-        _target_: priors.log_gamma_moments
-        shape: ${simulator.prior_fun.threshold_shape}
-        scale: ${simulator.prior_fun.threshold_scale}
-        moment: v
-    t0:
-      _target_: bayesflow.adapters.transforms.Standardize
-      mean:
-        _target_: priors.log_truncated_normal_moments
-        loc: ${simulator.prior_fun.t0_loc}
-        scale: ${simulator.prior_fun.t0_scale}
-        moment: m
-      std:
-        _target_: priors.log_truncated_normal_moments
-        loc: ${simulator.prior_fun.t0_loc}
-        scale: ${simulator.prior_fun.t0_scale}
-        moment: v
+- _target_: bayesflow.adapters.transforms.FilterTransform # Log transform params
+  transform_constructor: 
+    _target_: bayesflow.adapters.transforms.LambdaTransform
+    _partial_: true
+    forward:
+      _target_: simulation.log_transform
+    inverse:
+      _target_: simulation.inverse_log_transform
+  exclude: ["num_obs", "x"]
+- _target_: bayesflow.adapters.transforms.FilterTransform # Sqrt transform num_obs
+  transform_constructor: 
+    _target_: bayesflow.adapters.transforms.LambdaTransform
+    _partial_: true
+    forward:
+      _target_: simulation.sqrt_transform
+    inverse:
+      _target_: simulation.inverse_sqrt_transform
+  include: ["num_obs"]
+- _target_: bayesflow.adapters.transforms.FilterTransform # Standardize params and x
+  transform_constructor: 
+    _target_: bayesflow.adapters.transforms.Standardize
+    _partial_: true
+  exclude: ["num_obs"]

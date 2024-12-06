@@ -1,6 +1,7 @@
 from typing import Callable
 
 import bayesflow as bf
+import keras
 import numpy as np
 import scipy.stats as stats
 
@@ -229,25 +230,25 @@ def create_data_adapter(inference_variables, inference_conditions=None, summary_
     return adapter
     
 
-def log_transform(x, batch_size=None):
-    return np.log(x)
+def log_transform():
+    return keras.ops.log
 
 
-def inverse_log_transform(x, batch_size=None):
-    return np.exp(x)
+def inverse_log_transform():
+    return keras.ops.exp
 
 
-def sqrt_transform(x, batch_size=None):
-    return np.sqrt(x)
+def sqrt_transform():
+    return keras.ops.sqrt
 
 
-def inverse_sqrt_transform(x, batch_size=None):
-    return np.square(x)
+def inverse_sqrt_transform():
+    return keras.ops.square
 
 
-def probit_transform(x, batch_size=None):
-    return stats.norm.ppf(x)
+def probit_transform():
+    return stats.norm.ppf
 
 
-def inverse_probit_transform(x, batch_size=None):
-    return stats.norm.cdf(x)
+def inverse_probit_transform():
+    return stats.norm.cdf

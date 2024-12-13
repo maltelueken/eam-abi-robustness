@@ -2,16 +2,17 @@
 
 hydra:
   run:
-    dir: outputs/${hydra:runtime.choices.experiment}/${hydra:runtime.choices.model}/${hydra:runtime.choices.method}/${hydra.job.override_dirname}
+    dir: outputs/${hydra:runtime.choices.experiment}/${hydra:runtime.choices.model}/${hydra:runtime.choices.inference-method}/${hydra.job.override_dirname}
   sweep:
     dir: multirun
-    subdir: ${hydra:runtime.choices.experiment}/${hydra:runtime.choices.model}/${hydra:runtime.choices.method}/${hydra.job.override_dirname}
+    subdir: ${hydra:runtime.choices.experiment}/${hydra:runtime.choices.model}/${hydra:runtime.choices.inference-method}/${hydra.job.override_dirname}
   job:
     chdir: True
     env_set:
       KERAS_BACKEND: jax
     config:
       override_dirname:
+        item_sep: "/"
         exclude_keys:
           - experiment
           - model
@@ -24,7 +25,8 @@ hydra:
 
 defaults:
   - override /model: rdm_simple
-  - override /method: flow_matching
+  - override /inference-method: flow_matching
+  - override /summary-method: set_transformer
 
 seed: 2024
 
@@ -39,6 +41,8 @@ diag_num_obs:
 epochs: 100
 iterations_per_epoch: 500
 batch_size: 64
+
+test_data_path: ${hydra:runtime.cwd}/outputs/${hydra:runtime.choices.experiment}/${hydra:runtime.choices.model}
 
 test_batch_size: 100
 test_transform: true

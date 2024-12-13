@@ -26,7 +26,9 @@ dependencies = [
   "tensorflow[and-cuda]",
   "hydra-core",
   "pytest",
-  "ruff"
+  "ruff",
+  "optuna",
+  "hydra-optuna-sweeper"
 ]
 description = "Model training and analysis pipeline for assessing the obustness of amortized Bayesian inference for evidence accumulation models."
 license = {file = "LICENSE"}

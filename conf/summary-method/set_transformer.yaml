@@ -1,0 +1,10 @@
+# @package _global_
+
+hydra:
+  sweeper:
+    params:
+      approximator.summary_network.summary_dim: choice(4, 8, 16, 32)
+      approximator.summary_network.embed_dims: choice([16, 16], [32, 32], [64, 64])
+      approximator.summary_network.num_heads: choice([2, 2], [4, 4])
+      # approximator.summary_network.num_seeds: choice(1, 2, 4)
+      

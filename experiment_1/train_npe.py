@@ -5,6 +5,7 @@ if "KERAS_BACKEND" not in os.environ:
 import logging
 
 import hydra
+import numpy as np
 from hydra.utils import instantiate
 from omegaconf import DictConfig, OmegaConf
 
@@ -22,13 +23,15 @@ def train_npe(cfg: DictConfig):
 
     callbacks = instantiate(cfg["callbacks"], _convert_="partial") # [keras.callbacks.TensorBoard()]
 
-    approximator.fit(
+    history = approximator.fit(
         simulator=simulator,
         epochs=cfg["epochs"],
         num_batches=cfg["iterations_per_epoch"],
         batch_size=cfg["batch_size"],
         callbacks=callbacks,
     )
+
+    return(np.mean(history.history["loss"][-5:]))
 
 
 if __name__ == "__main__":

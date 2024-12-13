@@ -1,0 +1,9 @@
+# @package _global_
+
+hydra:
+  sweeper:
+    params:
+      approximator.inference_network.subnet_kwargs.depth: choice(2, 4, 6, 8, 10)
+      approximator.inference_network.subnet_kwargs.width: choice(128, 256, 512, 1024)
+      approximator.inference_network.use_optimal_transport: choice(true, false)
+      

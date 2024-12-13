@@ -1,0 +1,11 @@
+# @package _global_
+
+defaults:
+  - override /hydra/sweeper: optuna
+
+hydra:
+  sweeper:
+    direction: minimize
+    storage: null
+    n_trials: 20
+    n_jobs: 1

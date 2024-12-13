@@ -2,11 +2,13 @@
 
 defaults:
   - _self_
+  - sweeper: basic
   - approximator: continuous_approximator
-  - optimizer: adam
+  - optimizer: adam_cosine_decay
   - simulator: rdm
   - callbacks: tensorboard
   - model: rdm_simple # Overrides simulator and approximator
-  - method: flow_matching # Overrides approximator
+  - inference-method: flow_matching # Overrides approximator
+  - summary-method: set_transformer
   - experiment: experiment_1 # This must be last because it overrides model and method
   - mcmc_model_fun: rdm

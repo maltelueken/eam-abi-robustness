@@ -3,8 +3,7 @@ _partial_: true
 simulator_fun:
   _target_: simulation.rdmc_experiment_simple
   _partial_: true
-  s_false: 1
   a_shape: 2
-  t_max: 1000
+  t_max: 5000
   seed: ${seed}
     

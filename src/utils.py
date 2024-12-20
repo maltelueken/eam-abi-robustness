@@ -106,7 +106,7 @@ def create_pushforward_plot_rdm(data, prior_samples, param_names=None):
         )
         for i, p in enumerate(params):
             if param_names is not None:
-                ps = param_names[i] + ": " + str(np.round(p, 2))
+                ps = param_names[i] + ": " + str(np.round(p, 3))
             else:
                 ps = np.round(p, 2)
             ax.text(

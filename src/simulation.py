@@ -123,7 +123,7 @@ def find_min_and_argmin(arr):
         min_idx = 0
         for i in range(1, rows):
             if arr[i, j] < min_val:
-                min_val = min_val
+                min_val = arr[i, j]
                 min_idx = i
         min_vals[j] = min_val
         min_idxs[j] = min_idx
@@ -140,13 +140,13 @@ def set_seed_numba(value):
 def rdmc_experiment_simple_numba(mu, b, s, t0, num_obs, t_max):
     num_accumulators = mu.shape[0]
 
-    fpt = np.zeros((num_accumulators, num_obs), dtype=np.float64)
+    fpt = np.full((num_accumulators, num_obs), fill_value=t_max, dtype=np.float64)
     
     for n in prange(num_obs):
         for i in prange(num_accumulators):
             xt = 0.0
             for t in range(t_max):
-                xt += mu[i, t] + (s[i] * np.random.randn())
+                xt += mu[i, t] + s[i] * np.random.randn()
                 if xt > b:
                     fpt[i, n] = t
                     break
@@ -154,7 +154,7 @@ def rdmc_experiment_simple_numba(mu, b, s, t0, num_obs, t_max):
     rt, resp = find_min_and_argmin(fpt)
     rt += t0
 
-    return rt, resp
+    return rt / 1000, resp # Convert back to s scale
 
 
 def rdmc_experiment_simple(v_c_intercept, v_c_slope, amp, tau, s_true, s_false, b, t0, a_shape, num_obs, t_max, seed):
@@ -163,7 +163,7 @@ def rdmc_experiment_simple(v_c_intercept, v_c_slope, amp, tau, s_true, s_false, 
     
     mu_c = np.hstack([v_c_intercept, v_c_intercept + v_c_slope])
     s = np.hstack([s_false, s_true])
-    
+
     t = np.arange(1, t_max + 1, 1)
 
     eq4 = (
@@ -173,7 +173,7 @@ def rdmc_experiment_simple(v_c_intercept, v_c_slope, amp, tau, s_true, s_false, 
     ) * ((a_shape - 1) / t - 1 / tau)
 
     mu = np.tile(mu_c, (t_max, 1)).T
-    mu[0, :] += eq4
+    mu[1, :] += eq4
 
     set_seed_numba(seed)
 
@@ -192,10 +192,10 @@ def rrdmc_experiment_simple(v_c_intercept, v_c_slope, v_a_intercept, v_a_slope, 
     
     t = np.arange(1, t_max + 1, 1)
 
-    weigth_a = A0 * np.exp(-k*t)
-    weight_c = 1.0 - weigth_a
+    weight_a = A0 * np.exp(-k*t)
+    weight_c = 1.0 - weight_a
 
-    mu = weigth_a[None, :] * mu_a[:, None] + weight_c[None, :] * mu_c[:, None]
+    mu = weight_a[None, :] * mu_a[:, None] + weight_c[None, :] * mu_c[:, None]
 
     set_seed_numba(seed)
 

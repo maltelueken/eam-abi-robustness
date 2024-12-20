@@ -175,8 +175,17 @@ def rdmc_prior_simple(
     s_true = rng.gamma(shape=sd_true_shape, scale=sd_true_scale, size=batch_shape)
     b = rng.gamma(shape=threshold_shape, scale=threshold_scale, size=batch_shape)
     t0 = truncated_normal_rvs(t0_loc, t0_scale, size=batch_shape, random_state=rng)
+    s_false = 1
 
-    return {"v_c_intercept": drift_c_intercept, "v_c_slope": drift_c_slope, "amp": amp, "tau": tau, "s_true": s_true, "b": b, "t0": t0}
+    scale = 1000
+
+    s_true = s_true / np.sqrt(scale)
+    s_false = s_false / np.sqrt(scale)
+    drift_c_intercept = drift_c_intercept / scale
+    drift_c_slope = drift_c_slope / scale
+    tau = tau * scale
+
+    return {"v_c_intercept": drift_c_intercept, "v_c_slope": drift_c_slope, "amp": amp, "tau": tau, "s_true": s_true, "b": b, "t0": t0, "s_false": s_false}
 
 
 def rrdmc_prior_simple(
@@ -211,4 +220,16 @@ def rrdmc_prior_simple(
     b = rng.gamma(shape=threshold_shape, scale=threshold_scale, size=batch_shape)
     t0 = truncated_normal_rvs(t0_loc, t0_scale, size=batch_shape, random_state=rng)
 
-    return {"v_c_intercept": drift_c_intercept, "v_c_slope": drift_c_slope, "v_a_intercept": drift_a_intercept, "v_a_slope": drift_a_slope, "A0": A0, "k": k, "s_true": s_true, "b": b, "t0": t0}
+    s_false = 1
+
+    scale = 1000
+
+    s_true = s_true / np.sqrt(scale)
+    s_false = s_false / np.sqrt(scale)
+    drift_c_intercept = drift_c_intercept / scale
+    drift_c_slope = drift_c_slope / scale
+    drift_a_intercept = drift_a_intercept / scale
+    drift_a_slope = drift_a_slope / scale
+    k = k / scale
+
+    return {"v_c_intercept": drift_c_intercept, "v_c_slope": drift_c_slope, "v_a_intercept": drift_a_intercept, "v_a_slope": drift_a_slope, "A0": A0, "k": k, "s_true": s_true, "b": b, "t0": t0, "s_false": s_false}

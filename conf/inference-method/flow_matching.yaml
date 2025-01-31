@@ -1,9 +1,14 @@
 # @package _global_
 
+defaults:
+- override /approximator/inference_network: flow_matching
+
+inference_mlp_width: 8
+
 hydra:
   sweeper:
     params:
-      approximator.inference_network.subnet_kwargs.depth: choice(2, 4, 6, 8, 10)
-      approximator.inference_network.subnet_kwargs.width: choice(128, 256, 512, 1024)
+      approximator.inference_network.subnet_kwargs.depth: range(2, 4)
+      inference_mlp_width: range(2, 4)
       approximator.inference_network.use_optimal_transport: choice(true, false)
       

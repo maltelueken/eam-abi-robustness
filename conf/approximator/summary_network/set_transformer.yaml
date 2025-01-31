@@ -3,10 +3,28 @@ defaults:
 
 _target_: bayesflow.networks.SetTransformer
 summary_dim: 16
-embed_dims: [32, 32]
-num_heads: [4, 4]
-mlp_depths: [2, 2]
-mlp_widths: [64, 64]
+embed_dims: 
+  _target_: sweeper.constant_list
+  length: ${embed_depth}
+  value:
+    _target_: builtins.pow
+    base: 2
+    exp: ${embed_width}
+num_heads: 
+  _target_: sweeper.constant_list
+  length: ${embed_depth}
+  value: 4
+mlp_depths:
+  _target_: sweeper.constant_list
+  length: ${embed_depth}
+  value: ${mlp_depth}
+mlp_widths:
+  _target_: sweeper.constant_list
+  length: ${embed_depth}
+  value:
+    _target_: builtins.pow
+    base: 2
+    exp: ${mlp_width}
 num_seeds: 1
 dropout: 0.00
 mlp_activation: gelu

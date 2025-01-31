@@ -45,15 +45,15 @@ batch_size: 64
 test_data_path: ${hydra:runtime.cwd}/outputs/${hydra:runtime.choices.experiment}/${hydra:runtime.choices.model}
 
 test_batch_size: 100
-test_transform: true
 test_num_posterior_samples: 2000
 
 psrf_threshold: 1.01
 
 test_num_obs:
-  _target_: numpy.array
-  object: # ${trainer.generative_model.simulator.context_generator.non_batchable_context_fun.values}
-    - 1000
+  _target_: numpy.arange
+  start: 50
+  stop: 1200
+  step: 50
 
 mcmc_sampler: blackjax.nuts
 
@@ -69,7 +69,7 @@ mcmc_sampling_fun:
       - 1
       - 1
       - 0.2
-  num_chains: 1
+  num_chains: 4
   num_steps_warmup: 2000
   num_steps_sampling: ${test_num_posterior_samples}
   rng_key:

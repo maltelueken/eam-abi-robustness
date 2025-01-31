@@ -3,7 +3,10 @@ subnet: mlp
 subnet_kwargs:
   _target_: builtins.dict
   depth: 6
-  width: 256
+  width:
+    _target_: builtins.pow
+    base: 2
+    exp: ${inference_mlp_width}
   dropout: 0.00
 base_distribution: normal
 integrator: euler

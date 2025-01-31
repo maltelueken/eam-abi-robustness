@@ -6,6 +6,10 @@ defaults:
 hydra:
   sweeper:
     direction: minimize
-    storage: null
+    storage:
+      _target_: optuna.storages.JournalStorage
+      log_storage:
+        _target_: optuna.storages.journal.JournalFileBackend
+        file_path: optuna_trials.log
     n_trials: 20
     n_jobs: 1

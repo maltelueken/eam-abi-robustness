@@ -6,6 +6,8 @@
 #SBATCH --gpus=1
 #SBATCH --partition=gpu_mig
 #SBATCH --time=01:00:00
+#SBATCH --output=/projects/0/prjs1372/eam-abi-robustness/slurm/logs/train_npe_%j.out
+#SBATCH --error=/projects/0/prjs1372/eam-abi-robustness/slurm/logs/train_npe_%j.err
 
 cd /projects/0/prjs1372/eam-abi-robustness
 

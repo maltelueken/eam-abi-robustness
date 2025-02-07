@@ -2,7 +2,7 @@
 #SBATCH --job-name=fit_mcmc
 #SBATCH --nodes=1
 #SBATCH --ntasks=1
-#SBATCH --cpus-per-task=112
+#SBATCH --cpus-per-task=128
 #SBATCH --partition=fat_rome
 #SBATCH --time=04:00:00
 #SBATCH --output=/projects/0/prjs1372/eam-abi-robustness/slurm/logs/fit_mcmc_%j.out

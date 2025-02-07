@@ -24,12 +24,12 @@ logger = logging.getLogger(__name__)
 def fit_mcmc(cfg: DictConfig):
     sample_sizes = instantiate(cfg["test_num_obs"])
 
-    create_missing_dirs(["mcmc_samples"])
+    create_missing_dirs([os.path.join(cfg["test_data_path"], "mcmc_samples")])
 
     for t in sample_sizes:
         logger.info("Loading test data for sample size %s", t)
 
-        data = load_hdf5(os.path.join("test_data", f"test_data_sample_size_{t}.hdf5"))
+        data = load_hdf5(os.path.join(cfg["test_data_path"], "test_data", f"test_data_sample_size_{t}.hdf5"))
     
         sim_data = data["x"]
 
@@ -75,7 +75,7 @@ def fit_mcmc(cfg: DictConfig):
         trace_data = dict(sorted(trace_data.items()))
 
         # Save to hdf5 file
-        save_hdf5(os.path.join("mcmc_samples", f"fit_mcmc_sample_size_{t}.hdf5"), {"samples": np.array(list(trace_data.values()))})
+        save_hdf5(os.path.join(cfg["test_data_path"], "mcmc_samples", f"fit_mcmc_sample_size_{t}.hdf5"), {"samples": np.array(list(trace_data.values()))})
 
 
 if __name__ == "__main__":

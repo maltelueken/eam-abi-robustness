@@ -5,7 +5,7 @@ defaults:
 
 hydra:
   sweeper:
-    direction: minimize
+    direction: [minimize, maximize, minimize]
     storage:
       _target_: optuna.storages.JournalStorage
       log_storage:

@@ -1,0 +1,13 @@
+defaults:
+- adapter: rdm_simple
+- inference_network: flow_matching
+- summary_network: set_transformer
+- simulator: rdm
+- optimizer: adam_cosine_decay
+
+_target_: bayesflow.BasicWorkflow
+inference_variables: ["v_intercept", "v_slope", "s_true", "b", "t0"]
+inference_conditions:
+- num_obs
+summary_variables:
+- x

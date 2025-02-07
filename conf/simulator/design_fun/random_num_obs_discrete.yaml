@@ -1,9 +1,9 @@
 _target_: design.random_num_obs_discrete
 _partial_: true
 values:
-- 100
 - 250
 - 500
+- 750
 - 1000
 rng:
   _target_: numpy.random.default_rng

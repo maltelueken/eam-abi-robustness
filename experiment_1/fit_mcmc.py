@@ -2,9 +2,9 @@ import concurrent.futures
 import logging
 import os
 
-# os.environ["XLA_FLAGS"] = "--xla_force_host_platform_device_count={}".format(
-#     32
-# )
+os.environ["XLA_FLAGS"] = "--xla_force_host_platform_device_count={}".format(
+    32
+)
 os.environ["JAX_PLATFORMS"] = "cpu"
 
 import hydra

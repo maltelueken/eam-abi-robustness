@@ -1,11 +1,10 @@
 import concurrent.futures
 import logging
-import multiprocessing
 import os
 
-os.environ["XLA_FLAGS"] = "--xla_force_host_platform_device_count={}".format(
-    multiprocessing.cpu_count()
-)
+# os.environ["XLA_FLAGS"] = "--xla_force_host_platform_device_count={}".format(
+#     32
+# )
 os.environ["JAX_PLATFORMS"] = "cpu"
 
 import hydra
@@ -48,7 +47,7 @@ def fit_mcmc(cfg: DictConfig):
         model_funs_with_data = model_fun_vec(sim_data)
         min_rt = sim_data[:, :, 0].min(axis=1)
 
-        num_workers = int(multiprocessing.cpu_count()/cfg["mcmc_sampling_fun"]["num_chains"])
+        num_workers = int(32/cfg["mcmc_sampling_fun"]["num_chains"])
 
         logger.info("Estimating posteriors with MCMC across %s workers", num_workers)
         with concurrent.futures.ThreadPoolExecutor(max_workers=num_workers) as executor:

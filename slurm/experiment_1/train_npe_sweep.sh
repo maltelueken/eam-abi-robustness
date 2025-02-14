@@ -5,7 +5,7 @@
 #SBATCH --cpus-per-task=9
 #SBATCH --gpus=1
 #SBATCH --partition=gpu_mig
-#SBATCH --time=12:00:00
+#SBATCH --time=24:00:00
 #SBATCH --output=/projects/0/prjs1372/eam-abi-robustness/slurm/logs/train_npe_%j.out
 #SBATCH --error=/projects/0/prjs1372/eam-abi-robustness/slurm/logs/train_npe_%j.err
 

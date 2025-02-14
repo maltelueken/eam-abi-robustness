@@ -52,7 +52,7 @@ psrf_threshold: 1.01
 test_num_obs:
   _target_: numpy.arange
   start: 50
-  stop: 1200
+  stop: 1250
   step: 50
 
 mcmc_sampler: blackjax.nuts

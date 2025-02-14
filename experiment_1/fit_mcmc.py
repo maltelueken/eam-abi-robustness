@@ -1,10 +1,13 @@
 import concurrent.futures
 import logging
-import multiprocessing
 import os
 
+if "KERAS_BACKEND" not in os.environ:
+    # set this to "torch", "tensorflow", or "jax"
+    os.environ["KERAS_BACKEND"] = "jax"
+
 os.environ["XLA_FLAGS"] = "--xla_force_host_platform_device_count={}".format(
-    multiprocessing.cpu_count()
+    32
 )
 os.environ["JAX_PLATFORMS"] = "cpu"
 
@@ -46,18 +49,15 @@ def fit_mcmc(cfg: DictConfig):
         model_fun_vec = np.vectorize(model_fun, signature="(m,n)->()")
 
         model_funs_with_data = model_fun_vec(sim_data)
-        min_rt = sim_data[:, :, 0].min(axis=1)
 
-        num_workers = int(multiprocessing.cpu_count()/cfg["mcmc_sampling_fun"]["num_chains"])
+        num_workers = int(32/cfg["mcmc_sampling_fun"]["num_chains"])
 
         logger.info("Estimating posteriors with MCMC across %s workers", num_workers)
         with concurrent.futures.ThreadPoolExecutor(max_workers=num_workers) as executor:
             future_to_idx = {
                 executor.submit(
                     sampling_fun,
-                    fun,
-                    # prior_fun=prior_fun,
-                    min_rt=min_rt[i]
+                    fun
                 ): i
                 for i, fun in enumerate(model_funs_with_data)
             }

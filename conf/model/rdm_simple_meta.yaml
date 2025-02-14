@@ -1,5 +1,5 @@
 # @package _global_
 
 defaults:
-- override /simulator: rdm_meta
-- override /approximator/adapter: rdm_simple_meta
+- override /workflow/simulator: rdm_meta
+- override /workflow/adapter: rdm_simple_meta

@@ -36,7 +36,7 @@ diag_sens_num_posterior_samples: 100
 
 diag_num_obs:
   _target_: numpy.array
-  object: ${simulator.design_fun.values}
+  object: ${workflow.simulator.design_fun.values}
 
 epochs: 100
 iterations_per_epoch: 500

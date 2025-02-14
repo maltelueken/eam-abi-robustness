@@ -4,6 +4,7 @@ from typing import Iterable
 
 import arviz as az
 import jax
+import keras
 import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
@@ -48,37 +49,22 @@ def get_decay_steps(num_epochs, num_batches):
     return num_epochs * num_batches
 
 
-def create_prior_2d_plot(prior_samples, param_names, height=2.5, color="#8f2727", **kwargs):
-    # Get latent dimensionality and prepare titles
-    dim = prior_samples.shape[-1]
+def load_workflow(cfg):
+    workflow = instantiate(cfg["workflow"], _convert_="partial")
 
-    # Convert samples to a pandas data frame
-    if param_names is None:
-        titles = [f"Prior Param. {i}" for i in range(1, dim + 1)]
-    else:
-        titles = [f"Prior {p}" for p in param_names]
-    data_to_plot = pd.DataFrame(prior_samples, columns=titles)
+    if not workflow.approximator.built:
+        dataset = workflow.approximator.build_dataset(
+            simulator=workflow.simulator,
+            adapter=workflow.adapter,
+            num_batches=cfg["iterations_per_epoch"],
+            batch_size=cfg["batch_size"],
+        )
+        dataset = keras.tree.map_structure(lambda x: keras.ops.convert_to_tensor(x, dtype="float32"), dataset[0])
+        workflow.approximator.build_from_data(dataset)
 
-    # Generate plots
-    g = sns.PairGrid(data_to_plot, height=height, **kwargs)
-    g.map_diag(sns.histplot, fill=True, color=color, alpha=0.9, kde=True)
+    workflow.approximator.load_weights(cfg["callbacks"][1]["filepath"])
 
-    # Kernel density estimation (KDE) may not always be possible
-    # (e.g. with parameters whose correlation is close to 1 or -1).
-    # In this scenario, a scatter-plot is generated instead.
-    try:
-        g.map_lower(sns.kdeplot, fill=True, color=color, alpha=0.9)
-    except Exception as e:
-        logging.warning("KDE failed due to the following exception:\n" + repr(e) + "\nSubstituting scatter plot.")
-        g.map_lower(sns.scatterplot, alpha=0.6, s=40, edgecolor="k", color=color)
-    g.map_upper(sns.scatterplot, alpha=0.6, s=40, edgecolor="k", color=color)
-
-    # Add grids
-    for i in range(dim):
-        for j in range(dim):
-            g.axes[i, j].grid(alpha=0.5)
-    g.tight_layout()
-    return g.fig
+    return workflow
 
 
 def create_pushforward_plot_rdm(data, prior_samples, param_names=None):

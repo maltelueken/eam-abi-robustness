@@ -34,6 +34,8 @@ def fit_mcmc(cfg: DictConfig):
         except:
             logger.info("No MCMC samples found for num samples %s and dataset %s", t, i)
 
+    trace_dict = {int(k): v for k, v in trace_dict.items()}
+
     trace_data = dict(sorted(trace_dict.items()))
 
     # Save to hdf5 file

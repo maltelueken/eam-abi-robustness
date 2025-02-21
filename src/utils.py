@@ -18,7 +18,7 @@ from matplotlib.lines import Line2D
 def create_missing_dirs(dir_list):
     for dirname in dir_list:
         if not (os.path.exists(dirname)):
-            os.mkdir(dirname)
+            os.makedirs(dirname, exist_ok=True)
 
 
 def get_default_rng():

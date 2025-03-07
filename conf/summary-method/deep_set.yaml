@@ -1,0 +1,4 @@
+# @package _global_
+
+defaults:
+  - override /approximator/summary_network: deep_set

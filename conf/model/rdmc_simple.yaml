@@ -1,5 +1,5 @@
 # @package _global_
 
 defaults:
-- override /workflow/simulator: rdmc
-- override /workflow/adapter: rdmc_simple
+- override /simulator: rdmc
+- override /approximator/adapter: rdmc_simple

@@ -50,6 +50,8 @@ def fit_mcmc(cfg: DictConfig):
 
         model_funs_with_data = model_fun_vec(sim_data)
 
+        min_rt = sim_data[:, :, 0].min(axis=1)
+
         num_workers = int(32/cfg["mcmc_sampling_fun"]["num_chains"])
 
         logger.info("Estimating posteriors with MCMC across %s workers", num_workers)
@@ -57,7 +59,8 @@ def fit_mcmc(cfg: DictConfig):
             future_to_idx = {
                 executor.submit(
                     sampling_fun,
-                    fun
+                    fun,
+                    min_rt=min_rt[i]
                 ): i
                 for i, fun in enumerate(model_funs_with_data)
             }

@@ -30,13 +30,14 @@ defaults:
 
 seed: 2024
 
+eval_num_obs: 1000
+
 diag_batch_size: 100
-diag_sbc_num_posterior_samples: 100
-diag_sens_num_posterior_samples: 100
+diag_num_posterior_samples: 1000
 
 diag_num_obs:
   _target_: numpy.array
-  object: ${workflow.simulator.design_fun.values}
+  object: ${simulator.design_simulator.sample_fn.values}
 
 epochs: 100
 iterations_per_epoch: 500

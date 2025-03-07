@@ -3,10 +3,9 @@
 defaults:
   - _self_
   - sweeper: basic
-  - workflow: basic_workflow
-  # - approximator: continuous_approximator
-  # - optimizer: adam_cosine_decay
-  # - simulator: rdm
+  - approximator: continuous_approximator
+  - optimizer: adam_cosine_decay
+  - simulator: rdm
   - callbacks: tensorboard
   - model: rdm_simple # Overrides simulator and approximator
   - inference-method: flow_matching # Overrides approximator

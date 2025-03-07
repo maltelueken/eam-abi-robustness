@@ -41,7 +41,7 @@ def fit_mcmc(cfg: DictConfig):
 
     model = model_fun(sim_data[idx, :, :])
 
-    trace = sampling_fun(model)
+    trace = sampling_fun(model, min_rt=sim_data[idx, :, 0].min())
 
     save_hdf5(os.path.join(cfg["test_data_path"], "mcmc_samples", str(t), f"samples_{idx}.hdf5"), {str(idx): trace[0].position})
 

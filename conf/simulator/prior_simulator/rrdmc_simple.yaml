@@ -1,0 +1,25 @@
+_target_: bayesflow.simulators.LambdaSimulator
+sample_fn:
+  _target_: priors.rrdmc_prior_simple
+  _partial_: true
+  drift_c_intercept_loc: 1
+  drift_c_intercept_scale: 0.5
+  drift_c_slope_loc: 1.5
+  drift_c_slope_scale: 0.5
+  drift_a_intercept_loc: 2
+  drift_a_intercept_scale: 0.5
+  drift_a_slope_loc: 3.0
+  drift_a_slope_scale: 0.5
+  initial_shape: 5
+  initial_scale: 1.2
+  decay_shape: 4
+  decay_scale: 1
+  sd_true_shape: 12
+  sd_true_scale: 0.1
+  threshold_shape: 8
+  threshold_scale: 0.15
+  t0_loc: 300
+  t0_scale: 200
+  rng:
+    _target_: numpy.random.default_rng
+    seed: ${seed}

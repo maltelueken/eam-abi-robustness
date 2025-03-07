@@ -19,7 +19,7 @@ logger = logging.getLogger(__name__)
 
 @hydra.main(version_base=None, config_path="../conf", config_name="config")
 def generate_test_data(cfg: DictConfig):
-    workflow = instantiate(cfg["workflow"])
+    simulator = instantiate(cfg["simulator"], _convert_="partial")
 
     sample_sizes = instantiate(cfg["test_num_obs"])
 
@@ -28,8 +28,8 @@ def generate_test_data(cfg: DictConfig):
     for t in sample_sizes:
         logger.info("Creating test data set for sample size %s", t)
 
-        forward_dict = workflow.simulate(
-            batch_shape=(cfg["diag_batch_size"],), num_obs=np.tile([t], (cfg["diag_batch_size"],))
+        forward_dict = simulator.sample(
+            cfg["test_batch_size"], num_obs=np.array(t)
         )
         
         test_data_path = os.path.join(cfg["test_data_path"], "test_data", f"test_data_sample_size_{t}.hdf5")

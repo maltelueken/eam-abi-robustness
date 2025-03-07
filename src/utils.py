@@ -49,22 +49,23 @@ def get_decay_steps(num_epochs, num_batches):
     return num_epochs * num_batches
 
 
-def load_workflow(cfg):
-    workflow = instantiate(cfg["workflow"], _convert_="partial")
+def load_approximator(cfg):
+    approximator = instantiate(cfg["approximator"], _convert_="partial")
+    simulator = instantiate(cfg["simulator"], _convert_="partial")
 
-    if not workflow.approximator.built:
-        dataset = workflow.approximator.build_dataset(
-            simulator=workflow.simulator,
-            adapter=workflow.adapter,
+    if not approximator.built:
+        dataset = approximator.build_dataset(
+            simulator=simulator,
+            adapter=approximator.adapter,
             num_batches=cfg["iterations_per_epoch"],
             batch_size=cfg["batch_size"],
         )
         dataset = keras.tree.map_structure(lambda x: keras.ops.convert_to_tensor(x, dtype="float32"), dataset[0])
-        workflow.approximator.build_from_data(dataset)
+        approximator.build_from_data(dataset)
 
-    workflow.approximator.load_weights(cfg["callbacks"][1]["filepath"])
+    approximator.load_weights(cfg["callbacks"][1]["filepath"])
 
-    return workflow
+    return approximator, simulator
 
 
 def create_pushforward_plot_rdm(data, prior_samples, param_names=None):

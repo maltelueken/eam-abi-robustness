@@ -1,6 +1,5 @@
-_target_: simulation.batch_simulator
-_partial_: true
-simulator_fun:
+_target_: bayesflow.simulators.LambdaSimulator
+sample_fn:
   _target_: simulation.rrdmc_experiment_simple
   _partial_: true
   t_max: 5000

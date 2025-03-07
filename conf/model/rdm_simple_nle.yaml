@@ -1,6 +1,6 @@
 # @package _global_
 
 defaults:
-- override /workflow/simulator: rdm
-- override /workflow/adapter: rdm_simple_nle
-- override /workflow/summary_network: null
+- override /simulator: rdm
+- override /approximator/adapter: rdm_simple_nle
+- override /approximator/summary_network: null

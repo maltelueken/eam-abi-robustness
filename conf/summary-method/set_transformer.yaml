@@ -1,7 +1,7 @@
 # @package _global_
 
 defaults:
-  - override /workflow/summary_network: set_transformer
+  - override /approximator/summary_network: set_transformer
 
 embed_depth: 2
 embed_width: 6
@@ -11,10 +11,10 @@ mlp_width: 7
 hydra:
   sweeper:
     params:
-      workflow.summary_network.summary_dim: range(8, 32)
+      approximator.summary_network.summary_dim: range(8, 32)
       embed_depth: range(1, 4)
       embed_width: range(4, 8)
       mlp_depth: range(1, 4)
       mlp_width: range(5, 9)
-      workflow.summary_network.num_seeds: range(1, 4)
+      approximator.summary_network.num_seeds: range(1, 4)
       

@@ -107,7 +107,6 @@ def probit_beta_moments(shape: float, scale: float, moment: str, size=1000000):
 
 
 def rdm_prior_simple(
-    batch_shape,
     drift_intercept_loc,
     drift_intercept_scale,
     drift_slope_loc,
@@ -122,18 +121,18 @@ def rdm_prior_simple(
     rng,
 ):
     drift_intercept = truncated_normal_rvs(
-        drift_intercept_loc, drift_intercept_scale, size=batch_shape, random_state=rng
+        drift_intercept_loc, drift_intercept_scale, random_state=rng
     )
     drift_slope = truncated_normal_rvs(
-        drift_slope_loc, drift_slope_scale, size=batch_shape, random_state=rng
+        drift_slope_loc, drift_slope_scale, random_state=rng
     )
     sd_true = rng.gamma(
-        shape=sd_true_shape, scale=sd_true_scale, size=batch_shape
+        shape=sd_true_shape, scale=sd_true_scale
     )
     threshold = rng.gamma(
-        shape=threshold_shape, scale=threshold_scale, size=batch_shape
+        shape=threshold_shape, scale=threshold_scale
     )
-    t0 = truncated_normal_rvs(t0_loc, t0_scale, lower=t0_lower, size=batch_shape, random_state=rng)
+    t0 = truncated_normal_rvs(t0_loc, t0_scale, lower=t0_lower, random_state=rng)
 
     return {"v_intercept": drift_intercept, "v_slope": drift_slope, "s_true": sd_true, "b": threshold, "t0": t0}
 

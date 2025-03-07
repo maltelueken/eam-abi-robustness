@@ -6,25 +6,26 @@ import numpy as np
 import scipy.stats as stats
 
 from bayesflow.utils import batched_call, tree_stack
+from bayesflow.utils.decorators import allow_batch_size
 from bayesflow.types import Shape
 from numba import njit, prange
 
 
 class CustomSimulator(bf.simulators.Simulator):
-    def __init__(self, prior_fun: Callable, design_fun: Callable, simulator_fun: Callable):
-        self.prior_fun = prior_fun
-        self.design_fun = design_fun
-        self.simulator_fun = simulator_fun
+    def __init__(self, prior_simulator: Callable, design_simulator: Callable, experiment_simulator: Callable):
+        self.prior_simulator = prior_simulator
+        self.design_simulator = design_simulator
+        self.experiment_simulator = experiment_simulator
 
 
     def sample(self, batch_shape: Shape, **kwargs) -> dict[str, np.ndarray]:
-        prior_dict = self.prior_fun(batch_shape)
+        prior_dict = self.prior_simulator.sample(batch_shape)
 
-        design_dict = self.design_fun(batch_shape)
+        design_dict = self.design_simulator.sample(batch_shape)
 
         design_dict.update(**kwargs)
 
-        sims_dict = self.simulator_fun(batch_shape, **prior_dict, **design_dict)
+        sims_dict = self.experiment_simulator.sample(batch_shape, **prior_dict, **design_dict)
 
         data = prior_dict | design_dict | sims_dict
 
@@ -48,7 +49,7 @@ class CustomMetaSimulator(bf.simulators.Simulator):
         """Update dictionary only with kwargs that match existing keys."""
         d.update((k, v) for k, v in kwargs.items() if k in d)
 
-
+    @allow_batch_size
     def sample(self, batch_shape: Shape, **kwargs) -> dict[str, np.ndarray]:
         meta_dict = self.meta_fun(batch_shape)
 
@@ -88,8 +89,8 @@ def rdm_experiment_simple(
     rng
 ):
     """Simulates data from a single subject in a multi-alternative response times experiment."""
-    if np.any(np.array((v_intercept, v_slope, s_true, s_false, b, t0)) <= 0):
-        raise ValueError("Model parameters must be positive")
+    # if np.any(np.array((v_intercept, v_slope, s_true, s_false, b, t0)) <= 0):
+    #     raise ValueError("Model parameters must be positive")
 
     num_accumulators = 2
 
@@ -204,24 +205,23 @@ def rrdmc_experiment_simple(v_c_intercept, v_c_slope, v_a_intercept, v_a_slope, 
     return {"x": np.c_[rt, resp]}
 
 
-def create_data_adapter(inference_variables, inference_conditions=None, summary_variables=None, transforms=None):
-    adapter = (bf.adapters.Adapter()
+def create_simulator(prior_fun, simulator_fun, design_fun):
+    return bf.make_simulator([prior_fun, simulator_fun], meta_fn=design_fun)
+
+
+def create_data_adapter(inference_variables, inference_conditions=None, summary_variables=None):
+    adapter = (
+        bf.Adapter()
         .to_array()
         .convert_dtype("float64", "float32")
+        .broadcast("num_obs", to="x", exclude=[-2, -1], squeeze=2)
+        .as_set(["x"])
+        .apply(include=inference_variables, forward=log_transform, inverse=inverse_log_transform)
+        .apply(include="num_obs", forward=sqrt_transform, inverse=inverse_sqrt_transform)
+        .concatenate(inference_variables, into="inference_variables")
+        .concatenate(["x"], into="summary_variables")
+        .rename("num_obs", "inference_conditions")
     )
-
-    for transform in transforms:
-        adapter = adapter.add_transform(transform)
-
-    adapter = adapter.concatenate(inference_variables, into="inference_variables")
-
-    if inference_conditions is not None:
-        adapter = adapter.concatenate(inference_conditions, into="inference_conditions")
-
-    if summary_variables is not None:
-        adapter = adapter.as_set(summary_variables).concatenate(
-            summary_variables, into="summary_variables"
-        )
 
     adapter = adapter.keep(
         ["inference_variables", "inference_conditions", "summary_variables"]
@@ -230,20 +230,20 @@ def create_data_adapter(inference_variables, inference_conditions=None, summary_
     return adapter
     
 
-def log_transform():
-    return keras.ops.log
+def log_transform(x):
+    return np.log(x)
 
 
-def inverse_log_transform():
-    return keras.ops.exp
+def inverse_log_transform(x):
+    return np.exp(x)
 
 
-def sqrt_transform():
-    return keras.ops.sqrt
+def sqrt_transform(x):
+    return np.sqrt(x)
 
 
-def inverse_sqrt_transform():
-    return keras.ops.square
+def inverse_sqrt_transform(x):
+    return np.square(x)
 
 
 def probit_transform():

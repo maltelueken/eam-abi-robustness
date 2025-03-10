@@ -14,16 +14,23 @@ module load 2023
 
 source bin/activate
 
-for p1 in $(jot -p2 10 0.5 4)
+steps=10
+
+step_p1=$(echo "scale=6; (4 - 0.5) / ($steps - 1)" | bc)
+step_p2=$(echo "scale=6; (0.5 - 0.05) / ($steps - 1)" | bc)
+
+for i in $(seq 0 $(($steps - 1)))
 do
-    for p2 in $(jot -p2 10 0.05 0.5)
+    p1=$(echo "scale=2; 0.5 + ($i * $step_p1)" | bc)
+    for j in $(seq 0 $(($steps - 1)))
     do
+        p2=$(echo "scale=2; 0.05 + ($j * $step_p2)" | bc)
         for i in {0..99}
         do
-            srun --exclusive --ntasks=1 python experiment_2/fit_mcmc_slurm.py +slurm_p1=$p1 +slurm_p2=$p2 +slurm_idx=$i &
+            srun --exclusive --ntasks=1 python experiment_2/fit_mcmc_slurm.py experiment=experiment_2 +slurm_p1=$p1 +slurm_p2=$p2 +slurm_idx=$i &
         done
         wait
-        python experiment_2/collect_mcmc.py +slurm_p1=$p1 +slurm_p2=$p2
+        python experiment_2/collect_mcmc.py experiment=experiment_2 +slurm_p1=$p1 +slurm_p2=$p2
         rm -r outputs/experiment_2/rdm_simple/mcmc_samples/${p1}_${p2}
     done
 done

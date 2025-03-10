@@ -4,17 +4,17 @@ defaults:
   - override /approximator/summary_network: set_transformer
 
 embed_depth: 2
-embed_width: 6
+embed_width: 6 # 2^6 = 64
 mlp_depth: 2
-mlp_width: 7
+mlp_width: 7 # 2^7 = 128
 
 hydra:
   sweeper:
     params:
       approximator.summary_network.summary_dim: range(8, 32)
       embed_depth: range(1, 4)
-      embed_width: range(4, 8)
+      embed_width: range(4, 8) # 16 - 256
       mlp_depth: range(1, 4)
-      mlp_width: range(5, 9)
+      mlp_width: range(5, 9) # 32 - 512
       approximator.summary_network.num_seeds: range(1, 4)
       

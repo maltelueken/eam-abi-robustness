@@ -38,11 +38,8 @@ def train_npe(cfg: DictConfig):
     plt.savefig("loss_history.png")
 
     diag_sample = simulator.sample(
-        cfg["diag_batch_size"], num_obs=np.array(cfg["diag_num_obs"])
+        cfg["diag_batch_size"], num_obs=np.array(cfg["eval_num_obs"])
     )
-
-    # for k, v in diag_sample.items():
-    #     print(k, v.shape, v.dtype)
 
     param_names = cfg["approximator"]["adapter"]["inference_variables"]
 

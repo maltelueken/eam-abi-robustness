@@ -217,6 +217,7 @@ def create_data_adapter(inference_variables, inference_conditions=None, summary_
         .broadcast("num_obs", to="x", exclude=[-2, -1], squeeze=2)
         .as_set(["x"])
         .apply(include=inference_variables, forward=log_transform, inverse=inverse_log_transform)
+        .standardize(include=inference_variables)
         .apply(include="num_obs", forward=sqrt_transform, inverse=inverse_sqrt_transform)
         .concatenate(inference_variables, into="inference_variables")
         .concatenate(["x"], into="summary_variables")
@@ -229,19 +230,19 @@ def create_data_adapter(inference_variables, inference_conditions=None, summary_
 
     return adapter
     
-
+@keras.saving.register_keras_serializable(package="src", name="log_transform")
 def log_transform(x):
     return np.log(x)
 
-
+@keras.saving.register_keras_serializable(package="src", name="inverse_log_transform")
 def inverse_log_transform(x):
     return np.exp(x)
 
-
+@keras.saving.register_keras_serializable(package="src", name="sqrt_transform")
 def sqrt_transform(x):
     return np.sqrt(x)
 
-
+@keras.saving.register_keras_serializable(package="src", name="inverse_sqrt_transform")
 def inverse_sqrt_transform(x):
     return np.square(x)
 

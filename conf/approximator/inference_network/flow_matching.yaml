@@ -10,6 +10,10 @@ subnet_kwargs:
       base: 2
       exp: ${inference_mlp_width}
   dropout: 0.00
+  activation: mish
+  kernel_initializer: he_normal
+  residual: false
+  spectral_normalization: false
 base_distribution: normal
 loss_fn: mse
 use_optimal_transport: false

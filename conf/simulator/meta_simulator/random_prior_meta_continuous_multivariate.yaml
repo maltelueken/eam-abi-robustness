@@ -10,3 +10,4 @@ sample_fn:
   rng:
     _target_: numpy.random.default_rng
     seed: ${seed}
+is_batched: true

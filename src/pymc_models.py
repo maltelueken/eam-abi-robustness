@@ -148,15 +148,15 @@ def pos_cont_transform(op, rv):
     return transforms.log
 
 
-def rdm_model_simple(sim_data):
+def rdm_model_simple(sim_data, drift_slope_loc=1.5, threshold_scale=0.15):
     rt_true = sim_data[sim_data[:, 1] == 1, 0]
     rt_false = sim_data[sim_data[:, 1] == 0, 0]
 
     with pm.Model() as model:
         v_intercept = pm.TruncatedNormal("v_intercept", mu=1.0, sigma=0.5, lower=0)
-        v_slope = pm.TruncatedNormal("v_slope", mu=1.5, sigma=0.5, lower=0)
+        v_slope = pm.TruncatedNormal("v_slope", mu=drift_slope_loc, sigma=0.5, lower=0)
         s_true = pm.Gamma("s_true", alpha=12, beta=1.0 / 0.1)
-        b = pm.Gamma("b", alpha=8, beta=1.0 / 0.15)
+        b = pm.Gamma("b", alpha=8, beta=1.0 / threshold_scale)
         t0 = pm.TruncatedNormal("t0", mu=0.3, sigma=0.2, lower=0)
 
         v_true = v_intercept+v_slope

@@ -12,7 +12,10 @@ from numba import njit, prange
 
 
 class CustomSimulator(bf.simulators.Simulator):
-    def __init__(self, prior_simulator: Callable, design_simulator: Callable, experiment_simulator: Callable):
+    def __init__(self,
+                 prior_simulator: Callable,
+                 design_simulator: Callable,
+                 experiment_simulator: Callable):
         self.prior_simulator = prior_simulator
         self.design_simulator = design_simulator
         self.experiment_simulator = experiment_simulator
@@ -37,11 +40,14 @@ class CustomSimulator(bf.simulators.Simulator):
 
 
 class CustomMetaSimulator(bf.simulators.Simulator):
-    def __init__(self, meta_fun: Callable, prior_fun: Callable, design_fun: Callable, simulator_fun: Callable):
-        self.meta_fun = meta_fun
-        self.prior_fun = prior_fun
-        self.design_fun = design_fun
-        self.simulator_fun = simulator_fun
+    def __init__(self, meta_simulator: Callable,
+                 prior_simulator: Callable,
+                 design_simulator: Callable,
+                 experiment_simulator: Callable):
+        self.meta_simulator = meta_simulator
+        self.prior_simulator = prior_simulator
+        self.design_simulator = design_simulator
+        self.experiment_simulator = experiment_simulator
 
 
     @staticmethod
@@ -51,17 +57,17 @@ class CustomMetaSimulator(bf.simulators.Simulator):
 
     @allow_batch_size
     def sample(self, batch_shape: Shape, **kwargs) -> dict[str, np.ndarray]:
-        meta_dict = self.meta_fun(batch_shape)
+        meta_dict = self.meta_simulator.sample(batch_shape)
 
         self.update_existing(meta_dict, **kwargs)
 
-        prior_dict = self.prior_fun(batch_shape, **meta_dict)
+        prior_dict = self.prior_simulator.sample(batch_shape, **meta_dict)
 
-        design_dict = self.design_fun(batch_shape)
+        design_dict = self.design_simulator.sample(batch_shape)
 
         self.update_existing(design_dict, **kwargs)
 
-        sims_dict = self.simulator_fun(batch_shape, **prior_dict, **design_dict)
+        sims_dict = self.experiment_simulator.sample(batch_shape, **prior_dict, **design_dict)
 
         data = meta_dict | prior_dict | design_dict | sims_dict
 

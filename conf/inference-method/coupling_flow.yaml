@@ -3,4 +3,12 @@
 defaults:
 - override /approximator/inference_network: coupling_flow
 
-# optimizer/learning_rate: 1e-3
+inference_mlp_depth: 6
+inference_mlp_width: 8
+
+hydra:
+  sweeper:
+    params:
+      inference_mlp_depth: range(2, 12)
+      inference_mlp_width: range(6, 10)
+      approximator.inference_network.transform: choice(affine, spline, interleaved)

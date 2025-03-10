@@ -2,3 +2,16 @@
 
 defaults:
   - override /approximator/summary_network: deep_set
+
+summary_depth: 2
+equariant_width: 6 # 2^6 = 64
+invariant_width: 6
+
+hydra:
+  sweeper:
+    params:
+      approximator.summary_network.summary_dim: range(8, 32)
+      summary_depth: range(1, 4)
+      equivariant_depth: range(4, 8) # 16 - 256
+      invariant_width: range(4, 8)
+      

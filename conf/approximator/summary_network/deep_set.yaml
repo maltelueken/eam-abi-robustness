@@ -3,13 +3,37 @@
 
 _target_: bayesflow.networks.DeepSet
 summary_dim: 16
-depth: 2
+depth: ${summary_depth}
 inner_pooling: mean
 output_pooling: mean
-mlp_widths_equivariant: [64, 64]
-mlp_widths_invariant_inner: [64, 64]
-mlp_widths_invariant_outer: [64, 64]
-mlp_widths_invariant_last: [64, 64]
+mlp_widths_equivariant:
+  _target_: sweeper.constant_list
+  length: ${summary_depth}
+  value:
+    _target_: builtins.pow
+    base: 2
+    exp: ${equariant_width}
+mlp_widths_invariant_inner:
+  _target_: sweeper.constant_list
+  length: ${summary_depth}
+  value:
+    _target_: builtins.pow
+    base: 2
+    exp: ${invariant_width}
+mlp_widths_invariant_outer:
+  _target_: sweeper.constant_list
+  length: ${summary_depth}
+  value:
+    _target_: builtins.pow
+    base: 2
+    exp: ${invariant_width}
+mlp_widths_invariant_last:
+  _target_: sweeper.constant_list
+  length: ${summary_depth}
+  value:
+    _target_: builtins.pow
+    base: 2
+    exp: ${invariant_width}
 activation: gelu
 kernel_initializer: he_normal
 dropout: 0.00

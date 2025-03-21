@@ -5,8 +5,6 @@ if "KERAS_BACKEND" not in os.environ:
     # set this to "torch", "tensorflow", or "jax"
     os.environ["KERAS_BACKEND"] = "jax"
 
-os.environ["JAX_PLATFORMS"] = "cpu"
-
 import bayesflow as bf
 import blackjax
 import hydra
@@ -49,6 +47,7 @@ def check_robustness(cfg: DictConfig):
             
             logger.info("%s MCMC models did not converge: %s", 1.0-is_converged.mean(), np.where(~is_converged))
             posterior_mcmc = np.exp(np.reshape(posterior_mcmc, (posterior_mcmc.shape[0], -1, posterior_mcmc.shape[3])))[is_converged]
+            posterior_mcmc = posterior_mcmc[:, ::4,:]
 
             prior_samples = convert_prior_samples(forward_dict, param_names)
 

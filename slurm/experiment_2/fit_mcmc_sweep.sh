@@ -14,17 +14,13 @@ module load 2023
 
 source bin/activate
 
-steps=10
+param_1=(0.5 0.89 1.28 1.67 2.06 2.44 2.83 3.22 3.61 4.0)
+param_2=(0.05 0.1 0.15 0.2 0.25 0.3 0.35 0.4 0.45 0.5)
 
-step_p1=$(echo "scale=6; (4 - 0.5) / ($steps - 1)" | bc)
-step_p2=$(echo "scale=6; (0.5 - 0.05) / ($steps - 1)" | bc)
-
-for i in $(seq 0 $(($steps - 1)))
+for p1 in ${param_1[@]}
 do
-    p1=$(echo "scale=2; 0.5 + ($i * $step_p1)" | bc)
-    for j in $(seq 0 $(($steps - 1)))
+    for p2 in ${param_2[@]}
     do
-        p2=$(echo "scale=2; 0.05 + ($j * $step_p2)" | bc)
         for i in {0..99}
         do
             srun --exclusive --ntasks=1 python experiment_2/fit_mcmc_slurm.py experiment=experiment_2 +slurm_p1=$p1 +slurm_p2=$p2 +slurm_idx=$i &

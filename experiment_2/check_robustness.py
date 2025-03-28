@@ -31,9 +31,13 @@ def check_robustness(cfg: DictConfig):
     create_missing_dirs(["robustness"])
 
     mmd = []
+    meta_p1 = []
+    meta_p2 = []
 
     for p1 in meta_param_1:
         for p2 in meta_param_2:
+            meta_p1.append(p1)
+            meta_p2.append(p2)
             test_data_path = os.path.join(cfg["test_data_path"], "test_data", f"test_data_{meta_param_name_1}_{p1}_{meta_param_name_2}_{p2}.hdf5")
             logger.info("Loading test data from %s", os.path.abspath(test_data_path))
             forward_dict = load_hdf5(test_data_path)
@@ -64,8 +68,8 @@ def check_robustness(cfg: DictConfig):
             mmd.append(np.array([bf.metrics.functional.maximum_mean_discrepancy(x, y) for x, y in zip(posterior_mcmc, posterior_npe)]))
 
     pd.DataFrame({
-        meta_param_name_1: meta_param_1,
-        meta_param_name_2: meta_param_2,
+        meta_param_name_1: meta_p1,
+        meta_param_name_2: meta_p2,
         "mmd": mmd
     }).explode("mmd").to_csv(os.path.join("robustness", "mmd.csv"))
 

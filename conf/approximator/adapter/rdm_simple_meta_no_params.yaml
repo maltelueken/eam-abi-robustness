@@ -1,0 +1,6 @@
+defaults:
+  - rdm_simple
+
+inference_conditions:
+  - num_obs
+  

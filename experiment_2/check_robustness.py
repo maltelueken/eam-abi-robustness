@@ -31,6 +31,7 @@ def check_robustness(cfg: DictConfig):
     create_missing_dirs(["robustness"])
 
     mmd = []
+    error_rate = []
     meta_p1 = []
     meta_p2 = []
 
@@ -42,6 +43,8 @@ def check_robustness(cfg: DictConfig):
             logger.info("Loading test data from %s", os.path.abspath(test_data_path))
             forward_dict = load_hdf5(test_data_path)
 
+            data = forward_dict["x"]
+
             mcmc_data_path = os.path.join(cfg["test_data_path"], "mcmc_samples", f"fit_mcmc_{meta_param_name_1}_{p1}_{meta_param_name_2}_{p2}.hdf5")
             logger.info("Loading MCMC samples from %s", os.path.abspath(mcmc_data_path))
             mcmc_samples = load_hdf5(mcmc_data_path)
@@ -49,11 +52,13 @@ def check_robustness(cfg: DictConfig):
             posterior_mcmc = mcmc_samples["samples"]
             is_converged = np.all(blackjax.diagnostics.potential_scale_reduction(posterior_mcmc, chain_axis=1, sample_axis=2) < 1.01, axis=1)
             
+            error_rate.append(np.mean(data[:, :, 1], axis=0)[is_converged].tolist())
+
             logger.info("%s MCMC models did not converge: %s", 1.0-is_converged.mean(), np.where(~is_converged))
             posterior_mcmc = np.exp(np.reshape(posterior_mcmc, (posterior_mcmc.shape[0], -1, posterior_mcmc.shape[3])))[is_converged]
             posterior_mcmc = posterior_mcmc[:, ::4,:]
 
-            prior_samples = convert_prior_samples(forward_dict, param_names)
+            prior_samples = convert_prior_samples(forward_dict, param_names)[is_converged]
 
             npe_data_path = os.path.join("npe_samples", f"posterior_samples_{meta_param_name_1}_{p1}_{meta_param_name_2}_{p2}.hdf5")
             logger.info("Loading NPE samples from %s", os.path.abspath(npe_data_path))
@@ -70,8 +75,9 @@ def check_robustness(cfg: DictConfig):
     pd.DataFrame({
         meta_param_name_1: meta_p1,
         meta_param_name_2: meta_p2,
-        "mmd": mmd
-    }).explode("mmd").to_csv(os.path.join("robustness", "mmd.csv"))
+        "mmd": mmd,
+        "error_rate": error_rate
+    }).explode(["mmd", "error_rate"]).to_csv(os.path.join("robustness", "mmd.csv"))
 
 
 if __name__ == "__main__":

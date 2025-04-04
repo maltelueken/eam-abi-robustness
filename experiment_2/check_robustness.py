@@ -52,7 +52,7 @@ def check_robustness(cfg: DictConfig):
             posterior_mcmc = mcmc_samples["samples"]
             is_converged = np.all(blackjax.diagnostics.potential_scale_reduction(posterior_mcmc, chain_axis=1, sample_axis=2) < 1.01, axis=1)
             
-            error_rate.append(np.mean(data[:, :, 1], axis=0)[is_converged].tolist())
+            error_rate.append(np.mean(data[:, :, 1], axis=1)[is_converged].tolist())
 
             logger.info("%s MCMC models did not converge: %s", 1.0-is_converged.mean(), np.where(~is_converged))
             posterior_mcmc = np.exp(np.reshape(posterior_mcmc, (posterior_mcmc.shape[0], -1, posterior_mcmc.shape[3])))[is_converged]

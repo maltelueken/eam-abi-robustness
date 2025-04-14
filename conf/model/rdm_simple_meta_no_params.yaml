@@ -3,3 +3,5 @@
 defaults:
 - override /simulator: rdm_meta
 - override /approximator/adapter: rdm_simple_meta_no_params
+
+with_params: true

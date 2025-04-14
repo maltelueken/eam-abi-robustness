@@ -3,6 +3,7 @@
 defaults:
   - _self_
   - sweeper: basic
+  - experiment: experiment_1
   - approximator: continuous_approximator
   - optimizer: adam_cosine_decay
   - simulator: rdm
@@ -10,5 +11,4 @@ defaults:
   - model: rdm_simple # Overrides simulator and approximator
   - inference-method: flow_matching # Overrides approximator
   - summary-method: set_transformer
-  - experiment: experiment_1 # This must be last because it overrides model and method
   - mcmc_model_fun: rdm

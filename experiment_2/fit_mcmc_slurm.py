@@ -43,7 +43,10 @@ def fit_mcmc(cfg: DictConfig):
     # Need to pass sampler_fun here because it is not a function or class
     sampling_fun = instantiate(cfg["mcmc_sampling_fun"], sampler_fun=get_object(cfg["mcmc_sampler"]))
 
-    model = model_fun(sim_data[idx, :, :], p1, p2)
+    if cfg["with_params"]:
+        model = model_fun(sim_data[idx, :, :], p1, p2)
+    else:
+        model = model_fun(sim_data[idx, :, :])
 
     trace = sampling_fun(model, min_rt=sim_data[idx, :, 0].min())
 

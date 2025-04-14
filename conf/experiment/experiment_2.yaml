@@ -2,7 +2,6 @@
 
 defaults:
   - experiment_1
-  - override /model: rdm_simple_meta
 
 diag_num_obs: 500
 test_num_obs: 500
@@ -26,3 +25,5 @@ meta_param_2:
     stop: 0.5
     num: 10
   decimals: 2
+
+with_params: false

@@ -23,11 +23,6 @@ hydra:
       file:
         mode: w
 
-defaults:
-  - override /model: rdm_simple
-  - override /inference-method: flow_matching
-  - override /summary-method: set_transformer
-
 seed: 2024
 
 eval_num_obs: 1000

@@ -3,11 +3,13 @@ import os
 from typing import Iterable
 
 import arviz as az
+import bayesflow as bf
 import jax
 import keras
 import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
+import polars as pl
 import scipy.stats as stats
 import seaborn as sns
 
@@ -324,3 +326,42 @@ def create_profile_likelihood_plot(ll_fun, prior_draws, param_names=None, p_rang
     fig.tight_layout()
 
     return fig
+
+
+def trim_num_obs(x, min_num_obs):
+    return x[:min_num_obs]
+
+
+def read_data_from_txt(filename):
+    df = (pl.read_csv(filename, separator=" ")
+        .filter(
+            pl.col("block").eq("test") & 
+            pl.col("trl_number").gt(0)
+        )
+    )
+
+    min_trials = df.group_by("pp").agg(pl.len().alias("n")).select(pl.col("n").min()).item()
+
+    df = (df
+        .group_by("pp")
+        .agg(pl.col("acc"), pl.col("RT")/1_000)      
+    )
+
+    x = df.select(pl.col("RT"), pl.col("acc")).to_numpy()
+
+    x = np.array([np.array([trim_num_obs(e[0], min_trials), trim_num_obs(e[1], min_trials)]).T for e in x])
+
+    return dict(x=x, num_obs=min_trials)
+
+
+def sample_mmd_null(simulator, approximator, num_reps, batch_size_x, batch_size_y, **kwargs):
+    mmd_null = np.zeros(num_reps)
+
+    for i in range(num_reps):
+        data_x = simulator.sample(batch_size_x, **kwargs)
+        summary_x = approximator.summary_network(data_x["x"])
+        data_y = simulator.sample(batch_size_y, **kwargs)
+        summary_y = approximator.summary_network(data_y["x"])
+        mmd_null[i] = bf.metrics.functional.maximum_mean_discrepancy(summary_x, summary_y)
+
+    return mmd_null

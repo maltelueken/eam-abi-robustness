@@ -1,0 +1,13 @@
+# @package _global_
+
+defaults:
+  - experiment_1
+  - experiment_2
+
+diag_num_obs: 100
+test_num_obs: 100
+
+summary_mmd_num_reps: 100
+summary_mmd_batch_size: 1000
+
+# real_data_filename: ${hydra:runtime.cwd}/outputs/${hydra:runtime.choices.experiment}/${hydra:runtime.choices.model}/test_data/FF1.txt

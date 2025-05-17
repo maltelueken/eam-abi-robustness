@@ -39,10 +39,9 @@ def generate_test_data(cfg: DictConfig):
 
             test_data_path = os.path.join(cfg["test_data_path"], "test_data", f"test_data_{meta_param_name_1}_{p1}_{meta_param_name_2}_{p2}.hdf5")
             forward_dict = load_hdf5(test_data_path)
-            sample_dict = {k: v for k, v in forward_dict.items() if k not in param_names}
 
             posterior_samples = approximator.sample(
-                conditions=sample_dict,
+                conditions=forward_dict,
                 num_samples=cfg["test_num_posterior_samples"]
             )
             

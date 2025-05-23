@@ -220,7 +220,8 @@ def create_data_adapter(inference_variables, inference_conditions=None, summary_
         bf.Adapter()
         .to_array()
         .convert_dtype("float64", "float32")
-        .broadcast(inference_conditions, to="x", exclude=[-2, -1], squeeze=2)
+        .broadcast("num_obs", to="x", exclude=(-2, -1), squeeze=-1)
+        .broadcast(inference_conditions, to="num_obs") # Make sure that all inference conditions have same shape
         .as_set(summary_variables)
         .apply(include=inference_variables, forward=log_transform, inverse=inverse_log_transform)
         .standardize(include=inference_variables)

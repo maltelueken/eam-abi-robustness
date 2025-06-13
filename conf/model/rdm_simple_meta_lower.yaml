@@ -1,0 +1,8 @@
+# @package _global_
+
+defaults:
+- override /simulator: rdm_meta
+- override /approximator/adapter: rdm_simple_meta
+- override /simulator/meta_simulator: random_prior_meta_continuous_multivariate_lower
+
+with_params: true

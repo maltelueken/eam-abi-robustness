@@ -17,7 +17,7 @@ source bin/activate
 
 python experiment_1/train_npe.py \
     experiment=experiment_2 \
-    model=rdm_simple_meta_no_params \
+    model=rdm_simple_meta_lower \
     inference_mlp_depth=5 \
     inference_mlp_width=8 \
     approximator.inference_network.use_optimal_transport=true \

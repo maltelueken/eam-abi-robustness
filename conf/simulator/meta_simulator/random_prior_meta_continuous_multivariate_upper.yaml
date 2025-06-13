@@ -1,0 +1,13 @@
+_target_: bayesflow.simulators.LambdaSimulator
+sample_fn:
+  _target_: design.random_prior_meta_continuous_multivariate
+  _partial_: true
+  min_value: [2.83, 0.35]
+  max_value: [4.0, 0.5]
+  name: 
+  - ${meta_param_name_1}
+  - ${meta_param_name_2}
+  rng:
+    _target_: numpy.random.default_rng
+    seed: ${seed}
+is_batched: true

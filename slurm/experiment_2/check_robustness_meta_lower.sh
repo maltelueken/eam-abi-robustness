@@ -17,4 +17,4 @@ source bin/activate
 
 python experiment_2/check_robustness.py \
     experiment=experiment_2 \
-    model=rdm_simple_meta_no_params
+    model=rdm_simple_meta_lower

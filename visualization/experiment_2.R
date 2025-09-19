@@ -1,6 +1,7 @@
 
 
 library(ggplot2)
+library(ggh4x)
 library(dplyr)
 library(tidyr)
 library(forcats)
@@ -12,24 +13,106 @@ figure_path <- "visualization/figures/"
 
 # Generalization ----------------------------------------------------------
 
-df_robustness_a <- read.csv("outputs/experiment_2/rdm_simple/flow_matching/robustness/mmd.csv")[,-1] # Skip first index column
+study_labels <- paste("Context:", c("None", "High error rate", "Low error rate", "High + low error rate"))
 
-df_robustness_b <- read.csv("outputs/experiment_2/rdm_simple_meta_lower/flow_matching/robustness/mmd.csv")[,-1] # Skip first index column
+data_path <- "outputs/experiment_2"
 
-df_robustness_c <- read.csv("outputs/experiment_2/rdm_simple_meta_upper/flow_matching/robustness/mmd.csv")[,-1] # Skip first index column
+df_robustness_a <- read.csv(file.path(data_path, "rdm_simple/flow_matching/robustness/mmd.csv"))[,-1] # Skip first index column
 
-df_robustness_d <- read.csv("outputs/experiment_2/rdm_simple_meta/flow_matching/robustness/mmd.csv")[,-1] # Skip first index column
+df_robustness_d <- read.csv(file.path(data_path, "rdm_simple_meta/flow_matching/robustness/mmd.csv"))[,-1]
 
-df_robustness <- rbind(
-  df_robustness_a |>
-    mutate(study = "study_a"),
-  df_robustness_b |>
-    mutate(study = "study_b"),
-  df_robustness_c |>
-    mutate(study = "study_c"),
-  df_robustness_d |>
-    mutate(study = "study_d")
+df_robustness_b <- read.csv(file.path(data_path, "rdm_simple_meta_lower/flow_matching/robustness/mmd.csv"))[,-1]
+
+df_robustness_c <- read.csv(file.path(data_path, "rdm_simple_meta_upper/flow_matching/robustness/mmd.csv"))[,-1]
+
+df_summary_a <- read.csv(file.path(data_path, "rdm_simple/flow_matching/metrics/summary_stats.csv"))[,-1]
+
+df_summary_d <- read.csv(file.path(data_path, "rdm_simple_meta/flow_matching/metrics/summary_stats.csv"))[,-1]
+
+df_summary_b <- read.csv(file.path(data_path, "rdm_simple_meta_lower/flow_matching/metrics/summary_stats.csv"))[,-1]
+
+df_summary_c <- read.csv(file.path(data_path, "rdm_simple_meta_upper/flow_matching/metrics/summary_stats.csv"))[,-1]
+
+join_robustness_summary_dfs <- function(df_summary, df_robustness) {
+  return(df_summary |>
+           group_by(drift_slope_loc, threshold_scale, param) |>
+           mutate(id = row_number(), .before = 1) |>
+           left_join(df_robustness |>
+                       group_by(drift_slope_loc, threshold_scale) |>
+                       mutate(id = row_number()),
+                     by=c("drift_slope_loc", "threshold_scale", "id")))
+}
+
+df_join_a <- join_robustness_summary_dfs(df_summary_a, df_robustness_a)
+df_join_b <- join_robustness_summary_dfs(df_summary_b, df_robustness_b)
+df_join_c <- join_robustness_summary_dfs(df_summary_c, df_robustness_c)
+df_join_d <- join_robustness_summary_dfs(df_summary_d, df_robustness_d)
+
+df_join <- rbind(
+  df_join_a |> mutate(study = "study_a"),
+  df_join_b |> mutate(study = "study_b"),
+  df_join_c |> mutate(study = "study_c"),
+  df_join_d |> mutate(study = "study_d")
 )
+
+df_range <- data.frame(
+  param = rep(c("b", "s_true", "t0", "v_intercept", "v_slope"), each = 2),
+  true = c(0, 10, 0, 3, 0, 1.3, 0, 4, 0, 6),
+  value = c(0, 10, 0, 3, 0, 1.3, 0, 4, 0, 6),
+  method = "MCMC"
+)
+
+df_join |>
+  pivot_longer(c(mcmc_median, npe_median), names_to = "method") |>
+  mutate(
+    study = factor(study, labels = study_labels),
+    method = case_match(method, "mcmc_median" ~ "MCMC", .default = "NPE")
+  ) |>
+  ggplot(aes(x = value, y = true, color = method)) +
+  facet_grid2(rows = vars(study), cols = vars(param), scales = "free", independent = "y") +
+  geom_point() +
+  geom_abline(slope = 1, intercept = 0) +
+  geom_blank(data = df_range) +
+  labs(x = "True parameter", y = "Posterior median", color = "") +
+  theme_half_open() +
+  theme(
+    legend.position = "top",
+    legend.justification = "center",
+    strip.text.y = element_text(angle=360, hjust = 0),
+    strip.background.y = element_blank()
+  )
+
+ggsave(file.path(figure_path, "study_2_recovery.png"))
+
+df_range <- data.frame(
+  param = rep(rep(c("b", "s_true", "t0", "v_intercept", "v_slope"), each = 2), 4),
+  error_rate = 0,
+  median_diff = rep(c(0, 3, 0, 1.25, 0, 0.8, 0, 1.5, 0, 1.5), 4),
+  study = factor(rep(study_labels, each=10))
+)
+
+df_join |>
+  mutate(
+    study = factor(study, labels = study_labels),
+    median_diff = abs(mcmc_median - npe_median)
+    # study = factor(study, levels = rev(study_labels))
+    # study = fct_rev(factor(study, levels = paste0("study_", c("a", "b", "c", "d")), labels = study_labels))
+  ) |>
+  ggplot(aes(x = 1-error_rate, y = median_diff, color = study)) +
+  facet_grid2(rows = vars(study), cols = vars(param), scales = "free", independent = "y") +
+  geom_point(alpha = 0.1) +
+  geom_smooth(xseq = seq(0, 0.5, 0.02), color = "black") +
+  geom_blank(data = df_range) +
+  labs(x = "Error rate", y = "Absolute difference posterior median", color = "Context-aware") +
+  scale_x_continuous(limits = c(0, 0.5), breaks = c(0, 0.25, 0.5)) +
+  theme_half_open() +
+  theme(
+    legend.position = "none",
+    strip.text.y = element_text(angle = 360, hjust = 0),
+    strip.background.y = element_blank()
+  )
+
+ggsave(file.path(figure_path, "study_2_posterior_mismatch.png"))
 
 df_median_mmd <- df_robustness |>
   group_by(study, drift_slope_loc, threshold_scale) |>
@@ -70,7 +153,7 @@ p2 <- df_median_mmd |>
   scale_fill_viridis_c(limits =c(0.1, 0.65)) +
   theme_raster
 
-p3 <- df_robustness |> 
+p3 <- df_robustness |>
   group_by(study, drift_slope_loc, threshold_scale) |>
   summarise(error_rate = median(1-error_rate)) |>
   mutate(
@@ -151,8 +234,6 @@ plot_grid(
 
 ggsave(file.path(figure_path, "study_2_posterior_mmd_prior.png"), width = 10, height = 8)
 
-study_labels <- c("A: No", "B: High error rate", "C: Low error rate", "D: Full")
-
 df_robustness |>
   ggplot(aes(x = 1-error_rate, y = sqrt(mmd), color = study)) +
   geom_point(alpha = 0.05) +
@@ -176,15 +257,15 @@ df_metrics_c <- read.csv("outputs/experiment_2/rdm_simple_meta_upper/flow_matchi
 df_metrics_d <- read.csv("outputs/experiment_2/rdm_simple_meta/flow_matching/metrics/metrics.csv")[,-1] # Skip first index column
 
 df_metrics <- rbind(
-  df_metrics_a |> 
+  df_metrics_a |>
     mutate(study = "study_a"),
-  df_metrics_b |> 
+  df_metrics_b |>
     mutate(study = "study_b"),
-  df_metrics_c |> 
+  df_metrics_c |>
     mutate(study = "study_c"),
-  df_metrics_d |> 
+  df_metrics_d |>
     mutate(study = "study_d")
-) |> 
+) |>
   mutate(
     diff_rmsd = npe_rmsd - mcmc_rmsd,
     diff_pc = -(npe_pc - mcmc_pc),

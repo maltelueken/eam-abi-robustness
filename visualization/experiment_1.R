@@ -72,7 +72,7 @@ df_join |>
     study = factor(study, labels = study_labels),
     method = case_match(method, "mcmc_median" ~ "MCMC", .default = "NPE")
   ) |>
-  ggplot(aes(x = value, y = true, color = method)) +
+  ggplot(aes(x = true, y = value, color = method)) +
   facet_grid2(rows = vars(study), cols = vars(param), scales = "free", independent = "y") +
   geom_point() +
   geom_abline(slope = 1, intercept = 0) +

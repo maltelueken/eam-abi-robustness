@@ -1,7 +1,6 @@
 
 
 library(ggplot2)
-library(ggh4x)
 library(dplyr)
 library(tidyr)
 library(forcats)
@@ -37,9 +36,9 @@ join_robustness_summary_dfs <- function(df_summary, df_robustness) {
   return(df_summary |>
            group_by(drift_slope_loc, threshold_scale, param) |>
            mutate(id = row_number(), .before = 1) |>
-           left_join(df_robustness |>
-                       group_by(drift_slope_loc, threshold_scale) |>
-                       mutate(id = row_number()),
+           left_join(df_robustness |> 
+                       group_by(drift_slope_loc, threshold_scale) |> 
+                       mutate(id = row_number()), 
                      by=c("drift_slope_loc", "threshold_scale", "id")))
 }
 
@@ -68,7 +67,7 @@ df_join |>
     study = factor(study, labels = study_labels),
     method = case_match(method, "mcmc_median" ~ "MCMC", .default = "NPE")
   ) |>
-  ggplot(aes(x = value, y = true, color = method)) +
+  ggplot(aes(x = true, y = value, color = method)) +
   facet_grid2(rows = vars(study), cols = vars(param), scales = "free", independent = "y") +
   geom_point() +
   geom_abline(slope = 1, intercept = 0) +
@@ -153,7 +152,7 @@ p2 <- df_median_mmd |>
   scale_fill_viridis_c(limits =c(0.1, 0.65)) +
   theme_raster
 
-p3 <- df_robustness |>
+p3 <- df_robustness |> 
   group_by(study, drift_slope_loc, threshold_scale) |>
   summarise(error_rate = median(1-error_rate)) |>
   mutate(
@@ -257,15 +256,15 @@ df_metrics_c <- read.csv("outputs/experiment_2/rdm_simple_meta_upper/flow_matchi
 df_metrics_d <- read.csv("outputs/experiment_2/rdm_simple_meta/flow_matching/metrics/metrics.csv")[,-1] # Skip first index column
 
 df_metrics <- rbind(
-  df_metrics_a |>
+  df_metrics_a |> 
     mutate(study = "study_a"),
-  df_metrics_b |>
+  df_metrics_b |> 
     mutate(study = "study_b"),
-  df_metrics_c |>
+  df_metrics_c |> 
     mutate(study = "study_c"),
-  df_metrics_d |>
+  df_metrics_d |> 
     mutate(study = "study_d")
-) |>
+) |> 
   mutate(
     diff_rmsd = npe_rmsd - mcmc_rmsd,
     diff_pc = -(npe_pc - mcmc_pc),

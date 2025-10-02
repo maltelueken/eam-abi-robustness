@@ -41,9 +41,9 @@ join_robustness_summary_dfs <- function(df_summary, df_robustness) {
   return(df_summary |>
            group_by(sample_size, param) |>
            mutate(id = row_number(), .before = 1) |>
-           left_join(df_robustness |> 
-                       group_by(sample_size) |> 
-                       mutate(id = row_number()), 
+           left_join(df_robustness |>
+                       group_by(sample_size) |>
+                       mutate(id = row_number()),
                      by=c("sample_size", "id")))
 }
 
@@ -78,15 +78,16 @@ df_join |>
   geom_abline(slope = 1, intercept = 0) +
   geom_blank(data = df_range) +
   labs(x = "True parameter", y = "Posterior median", color = "") +
+  scale_color_viridis_d() +
   theme_half_open() +
   theme(
     legend.position = "top",
     legend.justification = "center",
-    strip.text.y = element_text(angle=360),
+    strip.text.y = element_text(angle=360, hjust = 0),
     strip.background.y = element_blank()
   )
 
-ggsave(file.path(figure_path, "study_1_recovery.png"))
+ggsave(file.path(figure_path, "study_1_recovery.png"), width = 10, height = 6)
 
 df_range <- data.frame(
   param = rep(c("b", "s_true", "t0", "v_intercept", "v_slope"), each = 2),
@@ -107,13 +108,13 @@ df_join |>
   labs(
     x = "Trial number (test datasets)",
     y = "Absolute difference posterior median",
-    color = "Trial number (training datasets)"
+    color = "Trial number\n(training datasets)"
   ) +
   scale_x_continuous(breaks = c(50, 250, 500, 750, 1000, 1200), limits = c(50, 1200)) +
   scale_color_discrete(labels = study_labels) +
   theme_half_open()
 
-ggsave(file.path(figure_path, "study_1_posterior_mismatch.png"))
+ggsave(file.path(figure_path, "study_1_posterior_mismatch.png"), width = 10, height = 8)
 
 
 # Metrics -----------------------------------------------------------------
@@ -127,15 +128,15 @@ df_metrics_c <- read.csv("outputs/experiment_1/rdm_simple_discrete_upper/flow_ma
 df_metrics_d <- read.csv("outputs/experiment_1/rdm_simple_discrete_full/flow_matching/metrics/metrics.csv")[,-1] # Skip first index column
 
 df_metrics <- rbind(
-  df_metrics_a |> 
+  df_metrics_a |>
     mutate(study = "study_a"),
-  df_metrics_b |> 
+  df_metrics_b |>
     mutate(study = "study_b"),
-  df_metrics_c |> 
+  df_metrics_c |>
     mutate(study = "study_c"),
-  df_metrics_d |> 
+  df_metrics_d |>
     mutate(study = "study_d")
-) |> 
+) |>
   mutate(
     diff_rmsd = npe_rmsd - mcmc_rmsd,
     diff_pc = -(npe_pc - mcmc_pc),

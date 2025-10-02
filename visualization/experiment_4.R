@@ -112,13 +112,13 @@ df_metrics_c <- read.csv("outputs/experiment_4/rdm_simple_meta_upper/flow_matchi
 df_metrics_d <- read.csv("outputs/experiment_4/rdm_simple_meta/flow_matching/metrics/metrics.csv")[,-1] # Skip first index column
 
 df_metrics <- rbind(
-  df_metrics_a |> 
+  df_metrics_a |>
     mutate(study = "study_a"),
-  df_metrics_b |> 
+  df_metrics_b |>
     mutate(study = "study_b"),
-  df_metrics_c |> 
+  df_metrics_c |>
     mutate(study = "study_c"),
-  df_metrics_d |> 
+  df_metrics_d |>
     mutate(study = "study_d")
 )
 
@@ -138,16 +138,70 @@ df_ppd_b <- read.csv("outputs/experiment_4/rdm_simple_meta_lower/flow_matching/p
 
 df_ppd_c <- read.csv("outputs/experiment_4/rdm_simple_meta_upper/flow_matching/posterior_predictive/ppd.csv") # Skip first index column
 
-df_ppd_d <- read.csv("outputs/experiment_4/rdm_simple_meta/flow_matching/posterior_predictive/ppd.csv") # Skip first index column
+df_ppd_d <- read.csv("outputs/experiment_4/rdm_simple_meta/flow_matching/posterior_predictive/ppd.csv")[,-1] # Skip first index column
+
+
+df_ppd_d |>
+  rename(name = name_mcmc) |>
+  pivot_longer(cols = c(acc_est_mcmc, acc_est_npe), names_to = c("method"), values_to = "acc_est", names_pattern = "^acc_(?:est_)?(mcmc|npe)$") |>
+  group_by(name, id, method) |>
+  summarise(
+    acc_est_median = median(acc_est),
+    acc_est_lower = quantile(acc_est, 0.025),
+    acc_est_upper = quantile(acc_est, 0.975),
+    acc_true = median(acc_true)
+  ) |>
+  ggplot(aes(x = acc_true, color = method)) +
+  facet_grid(rows = vars(name)) +
+  geom_pointrange(
+    aes(
+      y = acc_est_median,
+      ymin = acc_est_lower,
+      ymax = acc_est_upper
+    ),
+    position = position_jitter(width = 0.005)
+  ) +
+  geom_abline(slope = 1, intercept = 0) +
+  scale_color_viridis_d() +
+  # lims(x = c(0.9, 1.0), y = c(0.9, 1.0)) +
+  theme_half_open()
+
+df_ppd_d |>
+  rename(name = name_mcmc) |>
+  pivot_longer(cols = c(rt_est_mcmc, rt_est_npe), names_to = c("measure", "method"), values_to = "value", names_pattern = "^(rt|acc)_(?:est_)?(mcmc|npe)$") |>
+  pivot_wider(id_cols = c(name, id, sample, method, quantile, rt_true), names_from = measure, values_from = value) |>
+  group_by(name, id, method, quantile) |>
+  summarise(
+    rt_median = median(rt),
+    rt_lower = quantile(rt, 0.025),
+    rt_upper = quantile(rt, 0.975),
+    rt_true = median(rt_true)
+  ) |>
+  filter(quantile %in% c(0.1, 0.5, 0.9)) |>
+  ggplot(aes(x = rt_true, color = method)) +
+  facet_grid2(rows = vars(name), cols = vars(quantile), scales = "free", independent = "y") +
+  geom_pointrange(
+    aes(
+      y = rt_median,
+      ymin = rt_lower,
+      ymax = rt_upper
+    ),
+    position = position_jitter(width = 0.005)
+  ) +
+  geom_abline(slope = 1, intercept = 0) +
+  # lims(x = c(0.9, 1.0), y = c(0.9, 1.0)) +
+  # coord_cartesian(ylim = c(0, 5)) +
+  scale_color_viridis_d() +
+  theme_half_open()
 
 df_ppd <- rbind(
-  df_ppd_a |> 
+  df_ppd_a |>
     mutate(study = "study_a"),
-  df_ppd_b |> 
+  df_ppd_b |>
     mutate(study = "study_b"),
-  df_ppd_c |> 
+  df_ppd_c |>
     mutate(study = "study_c"),
-  df_ppd_d |> 
+  df_ppd_d |>
     mutate(study = "study_d")
 )
 

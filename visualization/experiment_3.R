@@ -10,7 +10,7 @@ library(cowplot)
 
 figure_path <- "visualization/figures/"
 
-study_labels <- paste("Context", c("A:\nHigh error rate", "B:\nLow error rate", "C:\nHigh + low error rate"))
+study_labels <- paste("Context", c("A:\nHigh error rate", "B:\nLow error rate", "C:\nHigh + low\nerror rate"))
 
 data_path <- "outputs/experiment_3"
 
@@ -137,7 +137,7 @@ df_join |>
     strip.background.y = element_blank()
   )
 
-ggsave(file.path(figure_path, "study_3_recovery.png"))
+ggsave(file.path(figure_path, "study_3_recovery.png"), width = 10, height = 6)
 
 df_segment_error_rate <- df_join |>
   filter(
@@ -170,12 +170,12 @@ df_join |>
   facet_grid2(rows = vars(study), cols = vars(param), scales = "free", independent = "y") +
   geom_point(alpha = 0.1) +
   geom_smooth(xseq = seq(0, 50, 0.02), color = "black") +
-  geom_segment(
+  geom_rect(
     data = df_segment_error_rate,
-    aes(x = x, xend = xend, y = 2.5),
+    aes(xmin = x, xmax = xend, ymin = 0, ymax = Inf),
     inherit.aes = FALSE,
-    size = 1.5,
-    color = "grey"
+    fill = "lightblue",
+    alpha = 0.3
   ) +
   geom_blank(data = df_range) +
   labs(x = "Error rate (in %)", y = "Absolute difference posterior median", color = "Context-aware") +
@@ -188,7 +188,7 @@ df_join |>
     strip.background.y = element_blank()
   )
 
-ggsave(file.path(figure_path, "study_3_posterior_mismatch.png"))
+ggsave(file.path(figure_path, "study_3_posterior_mismatch.png"), width = 10, height = 7)
 
 df_metrics_a <- read.csv(file.path(data_path, "rdm_simple_meta_lower/flow_matching/metrics/metrics.csv"))[,-1]
 df_metrics_a_no_params <- read.csv(file.path(data_path, "rdm_simple_meta_lower_no_params/flow_matching/metrics/metrics.csv"))[,-1]
@@ -224,7 +224,7 @@ df_metrics <- rbind(
               group_by(study, drift_slope_loc, threshold_scale, param) |>
               summarize(
                 median_error_rate = 100*median(1-error_rate)
-              ), 
+              ),
             by = c("study", "drift_slope_loc", "threshold_scale", "param"))
 
 df_metrics |>
@@ -235,12 +235,12 @@ df_metrics |>
   ggplot(aes(x = median_error_rate, y = rmsd, color = method)) +
   facet_grid2(rows = vars(study), cols = vars(param)) +
   geom_point(alpha = 0.5) +
-  geom_segment(
+  geom_rect(
     data = df_segment_error_rate,
-    aes(x = x, xend = xend, y = 0.7),
+    aes(xmin = x, xmax = xend, ymin = 0, ymax = Inf),
     inherit.aes = FALSE,
-    size = 1.5,
-    color = "grey"
+    fill = "lightblue",
+    alpha = 0.3
   ) +
   scale_color_viridis_d(labels = c("MCMC", "NPE (context-aware)", "NPE (context-unaware)")) +
   labs(x = "Median error rate (in %)", y = "Normalized RMSD", color = "Method") +
@@ -254,4 +254,4 @@ df_metrics |>
     strip.background.y = element_blank()
   )
 
-ggsave(file.path(figure_path, "study_3_rmsd.png"))
+ggsave(file.path(figure_path, "study_3_rmsd.png"), width = 10, height = 7)

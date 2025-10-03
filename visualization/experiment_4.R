@@ -1,6 +1,7 @@
 
 
 library(ggplot2)
+library(ggh4x)
 library(dplyr)
 library(tidyr)
 library(forcats)
@@ -9,10 +10,11 @@ library(cowplot)
 
 figure_path <- "visualization/figures/"
 
+data_path <- "outputs/experiment_4"
 
 # Empirical data distributions --------------------------------------------
 
-task_labels <- c("Numeric", "Verbal", "Figural")
+task_labels <- c("Figural", "Numeric", "Verbal")
 
 data_fn1 <- read.delim("outputs/experiment_4/rdm_simple/test_data/FN1.txt", sep = " ") |>
   mutate(name = "FN1")
@@ -59,7 +61,7 @@ ggsave(file.path(figure_path, "appendix_study_4_descriptive.png"))
 
 # Robustness --------------------------------------------------------------
 
-study_labels <- c("A: No", "B: High error rate", "C: Low error rate", "D: Full")
+study_labels <- paste("Context", c("A:\nHigh error rate", "B:\nLow error rate", "C:\nHigh + low\nerror rate"))
 
 df_robustness_a <- read.csv("outputs/experiment_4/rdm_simple/flow_matching/robustness/mmd.csv")[,-1] # Skip first index column
 
@@ -132,186 +134,239 @@ df_metrics |>
 
 # Posterior predictive ----------------------------------------------------
 
-df_ppd_a <- read.csv("outputs/experiment_4/rdm_simple/flow_matching/posterior_predictive/ppd.csv") # Skip first index column
+df_ppd_a <- read.csv(file.path(data_path, "rdm_simple/flow_matching/posterior_predictive/ppd.csv"))[,-1] # Skip first index column
 
-df_ppd_b <- read.csv("outputs/experiment_4/rdm_simple_meta_lower/flow_matching/posterior_predictive/ppd.csv")# Skip first index column
+df_ppd_b <- read.csv(file.path(data_path, "rdm_simple_meta_lower/flow_matching/posterior_predictive/ppd.csv"))[,-1]
+df_ppd_b_no_params <- read.csv(file.path(data_path, "rdm_simple_meta_lower_no_params/flow_matching/posterior_predictive/ppd.csv"))[,-1]
 
-df_ppd_c <- read.csv("outputs/experiment_4/rdm_simple_meta_upper/flow_matching/posterior_predictive/ppd.csv") # Skip first index column
+df_ppd_c <- read.csv(file.path(data_path, "rdm_simple_meta_upper/flow_matching/posterior_predictive/ppd.csv"))[,-1]
+df_ppd_c_no_params <- read.csv(file.path(data_path, "rdm_simple_meta_upper_no_params/flow_matching/posterior_predictive/ppd.csv"))[,-1]
 
-df_ppd_d <- read.csv("outputs/experiment_4/rdm_simple_meta/flow_matching/posterior_predictive/ppd.csv")[,-1] # Skip first index column
+df_ppd_d <- read.csv(file.path(data_path, "rdm_simple_meta/flow_matching/posterior_predictive/ppd.csv"))[,-1]
+df_ppd_d_no_params <- read.csv(file.path(data_path, "rdm_simple_meta_no_params/flow_matching/posterior_predictive/ppd.csv"))[,-1]
 
+join_ppd_dfs <- function(df_1, df_2) {
+  return(df_1 |>
+           left_join(
+             df_2,
+             by = c("name_mcmc", "id", "sample", "quantile"),
+             suffix = c("", "_no_params"
+             ))
+  )
+}
 
-df_ppd_d |>
-  rename(name = name_mcmc) |>
-  pivot_longer(cols = c(acc_est_mcmc, acc_est_npe), names_to = c("method"), values_to = "acc_est", names_pattern = "^acc_(?:est_)?(mcmc|npe)$") |>
-  group_by(name, id, method) |>
+df_ppd <- rbind(
+  join_ppd_dfs(df_ppd_b, df_ppd_b_no_params) |>
+    mutate(study = "study_b"),
+  join_ppd_dfs(df_ppd_c, df_ppd_c_no_params) |>
+    mutate(study = "study_c"),
+  join_ppd_dfs(df_ppd_d, df_ppd_d_no_params) |>
+    mutate(study = "study_d")
+) |>
+  mutate(
+    study = factor(study, labels = study_labels),
+    name = factor(name_mcmc, labels = task_labels)
+  )
+
+df_ppd_acc <- df_ppd |>
+  pivot_longer(cols = c(acc_est_mcmc, acc_est_npe, acc_est_npe_no_params), names_to = c("method"), values_to = "acc_est", names_pattern = "^acc_(?:est_)?(mcmc|npe|npe_no_params)$") |>
+  mutate(acc_true = if_else(method == "npe_no_params", acc_true_no_params, acc_true)) |>
+  group_by(study, name, id, method) |>
   summarise(
+    acc_rmsd = sqrt(mean((acc_true - acc_est)^2)),
     acc_est_median = median(acc_est),
     acc_est_lower = quantile(acc_est, 0.025),
     acc_est_upper = quantile(acc_est, 0.975),
     acc_true = median(acc_true)
   ) |>
+  mutate(method = case_match(
+    method,
+    "mcmc" ~ "MCMC",
+    "npe" ~ "NPE (context-aware)",
+    "npe_no_params" ~ "NPE (context-unaware)"
+  ))
+
+df_ppd_rt <- df_ppd |>
+  pivot_longer(cols = c(rt_est_mcmc, rt_est_npe, rt_est_npe_no_params), names_to = c("measure", "method"), values_to = "value", names_pattern = "^(rt|acc)_(?:est_)?(mcmc|npe|npe_no_params)$") |>
+  mutate(rt_true = if_else(method == "npe_no_params", rt_true_no_params, rt_true)) |>
+  pivot_wider(id_cols = c(study, name, id, sample, method, quantile, rt_true), names_from = measure, values_from = value) |>
+  group_by(study, name, id, method, quantile) |>
+  summarise(
+    rt_rmsd = sqrt(mean((rt_true - rt)^2)),
+    rt_median = median(rt),
+    rt_lower = quantile(rt, 0.025),
+    rt_upper = quantile(rt, 0.975),
+    rt_true = median(rt_true)
+  ) |>
+  mutate(method = case_match(
+    method,
+    "mcmc" ~ "MCMC",
+    "npe" ~ "NPE (context-aware)",
+    "npe_no_params" ~ "NPE (context-unaware)"
+  ))
+
+p1 <- df_ppd_acc |>
   ggplot(aes(x = acc_true, color = method)) +
-  facet_grid(rows = vars(name)) +
+  facet_grid2(rows = vars(study), cols = vars(name), scales = "free_x") +
   geom_pointrange(
     aes(
       y = acc_est_median,
       ymin = acc_est_lower,
       ymax = acc_est_upper
     ),
+    size = 0.1,
     position = position_jitter(width = 0.005)
   ) +
   geom_abline(slope = 1, intercept = 0) +
+  labs(x = "True accuracy", y = "Posterior predictive accuracy", color = "") +
   scale_color_viridis_d() +
-  # lims(x = c(0.9, 1.0), y = c(0.9, 1.0)) +
-  theme_half_open()
+  theme_half_open() +
+  theme(
+    legend.position = "top",
+    legend.justification = "center",
+    axis.text = element_text(size = 10),
+    strip.text.y = element_text(angle=360, hjust = 0),
+    strip.background.y = element_blank()
+  )
 
-df_ppd_d |>
-  rename(name = name_mcmc) |>
-  pivot_longer(cols = c(rt_est_mcmc, rt_est_npe), names_to = c("measure", "method"), values_to = "value", names_pattern = "^(rt|acc)_(?:est_)?(mcmc|npe)$") |>
-  pivot_wider(id_cols = c(name, id, sample, method, quantile, rt_true), names_from = measure, values_from = value) |>
-  group_by(name, id, method, quantile) |>
-  summarise(
-    rt_median = median(rt),
-    rt_lower = quantile(rt, 0.025),
-    rt_upper = quantile(rt, 0.975),
-    rt_true = median(rt_true)
-  ) |>
+p2 <- df_ppd_acc |>
+  ggplot(aes(x = "", y = acc_rmsd, color = method)) +
+  facet_grid(cols = vars(name), rows = vars(study)) +
+  geom_boxplot(outlier.size = 1) +
+  labs(x = "", y = "Accuracy RMSD", color = "") +
+  scale_color_viridis_d() +
+  theme_half_open() +
+  theme(
+    axis.ticks.x = element_blank(),
+    strip.text.y = element_text(angle=360, hjust = 0),
+    strip.background.y = element_blank()
+  )
+
+plot_grid(
+  get_legend(p1),
+  plot_grid(
+    p1 + theme(legend.position = "none"),
+    p2 + theme(legend.position = "none", strip.text.y = element_blank()),
+    ncol = 2,
+    rel_widths = c(1.0, 0.4),
+    labels = c("A", "B")
+  ),
+  rel_heights = c(0.1, 1.0),
+  ncol = 1
+)
+
+ggsave(file.path(figure_path, "study_4_ppd_acc.png"), width = 10, height = 6)
+
+p3 <- df_ppd_rt |>
   filter(quantile %in% c(0.1, 0.5, 0.9)) |>
   ggplot(aes(x = rt_true, color = method)) +
-  facet_grid2(rows = vars(name), cols = vars(quantile), scales = "free", independent = "y") +
+  facet_grid2(rows = vars(study), cols = vars(name), scales = "free", independent = "y") +
   geom_pointrange(
     aes(
       y = rt_median,
       ymin = rt_lower,
       ymax = rt_upper
     ),
-    position = position_jitter(width = 0.005)
+    size = 0.2
   ) +
   geom_abline(slope = 1, intercept = 0) +
-  # lims(x = c(0.9, 1.0), y = c(0.9, 1.0)) +
-  # coord_cartesian(ylim = c(0, 5)) +
+  labs(x = "True response time", y = "Posterior predictive response time", color = "") +
   scale_color_viridis_d() +
-  theme_half_open()
+  theme_half_open()  +
+  theme(
+    legend.position = "top",
+    legend.justification = "center",
+    axis.text = element_text(size = 10),
+    strip.text.y = element_text(angle=360, hjust = 0),
+    strip.background.y = element_blank()
+  )
 
-df_ppd <- rbind(
-  df_ppd_a |>
-    mutate(study = "study_a"),
-  df_ppd_b |>
-    mutate(study = "study_b"),
-  df_ppd_c |>
-    mutate(study = "study_c"),
-  df_ppd_d |>
-    mutate(study = "study_d")
-)
-
-df_ppd_join <- df_ppd |>
-  group_by(study, name) |>
-  mutate(index = row_number()) |>
-  left_join(df_robustness |>
-              group_by(study, name) |>
-              mutate(index = row_number())) |>
-  filter(npe_rt_rmsd < 2)
-
-p3 <- df_ppd_join |>
-  ggplot(aes(x = name, y = npe_acc_rmsd - mcmc_acc_rmsd, fill = study)) +
-  facet_wrap(vars("Accuracy")) +
+p4 <- df_ppd_rt |>
+  filter(quantile %in% c(0.1, 0.5, 0.9)) |>
+  ggplot(aes(x = as.factor(quantile), y = rt_rmsd, color = method)) +
+  facet_grid2(cols = vars(name), rows = vars(study), scales = "free_y", independent = "y") +
   geom_boxplot() +
-  geom_hline(yintercept = 0, linetype = "dashed") +
-  labs(x = "Task", y = "Difference NPE - MCMC error", fill = "Context-aware") +
-  scale_x_discrete(labels = task_labels) +
-  scale_fill_discrete(labels = study_labels) +
+  scale_color_viridis_d() +
+  labs(x = "Quantile", y = "Response time RMSD", color = "") +
   theme_half_open() +
-  theme(legend.justification = "center")
-
-p4 <- df_ppd_join |>
-  ggplot(aes(x = name, y = npe_rt_rmsd - mcmc_rt_rmsd, fill = study)) +
-  facet_wrap(vars("Response time")) +
-  geom_boxplot() +
-  geom_hline(yintercept = 0, linetype = "dashed") +
-  labs(x = "Task", y = "", fill = "Context-aware") +
-  scale_x_discrete(labels = task_labels) +
-  scale_fill_discrete(labels = study_labels) +
-  theme_half_open()
+  theme(
+    strip.text.y = element_text(angle=360, hjust = 0),
+    strip.background.y = element_blank()
+  )
 
 plot_grid(
   get_legend(p3),
   plot_grid(
     p3 + theme(legend.position = "none"),
-    p4 + theme(legend.position = "none"),
-    labels = "AUTO"
+    p4 + theme(legend.position = "none", strip.text.x = element_blank()),
+    ncol = 1,
+    # rel_widths = c(1.0, 0.8),
+    labels = c("A", "B")
   ),
-  ncol = 1,
-  rel_heights = c(0.3, 1)
+  rel_heights = c(0.1, 1.0),
+  ncol = 1
 )
 
-ggsave(file.path(figure_path, "study_4_ppd.png"))
+ggsave(file.path(figure_path, "study_4_ppd_rt.png"), width = 10, height = 8)
 
-df_ppd_join |>
-  ggplot(aes(x = mmd_sqrt, y = npe_acc_rmsd - mcmc_acc_rmsd, color = study)) +
-  facet_wrap(vars(name)) +
+
+# Posterior mismatch ------------------------------------------------------
+
+df_summary_c <- read.csv(file.path(data_path, "rdm_simple_meta/flow_matching/metrics/summary_stats.csv"))[,-1]
+df_summary_c_no_params <- read.csv(file.path(data_path, "rdm_simple_meta_no_params/flow_matching/metrics/summary_stats.csv"))[,-1]
+
+df_summary_a <- read.csv(file.path(data_path, "rdm_simple_meta_lower/flow_matching/metrics/summary_stats.csv"))[,-1]
+df_summary_a_no_params <- read.csv(file.path(data_path, "rdm_simple_meta_lower_no_params/flow_matching/metrics/summary_stats.csv"))[,-1]
+
+df_summary_b <- read.csv(file.path(data_path, "rdm_simple_meta_upper/flow_matching/metrics/summary_stats.csv"))[,-1]
+df_summary_b_no_params <- read.csv(file.path(data_path, "rdm_simple_meta_upper_no_params/flow_matching/metrics/summary_stats.csv"))[,-1]
+
+join_summary_dfs <- function(df_1, df_2) {
+  return(df_1 |>
+           group_by(name, param) |>
+           mutate(id = row_number()) |>
+           left_join(
+             df_2 |>
+               group_by(name, param) |>
+               mutate(id = row_number()),
+             by = c("name", "id", "param"),
+             suffix = c("", "_no_params"
+             ))
+  )
+}
+
+df_summary <- rbind(
+  join_summary_dfs(df_summary_a, df_summary_a_no_params) |> mutate(study = "study_a"),
+  join_summary_dfs(df_summary_b, df_summary_b_no_params) |> mutate(study = "study_b"),
+  join_summary_dfs(df_summary_c, df_summary_c_no_params) |> mutate(study = "study_c")
+) |>
+  pivot_longer(c(npe_median, npe_median_no_params), names_to = "method", values_to = "npe_median") |>
+  mutate(
+    acc = if_else(method == "npe_no_params", acc_no_params, acc),
+    study = factor(study, labels = study_labels),
+    name = factor(name, levels = c("FF1", "FN1", "FV1"), labels = task_labels),
+    method = case_match(
+      method,
+      "npe_median" ~ "NPE (context-aware)",
+      "npe_median_no_params" ~ "NPE (context-unaware)"
+    )
+  )
+
+df_summary |>
+  # filter(!param %in% c("t0", "s_true")) |>
+  ggplot(aes(x = mcmc_median, y = npe_median, color = method)) +
+  facet_grid2(rows = vars(study), cols = vars(param), "free", independent = "y") +
+  geom_point() +
+  geom_abline(slope = 1, intercept = 0)
+
+df_summary |>
+  group_by(study, param, method) |>
+  summarise(r = cor(mcmc_median, npe_median)) |>
+  group_by(study, method) |>
+  summarise(mean(r))
+
+df_summary |>
+  ggplot(aes(x = 1-acc, y = abs(mcmc_median - npe_median), color = method)) +
+  facet_grid2(rows = vars(study), cols = vars(param), "free_y") +
   geom_point() +
   geom_smooth(method = "lm")
-
-df_ppd_join |>
-  ggplot(aes(x = mmd_sqrt, y = npe_rt_rmsd - mcmc_rt_rmsd, color = study)) +
-  facet_wrap(vars(name)) +
-  geom_point() +
-  geom_smooth(method = "lm")
-
-df_ppd_join |>
-  ggplot(aes(x = mcmc_acc_rmsd, y = npe_acc_rmsd)) +
-  geom_point() +
-  geom_smooth() +
-  geom_abline(intercept = 0, slope = 1)
-
-df_ppd_join |>
-  ggplot(aes(x = mcmc_rt_rmsd, y = npe_rt_rmsd)) +
-  geom_point() +
-  geom_smooth() +
-  geom_abline(intercept = 0, slope = 1)
-
-df_ppd |>
-  ggplot(aes(y = npe_acc_rmsd, x = study)) +
-  geom_boxplot() +
-  geom_point()
-
-df_ppd |>
-  filter(npe_rt_rmsd < 1) |>
-  ggplot(aes(y = npe_rt_rmsd, x = study)) +
-  geom_boxplot() +
-  geom_point()
-
-df_ppd |>
-  filter(npe_rt_rmsd < 1) |>
-  ggplot(aes(y = npe_rt_rmsd, x = npe_acc_rmsd, color = study)) +
-  geom_point()
-
-df_ppd |>
-  filter(npe_rt_rmsd < 1) |>
-  ggplot(aes(y = mcmc_rt_rmsd, x = mcmc_acc_rmsd, color = study)) +
-  geom_point()
-
-df_ppd |>
-  ggplot(aes(y = npe_acc_rmsd, x = mcmc_acc_rmsd, color = study)) +
-  geom_point()
-
-df_ppd |>
-  filter(npe_rt_rmsd < 1) |>
-  ggplot(aes(y = npe_rt_rmsd, x = mcmc_rt_rmsd, color = study)) +
-  geom_point()
-
-cbind(df_robustness, df_ppd) |>
-  select(npe_acc_rmsd, mcmc_acc_rmsd, mmd_sqrt) |>
-  ggplot(aes(x = mmd_sqrt, y = npe_acc_rmsd - mcmc_acc_rmsd)) +
-  geom_point() +
-  geom_smooth(method = "lm") +
-  scale_color_viridis_c()
-
-cbind(df_robustness, df_ppd) |>
-  select(npe_rt_rmsd, mcmc_rt_rmsd, mmd_sqrt) |>
-  filter(npe_rt_rmsd < 1) |>
-  ggplot(aes(x = mmd_sqrt, y = npe_rt_rmsd - mcmc_rt_rmsd)) +
-  geom_point() +
-  geom_smooth(method = "lm") +
-  scale_color_viridis_c()

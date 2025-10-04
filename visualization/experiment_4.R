@@ -352,21 +352,57 @@ df_summary <- rbind(
     )
   )
 
+df_range <- data.frame(
+  param = rep(c("b", "s_true", "t0", "v_intercept", "v_slope"), each = 2),
+  mcmc_median = c(0.5, 4, 0.5, 3, 0.1, 0.9, 0, 2.5, 1, 7),
+  npe_median = c(0.5, 4, 0.5, 3, 0.1, 0.9, 0, 2.5, 1, 7),
+  method = "NPE (context-aware)"
+)
+
 df_summary |>
   # filter(!param %in% c("t0", "s_true")) |>
   ggplot(aes(x = mcmc_median, y = npe_median, color = method)) +
   facet_grid2(rows = vars(study), cols = vars(param), "free", independent = "y") +
   geom_point() +
-  geom_abline(slope = 1, intercept = 0)
+  geom_blank(data = df_range) +
+  geom_abline(slope = 1, intercept = 0) +
+  scale_color_viridis_d() +
+  labs(x = "MCMC posterior median", y = "NPE posterior median", color = "") +
+  theme_half_open() +
+  theme(
+    legend.position = "top",
+    legend.justification = "center",
+    strip.text.y = element_text(angle=360, hjust = 0),
+    strip.background.y = element_blank()
+  )
+
+ggsave(file.path(figure_path, "study_4_recovery.png"), width = 10, height = 6)
+
+df_range <- data.frame(
+  param = rep(rep(c("b", "s_true", "t0", "v_intercept", "v_slope"), each = 2), 3),
+  error_rate = 0,
+  median_diff = rep(c(0, 1, 0, 1.3, 0, 0.4, 0, 1.2, 0, 3), 3),
+  study = factor(rep(study_labels, each=10)),
+  method = "NPE (context-aware)"
+)
 
 df_summary |>
-  group_by(study, param, method) |>
-  summarise(r = cor(mcmc_median, npe_median)) |>
-  group_by(study, method) |>
-  summarise(mean(r))
+  mutate(
+    median_diff = abs(mcmc_median - npe_median),
+    error_rate = (1-acc)*100
+  ) |>
+  ggplot(aes(x = error_rate, y = median_diff, color = method)) +
+  facet_grid2(rows = vars(study), cols = vars(param), scales = "free_y", independent = "y") +
+  geom_point(alpha = 0.1)  +
+  geom_blank(data = df_range) +
+  scale_color_viridis_d() +
+  labs(x = "Error rate (in %)", y = "Absolute difference posterior median", color = "") +
+  theme_half_open() +
+  theme(
+    legend.position = "top",
+    legend.justification = "center",
+    strip.text.y = element_text(angle=360, hjust = 0),
+    strip.background.y = element_blank()
+  )
 
-df_summary |>
-  ggplot(aes(x = 1-acc, y = abs(mcmc_median - npe_median), color = method)) +
-  facet_grid2(rows = vars(study), cols = vars(param), "free_y") +
-  geom_point() +
-  geom_smooth(method = "lm")
+ggsave(file.path(figure_path, "study_4_posterior_mismatch.png"), width = 10, height = 6)

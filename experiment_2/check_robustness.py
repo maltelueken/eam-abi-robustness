@@ -65,11 +65,6 @@ def check_robustness(cfg: DictConfig):
             npe_samples = load_hdf5(npe_data_path)
             posterior_npe = convert_posterior_samples(npe_samples, param_names)[is_converged]
 
-            idx = 3
-
-            fig = create_robustness_2d_plot(posterior_npe[idx,:,:], posterior_mcmc[idx,:,:], prior_samples, prior_samples[idx,:], param_names)
-            fig.savefig(os.path.join("robustness", f"robustness_2d_{meta_param_name_1}_{p1}_{meta_param_name_2}_{p2}.png"))
-
             mmd.append(np.array([bf.metrics.functional.maximum_mean_discrepancy(x, y) for x, y in zip(posterior_mcmc, posterior_npe)]))
 
     pd.DataFrame({

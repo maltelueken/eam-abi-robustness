@@ -1,7 +1,7 @@
 import os
 if "KERAS_BACKEND" not in os.environ:
     # set this to "torch", "tensorflow", or "jax"
-    os.environ["KERAS_BACKEND"] = "tensorflow"
+    os.environ["KERAS_BACKEND"] = "jax"
 import logging
 
 import bayesflow as bf

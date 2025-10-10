@@ -23,22 +23,6 @@ def create_missing_dirs(dir_list):
             os.makedirs(dirname, exist_ok=True)
 
 
-def get_default_rng():
-    return np.random.default_rng(2024)
-
-
-def check_rt_dist(x):
-    return 0.4 <= x.mean() <= 2.5 and 0.4 <= np.median(x) <= 2.5 and 0.1 <= stats.iqr(x) <= 2.0 and x.max() >= 1.5 and x.min() <= 0.5
-
-
-def check_mcmc_trace(trace):
-    return np.all(az.rhat(trace).to_dataarray().to_numpy() < 1.01) and np.all(az.ess(trace).to_dataarray().to_numpy() >= 1000)
-
-
-def sub_instantiate(cfg):
-    return {k: instantiate(v) if isinstance(v, Iterable) and "_target_" in v else v for k, v in cfg.items()}
-
-
 def convert_prior_samples(forward_dict, param_names):
     return np.moveaxis(np.array([forward_dict[key] for key in param_names]).squeeze(), [0, 1], [1, 0])
 
@@ -101,124 +85,6 @@ def create_pushforward_plot_rdm(data, prior_samples, param_names=None):
         ax.set_yticks([])
         if i > 19:
             ax.set_xlabel("Simulated RTs (seconds)")
-    fig.tight_layout()
-    return fig
-
-
-def create_pushforward_plot_rdmc(data, prior_samples, param_names=None):
-    fig, axarr = plt.subplots(5, 2, figsize=(12, 12))
-    for i, ax in enumerate(axarr.flat):
-        rt = data[i, :, 0]
-        resp = data[i, :, 1]
-        cond = data[i, :, 2]
-
-        params = prior_samples[i, :]
-        sns.histplot(
-            rt[np.bitwise_and(resp == 1, cond == 0)], color="darkgreen", alpha=0.5, ax=ax
-        )
-        sns.histplot(
-            rt[np.bitwise_and(resp == 0, cond == 0)], color="maroon", alpha=0.5, ax=ax
-        )
-        for p in ax.patches:  # turn the histogram upside down
-            p.set_height(-p.get_height())
-        sns.histplot(
-            rt[np.bitwise_and(resp == 1, cond == 1)], color="darkgreen", alpha=0.5, ax=ax
-        )
-        sns.histplot(
-            rt[np.bitwise_and(resp == 0, cond == 1)], color="maroon", alpha=0.5, ax=ax
-        )
-        sns.despine(ax=ax)
-        ax.vlines([rt[np.bitwise_and(resp == 1, cond == 0)].mean(), rt[np.bitwise_and(resp == 0, cond == 0)].mean()], ymin = 0, ymax = 0.5, color = ["darkgreen", "maroon"], linestyle = '-', 
-           transform=ax.get_xaxis_transform())
-        ax.vlines([rt[np.bitwise_and(resp == 1, cond == 1)].mean(), rt[np.bitwise_and(resp == 0, cond == 1)].mean()], ymin = 0.5, ymax = 1, color = ["darkgreen", "maroon"], linestyle = '-', 
-           transform=ax.get_xaxis_transform())
-        ax.text(
-            0.9,
-            0.9,
-            f"Acc: {str(np.round(resp[cond == 1].mean(), 2))} / {str(np.round(resp[cond == 0].mean(), 2))}",
-            horizontalalignment="center",
-            verticalalignment="center",
-            transform=ax.transAxes,
-        )
-        for i, p in enumerate(params):
-            if param_names is not None:
-                ps = param_names[i] + ": " + str(np.round(p, 2))
-            else:
-                ps = np.round(p, 2)
-            ax.text(
-                0.9,
-                0.8 - i * 0.1,
-                ps,
-                horizontalalignment="center",
-                verticalalignment="center",
-                transform=ax.transAxes,
-            )
-
-        ax.spines['bottom'].set_position('zero')
-
-        ax.set_ylim((-50, 50))
-        ax.set_ylabel("")
-        ax.set_yticks([])
-        if i > 9:
-            ax.set_xlabel("Simulated RTs (milliseconds)")
-    fig.tight_layout()
-    return fig
-
-
-def create_ecdf_plot_rdmc(data, prior_samples, param_names=None):
-    fig, axarr = plt.subplots(5, 2, figsize=(12, 12))
-    for i, ax in enumerate(axarr.flat):
-        rt = data[i, :, 0]
-        resp = data[i, :, 1]
-        cond = data[i, :, 2]
-
-        params = prior_samples[i, :]
-
-        sns.ecdfplot(
-            rt[np.bitwise_and(resp == 1, cond == 1)], color="darkgreen", alpha=0.5, ax=ax
-        )
-        sns.ecdfplot(
-            rt[np.bitwise_and(resp == 1, cond == 0)], color="maroon", alpha=0.5, ax=ax
-        )
-
-        sns.despine(ax=ax)
-
-        ax.set_ylabel("")
-        ax.set_yticks([])
-        if i > 9:
-            ax.set_xlabel("Simulated RTs (milliseconds)")
-    fig.tight_layout()
-    return fig
-
-
-def create_delta_plot_rdmc(data, prior_samples, param_names=None):
-    fig, axarr = plt.subplots(5, 2, figsize=(12, 12))
-    for i, ax in enumerate(axarr.flat):
-        rt = data[i, :, 0]
-        resp = data[i, :, 1]
-        cond = data[i, :, 2]
-
-        qs = np.linspace(0, 1, 21)[1:-1]
-
-        mean_quantiles = np.array(
-            [
-                stats.mstats.mquantiles(
-                    rt[np.bitwise_and(resp == 1, cond == i)],
-                    qs,
-                    alphap=0.5,
-                    betap=0.5,
-                )
-                for i in (0, 1)
-            ]
-        )
-
-        diff_quantiles = mean_quantiles[0, :] - mean_quantiles[1, :]
-
-        ax.plot(mean_quantiles.mean(axis=0), diff_quantiles, "--o", color="black")
-
-        ax.set_ylabel("Difference mean RT congruent vs. incongruent (ms)")
-        if i > 9:
-            ax.set_xlabel("Mean RT quantiles (ms)")
     fig.tight_layout()
     return fig
 
@@ -389,16 +255,3 @@ def read_data_from_txt(filename, trim=True):
 
 def combine_real_data_samples(samples):
     return {key: np.array([d[key] for d in samples]).squeeze(1) for key in samples[0]}
-
-
-def sample_mmd_null(simulator, approximator, num_reps, batch_size_x, batch_size_y, **kwargs):
-    mmd_null = np.zeros(num_reps)
-
-    for i in range(num_reps):
-        data_x = simulator.sample(batch_size_x, **kwargs)
-        summary_x = approximator.summary_network(data_x["x"])
-        data_y = simulator.sample(batch_size_y, **kwargs)
-        summary_y = approximator.summary_network(data_y["x"])
-        mmd_null[i] = bf.metrics.functional.maximum_mean_discrepancy(summary_x, summary_y)
-
-    return mmd_null

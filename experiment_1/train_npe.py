@@ -1,7 +1,7 @@
 import os
 if "KERAS_BACKEND" not in os.environ:
     # set this to "torch", "tensorflow", or "jax"
-    os.environ["KERAS_BACKEND"] = "jax"
+    os.environ["KERAS_BACKEND"] = "tensorflow"
 import logging
 
 import bayesflow as bf
@@ -43,11 +43,9 @@ def train_npe(cfg: DictConfig):
 
     param_names = cfg["approximator"]["adapter"]["inference_variables"]
 
-    conditions = {k: v for k, v in diag_sample.items() if k not in param_names}
-
     posterior_samples = approximator.sample(
         num_samples=cfg["diag_num_posterior_samples"], 
-        conditions=conditions
+        conditions=diag_sample
     )
 
     root_mean_squared_error = bf_metrics.root_mean_squared_error(

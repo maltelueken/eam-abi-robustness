@@ -20,7 +20,7 @@ class CustomSimulator(bf.simulators.Simulator):
         self.design_simulator = design_simulator
         self.experiment_simulator = experiment_simulator
 
-
+    @allow_batch_size
     def sample(self, batch_shape: Shape, **kwargs) -> dict[str, np.ndarray]:
         prior_dict = self.prior_simulator.sample(batch_shape)
 
@@ -223,13 +223,11 @@ def create_data_adapter(inference_variables, inference_conditions=None, summary_
         .broadcast("num_obs", to="x", exclude=(-2, -1), squeeze=-1)
         .broadcast(inference_conditions, to="num_obs") # Make sure that all inference conditions have same shape
         .as_set(summary_variables)
-        .apply(include=inference_variables, forward=log_transform, inverse=inverse_log_transform)
-        .standardize(include=inference_variables)
-        .apply(include="num_obs", forward=sqrt_transform, inverse=inverse_sqrt_transform)
-        .apply(include=inference_conditions, exclude="num_obs", forward=log_transform, inverse=inverse_log_transform)
+        .log(inference_variables)
+        .sqrt("num_obs")
         .concatenate(inference_variables, into="inference_variables")
         .concatenate(summary_variables, into="summary_variables")
-        .concatenate(inference_conditions, into="inference_conditions")
+        .rename("num_obs", "inference_conditions")
     )
 
     adapter = adapter.keep(

@@ -20,7 +20,7 @@ from pymc.distributions.dist_math import check_parameters
 from pymc.distributions.distribution import DIST_PARAMETER_TYPES, Continuous
 from pymc.distributions.shape_utils import rv_size_is_none
 from pymc.distributions.transforms import _default_transform
-from pymc.sampling_jax import get_jaxified_logp
+from pymc.sampling.jax import get_jaxified_logp
 
 
 logger = logging.getLogger(__name__)
@@ -148,11 +148,34 @@ def pos_cont_transform(op, rv):
     return transforms.log
 
 
-def rdm_model_simple(sim_data, drift_slope_loc=1.5, threshold_scale=0.15):
+def rdm_model_simple(sim_data, drift_slope_loc, threshold_scale):
     rt_true = sim_data[sim_data[:, 1] == 1, 0]
     rt_false = sim_data[sim_data[:, 1] == 0, 0]
 
     with pm.Model() as model:
+        v_intercept = pm.TruncatedNormal("v_intercept", mu=1.0, sigma=0.5, lower=0)
+        v_slope = pm.TruncatedNormal("v_slope", mu=drift_slope_loc, sigma=0.5, lower=0)
+        s_true = pm.Gamma("s_true", alpha=12, beta=1.0 / 0.1)
+        b = pm.Gamma("b", alpha=8, beta=1.0 / threshold_scale)
+        t0 = pm.TruncatedNormal("t0", mu=0.3, sigma=0.2, lower=0)
+
+        v_true = v_intercept+v_slope
+        v_false = v_intercept
+
+        RdmSimple("ll_true", drift_winner=v_true, drift_loser=v_false, s_winner=s_true, s_loser=1.0, threshold=b, ndt=t0, observed=rt_true)
+        RdmSimple("ll_false", drift_winner=v_false, drift_loser=v_true, s_winner=1.0, s_loser=s_true, threshold=b, ndt=t0, observed=rt_false)
+
+    return get_jaxified_logp(model)
+
+
+def rdm_model_meta(sim_data, drift_slope_loc_lower, drift_slope_loc_upper, threshold_scale_lower, threshold_scale_upper):
+    rt_true = sim_data[sim_data[:, 1] == 1, 0]
+    rt_false = sim_data[sim_data[:, 1] == 0, 0]
+
+    with pm.Model() as model:
+        drift_slope_loc = pm.Uniform("drift_slope_loc", lower=drift_slope_loc_lower, upper=drift_slope_loc_upper)
+        threshold_scale = pm.Uniform("threshold_scale", lower=threshold_scale_lower, upper=threshold_scale_upper)
+
         v_intercept = pm.TruncatedNormal("v_intercept", mu=1.0, sigma=0.5, lower=0)
         v_slope = pm.TruncatedNormal("v_slope", mu=drift_slope_loc, sigma=0.5, lower=0)
         s_true = pm.Gamma("s_true", alpha=12, beta=1.0 / 0.1)

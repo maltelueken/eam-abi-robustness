@@ -3,3 +3,5 @@
 defaults:
 - override /simulator: rdm
 - override /approximator/adapter: rdm_simple
+
+is_meta: false

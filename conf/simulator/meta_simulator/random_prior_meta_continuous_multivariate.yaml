@@ -3,7 +3,7 @@ sample_fn:
   _target_: design.random_prior_meta_continuous_multivariate
   _partial_: true
   min_value: [0.5, 0.05]
-  max_value: [4.0, 0.5]
+  max_value: [2.5, 0.25]
   name: 
   - ${meta_param_name_1}
   - ${meta_param_name_2}

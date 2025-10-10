@@ -2,8 +2,8 @@ _target_: bayesflow.simulators.LambdaSimulator
 sample_fn:
   _target_: design.random_prior_meta_continuous_multivariate
   _partial_: true
-  min_value: [2.83, 0.35]
-  max_value: [4.0, 0.5]
+  min_value: [2.0, 0.2]
+  max_value: [2.5, 0.25]
   name: 
   - ${meta_param_name_1}
   - ${meta_param_name_2}

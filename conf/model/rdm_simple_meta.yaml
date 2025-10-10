@@ -2,6 +2,18 @@
 
 defaults:
 - override /simulator: rdm_meta
-- override /approximator/adapter: rdm_simple_meta
+- override /mcmc_model_fun: rdm_meta
 
-with_params: true
+is_meta: true
+
+mcmc_sampling_fun:
+  init_position:
+    _target_: numpy.array
+    object:
+      - 1.5
+      - 0.15
+      - 1
+      - 2
+      - 1
+      - 1
+      - 0.2

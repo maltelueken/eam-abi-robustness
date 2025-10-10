@@ -7,7 +7,7 @@ if "KERAS_BACKEND" not in os.environ:
     os.environ["KERAS_BACKEND"] = "jax"
 
 os.environ["XLA_FLAGS"] = "--xla_force_host_platform_device_count={}".format(
-    32
+    64
 )
 os.environ["JAX_PLATFORMS"] = "cpu"
 

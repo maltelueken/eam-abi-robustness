@@ -11,11 +11,13 @@ import blackjax
 import hydra
 import numpy as np
 import optuna
-import polars as pl
+import pandas as pd
 from omegaconf import DictConfig
 
 from data import load_hdf5
-from utils import combine_real_data_samples, create_missing_dirs, load_approximator, read_data_from_txt
+from metrics import calc_posterior_predictive
+from utils import convert_posterior_samples, create_missing_dirs, load_approximator, read_data_from_txt
+
 
 logger = logging.getLogger(__name__)
 
@@ -24,16 +26,14 @@ logger = logging.getLogger(__name__)
 def check_posterior_predictive(cfg: DictConfig):
     approximator, simulator = load_approximator(cfg)
 
+    param_names = cfg["approximator"]["adapter"]["inference_variables"]
+
     create_missing_dirs(["posterior_predictive"])
 
     meta_param_name_1 = cfg["meta_param_name_1"]
     meta_param_name_2 = cfg["meta_param_name_2"]
 
-    basenames = []
-    npe_acc_rmsd = []
-    npe_rt_rmsd = []
-    mcmc_acc_rmsd = []
-    mcmc_rt_rmsd = []
+    dfs = []
 
     for filename in os.listdir(os.path.join(cfg["test_data_path"], "test_data")):
         logger.info("Loading test data for file %s", filename)
@@ -51,7 +51,7 @@ def check_posterior_predictive(cfg: DictConfig):
 
         logger.info("Predicting with parameters %s", (p1, p2))
 
-        mcmc_data_path = os.path.join("mcmc_samples", f"fit_mcmc_{basename}.hdf5")
+        mcmc_data_path = os.path.join("..", "mcmc_samples", f"fit_mcmc_{basename}.hdf5")
         logger.info("Loading MCMC samples from %s", os.path.abspath(mcmc_data_path))
         mcmc_samples = load_hdf5(mcmc_data_path)
 
@@ -64,78 +64,27 @@ def check_posterior_predictive(cfg: DictConfig):
 
         data = read_data_from_txt(os.path.join(cfg["test_data_path"], "test_data", filename))
 
-        data_x = [d for c, d in zip(is_converged, data) if c]
+        data_x = data["x"][is_converged]
 
-        for d in data_x:
-            d[meta_param_name_1] = np.array(p1)
-            d[meta_param_name_2] = np.array(p2)
+        data[meta_param_name_1] = np.array(p1)
+        data[meta_param_name_2] = np.array(p2)
 
-        mcmc_acc = []
-        mcmc_rt = []
+        df_mcmc = calc_posterior_predictive(data_x, posterior_mcmc, data["num_obs"], simulator, cfg["test_num_posterior_predictive_samples"])
+        df_mcmc["name"] = basename
 
-        for i, d in enumerate(data_x):
-            acc_i = []
-            rt_i = []
-
-            for j in range(cfg["test_num_posterior_predictive_samples"]):
-                sim = simulator.experiment_simulator.sample_fn(
-                    v_intercept = posterior_mcmc[i,j,0],
-                    v_slope= posterior_mcmc[i,j,1],
-                    s_true = posterior_mcmc[i,j,2],
-                    b = posterior_mcmc[i,j,3],
-                    t0 = posterior_mcmc[i,j,4],
-                    num_obs=d["num_obs"]
-                )
-                acc_i.append(sim["x"][:,1].mean())
-                rt_i.append(np.quantile(sim["x"][:,0], q=np.arange(1, 10)/10))
-
-            mcmc_acc.append(np.sqrt(np.mean((np.array(acc_i) - d["x"][0,:,1].mean())**2)))
-            mcmc_rt.append(np.sqrt(np.mean((np.array(rt_i) - np.quantile(d["x"][0,:,0], q=np.arange(1, 10)/10))**2)))
-
-        posterior_npe_list = [approximator.sample(
-            conditions=d,
+        npe_samples = approximator.sample(
+            conditions=data,
             num_samples=cfg["test_num_posterior_predictive_samples"]
-        ) for d in data]
+        )
 
-        posterior_npe = combine_real_data_samples(posterior_npe_list)
+        posterior_npe = convert_posterior_samples(npe_samples, param_names)[is_converged]
 
-        npe_acc = []
-        npe_rt = []
+        df_npe = calc_posterior_predictive(data_x, posterior_npe, data["num_obs"], simulator, cfg["test_num_posterior_predictive_samples"])
+        df_npe["name"] = basename
 
-        for i, d in enumerate(data_x):
-            acc_i = []
-            rt_i = []
+        dfs.append(pd.merge(df_npe, df_mcmc, on=["id", "sample", "acc_true", "quantile", "rt_true"], suffixes=["_npe", "_mcmc"]))
 
-            for j in range(cfg["test_num_posterior_predictive_samples"]):
-                sim = simulator.experiment_simulator.sample_fn(
-                    v_intercept = posterior_npe["v_intercept"][i,j,0],
-                    v_slope= posterior_npe["v_slope"][i,j,0],
-                    s_true = posterior_npe["s_true"][i,j,0],
-                    b = posterior_npe["b"][i,j,0],
-                    t0 = posterior_npe["t0"][i,j,0],
-                    num_obs=d["num_obs"]
-                )
-                acc_i.append(sim["x"][:,1].mean())
-                rt_i.append(np.quantile(sim["x"][:,0], q=np.arange(1, 10)/10))
-
-            npe_acc.append(np.sqrt(np.mean((np.array(acc_i) - d["x"][0,:,1].mean())**2)))
-            npe_rt.append(np.sqrt(np.mean((np.array(rt_i) - np.quantile(d["x"][0,:,0], q=np.arange(1, 10)/10))**2)))
-
-        basenames.append(basename)
-        npe_acc_rmsd.append(npe_acc)
-        npe_rt_rmsd.append(npe_rt)
-        mcmc_acc_rmsd.append(mcmc_acc)
-        mcmc_rt_rmsd.append(mcmc_rt)
-
-
-    pl.DataFrame({
-        "name": basenames,
-        "npe_acc_rmsd": npe_acc_rmsd,
-        "npe_rt_rmsd": npe_rt_rmsd,
-        "mcmc_acc_rmsd": mcmc_acc_rmsd,
-        "mcmc_rt_rmsd": mcmc_rt_rmsd
-    }).explode(["npe_acc_rmsd", "npe_rt_rmsd", "mcmc_acc_rmsd", "mcmc_rt_rmsd"]).write_csv(os.path.join("posterior_predictive", "ppd.csv"))
-
+    pd.concat(dfs).to_csv(os.path.join("posterior_predictive", "ppd.csv"))
 
 if __name__ == "__main__":
     check_posterior_predictive()

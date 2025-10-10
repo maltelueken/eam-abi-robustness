@@ -332,7 +332,7 @@ def trim_num_obs(x, min_num_obs):
     return x[:min_num_obs]
 
 
-def read_data_from_txt(filename, trim=False):
+def read_data_from_txt(filename, trim=True):
     df = (pl.read_csv(filename, separator=" ")
         .filter(
             pl.col("block").eq("test") & 
@@ -375,7 +375,8 @@ def read_data_from_txt(filename, trim=False):
             pl.col("mean_RT").ge(pl.col("mean_RT").quantile(0.25) - 3 * pl.col("mean_RT_IQR")),
             pl.col("mean_acc").le(pl.col("mean_acc").quantile(0.75) + 3 * pl.col("mean_acc_IQR")),
             pl.col("mean_acc").ge(pl.col("mean_acc").quantile(0.25) - 3 * pl.col("mean_acc_IQR"))
-        )     
+        )
+        .sort("pp") # Sort so that order is always the same
     )
 
     x = df.select(pl.col("RT"), pl.col("acc")).to_numpy()

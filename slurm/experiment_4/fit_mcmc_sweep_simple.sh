@@ -24,7 +24,7 @@ for f in ${param_1[@]}
 do
     for i in {0..124}
     do
-        srun --exclusive --ntasks=1 python $experiment/fit_mcmc_slurm.py experiment=$experiment model=$experiment +slurm_filename=$f +slurm_idx=$i &
+        srun --exclusive --ntasks=1 python $experiment/fit_mcmc_slurm.py experiment=$experiment model=$model +slurm_filename=$f +slurm_idx=$i &
     done
     wait
     python $experiment/collect_mcmc.py experiment=$experiment model=$model +slurm_filename=$f

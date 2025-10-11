@@ -14,8 +14,11 @@ module load 2023
 
 source bin/activate
 
-param_1=(1.67 2.06 2.44)
-param_2=(0.05 0.1 0.15 0.2 0.25 0.3 0.35 0.4 0.45 0.5)
+param_1=(0.5 0.75 1.0)
+param_2=(0.05 0.075 0.1 0.125 0.15 0.175 0.2 0.225 0.25)
+
+experiment=experiment_2
+model=rdm_simple_lower
 
 for p1 in ${param_1[@]}
 do
@@ -23,10 +26,10 @@ do
     do
         for i in {0..99}
         do
-            srun --exclusive --ntasks=1 python experiment_2/fit_mcmc_slurm.py experiment=experiment_2 +slurm_p1=$p1 +slurm_p2=$p2 +slurm_idx=$i &
+            srun --exclusive --ntasks=1 python $experiment/fit_mcmc_slurm.py experiment=$experiment model=$model +slurm_p1=$p1 +slurm_p2=$p2 +slurm_idx=$i &
         done
         wait
-        python experiment_2/collect_mcmc.py experiment=experiment_2 +slurm_p1=$p1 +slurm_p2=$p2
-        rm -r outputs/experiment_2/rdm_simple/mcmc_samples/${p1}_${p2}
+        python $experiment/collect_mcmc.py experiment=$experiment model=$model +slurm_p1=$p1 +slurm_p2=$p2
+        rm -r outputs/$experiment/$model/mcmc_samples/${p1}_${p2}
     done
 done

@@ -11,7 +11,6 @@ os.environ["XLA_FLAGS"] = "--xla_force_host_platform_device_count={}".format(
 
 os.environ["JAX_PLATFORMS"] = "cpu"
 
-import optuna
 import hydra
 from hydra.utils import get_object, instantiate
 from omegaconf import DictConfig
@@ -31,32 +30,27 @@ def fit_mcmc(cfg: DictConfig):
 
     create_missing_dirs([os.path.join(cfg["test_data_path"], "mcmc_samples", basename)])
 
-    meta_param_name_1 = cfg["meta_param_name_1"]
-    meta_param_name_2 = cfg["meta_param_name_2"]
-
     logger.info("Loading test data for file %s", filename)
 
     data = read_data_from_txt(os.path.join(cfg["test_data_path"], "test_data", filename))
 
     sim_data = data["x"]
 
-    study = optuna.create_study(
-        study_name=basename,
-        storage="sqlite:///../../check_summary_mmd.db",
-        load_if_exists=True
-    )
-
-    p1 = study.best_params[meta_param_name_1]
-    p2 = study.best_params[meta_param_name_2]
-
-    logger.info("Running MCMC with parameters %s", (p1, p2))
-
     model_fun = instantiate(cfg["mcmc_model_fun"])
 
     # Need to pass sampler_fun here because it is not a function or class
     sampling_fun = instantiate(cfg["mcmc_sampling_fun"], sampler_fun=get_object(cfg["mcmc_sampler"]))
 
-    model = model_fun(sim_data[idx, :, :], p1, p2)
+    if not cfg["is_meta"]:
+        _p1 = cfg["simulator"]["prior_simulator"]["sample_fn"]["drift_slope_loc"]
+        _p2 = cfg["simulator"]["prior_simulator"]["sample_fn"]["threshold_scale"]
+        model = model_fun(sim_data[idx, :, :], _p1, _p2)
+    else:
+        _p1_lower = cfg["simulator"]["meta_simulator"]["sample_fn"]["min_value"][0]
+        _p1_upper = cfg["simulator"]["meta_simulator"]["sample_fn"]["max_value"][0]
+        _p2_lower = cfg["simulator"]["meta_simulator"]["sample_fn"]["min_value"][1]
+        _p2_upper = cfg["simulator"]["meta_simulator"]["sample_fn"]["max_value"][0]
+        model = model_fun(sim_data[idx, :, :], _p1_lower, _p1_upper, _p2_lower, _p2_upper)
 
     trace = sampling_fun(model, min_rt=sim_data[idx, :, 0].min())
 

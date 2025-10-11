@@ -1,12 +1,12 @@
 #!/bin/bash
-#SBATCH --job-name=rdm_meta
+#SBATCH --job-name=rdm_mupr
 #SBATCH --nodes=1
 #SBATCH --ntasks=32
 #SBATCH --cpus-per-task=4
 #SBATCH --partition=fat_rome
 #SBATCH --time=12:00:00
-#SBATCH --output=/projects/0/prjs1372/eam-abi-robustness/slurm/logs/fit_mcmc_rdm_meta_%j.out
-#SBATCH --error=/projects/0/prjs1372/eam-abi-robustness/slurm/logs/fit_mcmc_rdm_meta_%j.err
+#SBATCH --output=/projects/0/prjs1372/eam-abi-robustness/slurm/logs/fit_mcmc_rdm_mupr_%j.out
+#SBATCH --error=/projects/0/prjs1372/eam-abi-robustness/slurm/logs/fit_mcmc_rdm_mupr_%j.err
 
 cd /projects/0/prjs1372/eam-abi-robustness
 
@@ -14,11 +14,11 @@ module load 2023
 
 source bin/activate
 
-param_1=(1.25 1.5 1.75)
+param_1=(2.0 2.25 2.5)
 param_2=(0.05 0.075 0.1 0.125 0.15 0.175 0.2 0.225 0.25)
 
 experiment=experiment_2
-model=rdm_simple_meta
+model=rdm_simple_meta_upper
 
 for p1 in ${param_1[@]}
 do

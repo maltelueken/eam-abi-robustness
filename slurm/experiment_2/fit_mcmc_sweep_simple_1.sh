@@ -1,12 +1,12 @@
 #!/bin/bash
-#SBATCH --job-name=fit_mcmc
+#SBATCH --job-name=rdm_simp
 #SBATCH --nodes=1
 #SBATCH --ntasks=32
 #SBATCH --cpus-per-task=4
 #SBATCH --partition=fat_rome
 #SBATCH --time=12:00:00
-#SBATCH --output=/projects/0/prjs1372/eam-abi-robustness/slurm/logs/fit_mcmc_%j.out
-#SBATCH --error=/projects/0/prjs1372/eam-abi-robustness/slurm/logs/fit_mcmc_%j.err
+#SBATCH --output=/projects/0/prjs1372/eam-abi-robustness/slurm/logs/fit_mcmc_rdm_simp_%j.out
+#SBATCH --error=/projects/0/prjs1372/eam-abi-robustness/slurm/logs/fit_mcmc_rdm_simp_%j.err
 
 cd /projects/0/prjs1372/eam-abi-robustness
 

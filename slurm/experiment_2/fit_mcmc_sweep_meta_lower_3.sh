@@ -4,7 +4,7 @@
 #SBATCH --ntasks=32
 #SBATCH --cpus-per-task=4
 #SBATCH --partition=fat_rome
-#SBATCH --time=12:00:00
+#SBATCH --time=16:00:00
 #SBATCH --output=/projects/0/prjs1372/eam-abi-robustness/slurm/logs/fit_mcmc_rdm_mlwr_%j.out
 #SBATCH --error=/projects/0/prjs1372/eam-abi-robustness/slurm/logs/fit_mcmc_rdm_mlwr_%j.err
 
@@ -26,7 +26,7 @@ do
     do
         for i in {0..99}
         do
-            srun --exclusive --ntasks=1 python $experiment/fit_mcmc_slurm.py experiment=$experiment model=$model +slurm_p1=$p1 +slurm_p2=$p2 +slurm_idx=$i &
+            srun --exclusive --ntasks=1 --cpus-per-task=4 python $experiment/fit_mcmc_slurm.py experiment=$experiment model=$model +slurm_p1=$p1 +slurm_p2=$p2 +slurm_idx=$i &
         done
         wait
         python $experiment/collect_mcmc.py experiment=$experiment model=$model +slurm_p1=$p1 +slurm_p2=$p2

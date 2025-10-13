@@ -15,7 +15,7 @@ meta_param_1:
     start: 0.5
     stop: 2.5
     num: 9
-  decimals: 2
+  decimals: 3
 
 meta_param_name_2: threshold_scale
 meta_param_2:
@@ -25,6 +25,6 @@ meta_param_2:
     start: 0.05
     stop: 0.25
     num: 9
-  decimals: 2
+  decimals: 3
 
 is_meta: false

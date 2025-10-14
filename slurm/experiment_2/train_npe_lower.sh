@@ -1,5 +1,5 @@
 #!/bin/bash
-#SBATCH --job-name=npe_mupr
+#SBATCH --job-name=npe_lowr
 #SBATCH --nodes=1
 #SBATCH --ntasks=1
 #SBATCH --cpus-per-task=9
@@ -17,7 +17,7 @@ source bin/activate
 
 python experiment_1/train_npe.py \
     experiment=experiment_2 \
-    model=rdm_simple_meta_upper \
+    model=rdm_simple_lower \
     inference_mlp_depth=5 \
     inference_mlp_width=6 \
     approximator.inference_network.use_optimal_transport=false \

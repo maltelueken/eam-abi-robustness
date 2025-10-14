@@ -1,5 +1,5 @@
 #!/bin/bash
-#SBATCH --job-name=train_npe
+#SBATCH --job-name=npe_upper
 #SBATCH --nodes=1
 #SBATCH --ntasks=1
 #SBATCH --cpus-per-task=9
@@ -19,11 +19,11 @@ python experiment_1/train_npe.py \
     experiment=experiment_1 \
     model=rdm_simple_discrete_upper \
     inference_mlp_depth=5 \
-    inference_mlp_width=8 \
-    approximator.inference_network.use_optimal_transport=true \
-    approximator.summary_network.summary_dim=19 \
-    embed_depth=1 \
-    embed_width=4 \
-    mlp_depth=2 \
-    mlp_width=5 \
-    approximator.summary_network.num_seeds=3
+    inference_mlp_width=6 \
+    approximator.inference_network.use_optimal_transport=false \
+    approximator.summary_network.summary_dim=27 \
+    embed_depth=3 \
+    embed_width=5 \
+    mlp_depth=3 \
+    mlp_width=7 \
+    approximator.summary_network.num_seeds=4

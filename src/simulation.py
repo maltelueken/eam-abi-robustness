@@ -1,14 +1,11 @@
 from typing import Callable
 
 import bayesflow as bf
-import keras
 import numpy as np
-import scipy.stats as stats
 
 from bayesflow.utils import batched_call, tree_stack
 from bayesflow.utils.decorators import allow_batch_size
 from bayesflow.types import Shape
-from numba import njit, prange
 
 
 class CustomSimulator(bf.simulators.Simulator):

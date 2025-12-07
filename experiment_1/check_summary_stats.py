@@ -1,12 +1,6 @@
 import logging
 import os
 
-if "KERAS_BACKEND" not in os.environ:
-    # set this to "torch", "tensorflow", or "jax"
-    os.environ["KERAS_BACKEND"] = "jax"
-
-import bayesflow as bf
-import bayesflow.diagnostics.metrics as bf_metrics
 import blackjax
 import hydra
 import numpy as np
@@ -15,7 +9,6 @@ from hydra.utils import instantiate
 from omegaconf import DictConfig
 
 from data import load_hdf5
-from metrics import calibration_error
 from utils import create_missing_dirs, convert_prior_samples, convert_posterior_samples
 
 logger = logging.getLogger(__name__)
@@ -52,7 +45,7 @@ def check_summary_stats(cfg: DictConfig):
         
         logger.info("%s MCMC models did not converge: %s", 1.0-is_converged.mean(), np.where(~is_converged))
         posterior_mcmc = np.exp(np.reshape(posterior_mcmc, (posterior_mcmc.shape[0], -1, posterior_mcmc.shape[3])))[is_converged]
-        posterior_mcmc = posterior_mcmc[:, ::4,:]
+        posterior_mcmc = posterior_mcmc[:, ::4,:] # Only take every 4th sample to match MCMC and NPE posterior samples
 
         prior_samples = convert_prior_samples(forward_dict, param_names)[is_converged]
 
@@ -83,7 +76,8 @@ def check_summary_stats(cfg: DictConfig):
         "mcmc_median": mcmc_posterior_median,
         "mcmc_lower": mcmc_posterior_lower,
         "mcmc_upper": mcmc_posterior_upper,
-    }).explode(["param", "true", "npe_median", "npe_lower", "npe_upper", "mcmc_median", "mcmc_lower", "mcmc_upper"]).to_csv(os.path.join("metrics", "summary_stats.csv"))
+    }).explode(["param", "true", "npe_median", "npe_lower", "npe_upper",
+                "mcmc_median", "mcmc_lower", "mcmc_upper"]).to_csv(os.path.join("metrics", "summary_stats.csv"))
 
 
 if __name__ == "__main__":

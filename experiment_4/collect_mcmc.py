@@ -1,15 +1,10 @@
 import logging
 import os
 
-if "KERAS_BACKEND" not in os.environ:
-    # set this to "torch", "tensorflow", or "jax"
-    os.environ["KERAS_BACKEND"] = "jax"
-
 os.environ["JAX_PLATFORMS"] = "cpu"
 
 import hydra
 import numpy as np
-from hydra.utils import instantiate
 from omegaconf import DictConfig
 
 from data import load_hdf5, save_hdf5

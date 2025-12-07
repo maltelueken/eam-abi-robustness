@@ -1,31 +1,19 @@
 import logging
 import os
 
-if "KERAS_BACKEND" not in os.environ:
-    # set this to "torch", "tensorflow", or "jax"
-    os.environ["KERAS_BACKEND"] = "jax"
-
-import bayesflow as bf
-import bayesflow.diagnostics.metrics as bf_metrics
 import blackjax
 import hydra
 import numpy as np
 import pandas as pd
-from hydra.utils import instantiate
 from omegaconf import DictConfig
 
 from data import load_hdf5
-from utils import create_missing_dirs, convert_prior_samples, convert_posterior_samples, read_data_from_txt
+from utils import create_missing_dirs, convert_posterior_samples, read_data_from_txt
 
 logger = logging.getLogger(__name__)
 
 @hydra.main(version_base=None, config_path="../conf", config_name="config")
 def check_metrics(cfg: DictConfig):
-    meta_param_1 = instantiate(cfg["meta_param_1"])
-    meta_param_2 = instantiate(cfg["meta_param_2"])
-
-    meta_param_name_1 = cfg["meta_param_name_1"]
-    meta_param_name_2 = cfg["meta_param_name_2"]
 
     param_names = cfg["approximator"]["adapter"]["inference_variables"]
 

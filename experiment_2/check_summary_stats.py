@@ -1,12 +1,6 @@
 import logging
 import os
 
-if "KERAS_BACKEND" not in os.environ:
-    # set this to "torch", "tensorflow", or "jax"
-    os.environ["KERAS_BACKEND"] = "jax"
-
-import bayesflow as bf
-import bayesflow.diagnostics.metrics as bf_metrics
 import blackjax
 import hydra
 import numpy as np

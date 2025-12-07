@@ -1,13 +1,7 @@
 import logging
 import os
 
-if "KERAS_BACKEND" not in os.environ:
-    # set this to "torch", "tensorflow", or "jax"
-    os.environ["KERAS_BACKEND"] = "jax"
-
-os.environ["XLA_FLAGS"] = "--xla_force_host_platform_device_count={}".format(
-    4
-)
+os.environ["XLA_FLAGS"] = "--xla_force_host_platform_device_count={}".format(4)
 
 os.environ["JAX_PLATFORMS"] = "cpu"
 
@@ -15,7 +9,7 @@ import hydra
 from hydra.utils import get_object, instantiate
 from omegaconf import DictConfig
 
-from data import load_hdf5, save_hdf5
+from data import save_hdf5
 from utils import create_missing_dirs, read_data_from_txt
 
 logger = logging.getLogger(__name__)

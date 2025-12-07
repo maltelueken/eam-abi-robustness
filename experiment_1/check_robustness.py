@@ -1,9 +1,6 @@
 import logging
 import os
 
-if "KERAS_BACKEND" not in os.environ:
-    # set this to "torch", "tensorflow", or "jax"
-    os.environ["KERAS_BACKEND"] = "jax"
 
 import bayesflow as bf
 import blackjax
@@ -14,7 +11,7 @@ from hydra.utils import instantiate
 from omegaconf import DictConfig
 
 from data import load_hdf5
-from utils import create_missing_dirs, create_robustness_2d_plot, convert_prior_samples, convert_posterior_samples
+from utils import create_missing_dirs, convert_prior_samples, convert_posterior_samples
 
 logger = logging.getLogger(__name__)
 
@@ -42,9 +39,7 @@ def check_robustness(cfg: DictConfig):
         
         logger.info("%s MCMC models did not converge: %s", 1.0-is_converged.mean(), np.where(~is_converged))
         posterior_mcmc = np.exp(np.reshape(posterior_mcmc, (posterior_mcmc.shape[0], -1, posterior_mcmc.shape[3])))[is_converged]
-        posterior_mcmc = posterior_mcmc[:, ::4,:]
-
-        prior_samples = convert_prior_samples(forward_dict, param_names)
+        posterior_mcmc = posterior_mcmc[:, ::4,:] # Only take every 4th sample to match MCMC and NPE posterior samples
 
         npe_data_path = os.path.join("npe_samples", f"posterior_samples_sample_size_{t}.hdf5")
         logger.info("Loading NPE samples from %s", os.path.abspath(npe_data_path))

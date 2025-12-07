@@ -1,10 +1,6 @@
 import logging
 import os
 
-if "KERAS_BACKEND" not in os.environ:
-    # set this to "torch", "tensorflow", or "jax"
-    os.environ["KERAS_BACKEND"] = "jax"
-
 import bayesflow as bf
 import blackjax
 import hydra
@@ -14,7 +10,7 @@ from hydra.utils import instantiate
 from omegaconf import DictConfig
 
 from data import load_hdf5
-from utils import create_missing_dirs, create_robustness_2d_plot, convert_prior_samples, convert_posterior_samples
+from utils import create_missing_dirs, convert_prior_samples, convert_posterior_samples
 
 logger = logging.getLogger(__name__)
 

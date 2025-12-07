@@ -1,13 +1,7 @@
 import logging
 import os
 
-if "KERAS_BACKEND" not in os.environ:
-    # set this to "torch", "tensorflow", or "jax"
-    os.environ["KERAS_BACKEND"] = "jax"
-
-os.environ["XLA_FLAGS"] = "--xla_force_host_platform_device_count={}".format(
-    4
-)
+os.environ["XLA_FLAGS"] = "--xla_force_host_platform_device_count={}".format(4)
 
 os.environ["JAX_PLATFORMS"] = "cpu"
 

@@ -1,15 +1,7 @@
 import os
 import logging
 
-if "KERAS_BACKEND" not in os.environ:
-    # set this to "torch", "tensorflow", or "jax"
-    os.environ["KERAS_BACKEND"] = "jax"
-
-# os.environ["JAX_PLATFORMS"] = "cpu"
-
 import hydra
-import keras
-import numpy as np
 from hydra.utils import instantiate
 from omegaconf import DictConfig
 
@@ -22,8 +14,6 @@ logger = logging.getLogger(__name__)
 @hydra.main(version_base=None, config_path="../conf", config_name="config")
 def generate_test_data(cfg: DictConfig):
     approximator, _ = load_approximator(cfg)
-
-    param_names = cfg["approximator"]["adapter"]["inference_variables"]
 
     meta_param_1 = instantiate(cfg["meta_param_1"])
     meta_param_2 = instantiate(cfg["meta_param_2"])

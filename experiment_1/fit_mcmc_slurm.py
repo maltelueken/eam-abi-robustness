@@ -1,13 +1,7 @@
 import logging
 import os
 
-if "KERAS_BACKEND" not in os.environ:
-    # set this to "torch", "tensorflow", or "jax"
-    os.environ["KERAS_BACKEND"] = "jax"
-
-os.environ["XLA_FLAGS"] = "--xla_force_host_platform_device_count={}".format(
-    4
-)
+os.environ["XLA_FLAGS"] = "--xla_force_host_platform_device_count={}".format(4)
 
 os.environ["JAX_PLATFORMS"] = "cpu"
 
@@ -32,7 +26,7 @@ def fit_mcmc(cfg: DictConfig):
 
     data = load_hdf5(os.path.join(cfg["test_data_path"], "test_data", f"test_data_sample_size_{t}.hdf5"))
     
-    sim_data = data["x"]
+    data_x = data["x"]
 
     model_fun = instantiate(cfg["mcmc_model_fun"])
 
@@ -41,9 +35,10 @@ def fit_mcmc(cfg: DictConfig):
 
     _p1 = cfg["simulator"]["prior_simulator"]["sample_fn"]["drift_slope_loc"]
     _p2 = cfg["simulator"]["prior_simulator"]["sample_fn"]["threshold_scale"]
-    model = model_fun(sim_data[idx, :, :], _p1, _p2)
+    
+    model = model_fun(data_x[idx, :, :], _p1, _p2)
 
-    trace = sampling_fun(model, min_rt=sim_data[idx, :, 0].min())
+    trace = sampling_fun(model, min_rt=data_x[idx, :, 0].min())
 
     save_hdf5(os.path.join(cfg["test_data_path"], "mcmc_samples", str(t), f"samples_{idx}.hdf5"), {str(idx): trace[0].position})
 

@@ -1,16 +1,9 @@
 import os
 import logging
 
-if "KERAS_BACKEND" not in os.environ:
-    # set this to "torch", "tensorflow", or "jax"
-    os.environ["KERAS_BACKEND"] = "jax"
-
-# os.environ["JAX_PLATFORMS"] = "cpu"
-
 import blackjax
 import hydra
 import numpy as np
-import optuna
 import pandas as pd
 from omegaconf import DictConfig
 
@@ -30,26 +23,12 @@ def check_posterior_predictive(cfg: DictConfig):
 
     create_missing_dirs(["posterior_predictive"])
 
-    meta_param_name_1 = cfg["meta_param_name_1"]
-    meta_param_name_2 = cfg["meta_param_name_2"]
-
     dfs = []
 
     for filename in os.listdir(os.path.join(cfg["test_data_path"], "test_data")):
         logger.info("Loading test data for file %s", filename)
 
         basename = os.path.splitext(filename)[0]
-
-        study = optuna.create_study(
-            study_name=os.path.splitext(filename)[0],
-            storage="sqlite:///check_summary_mmd.db",
-            load_if_exists=True
-        )
-
-        p1 = study.best_params[meta_param_name_1]
-        p2 = study.best_params[meta_param_name_2]
-
-        logger.info("Predicting with parameters %s", (p1, p2))
 
         mcmc_data_path = os.path.join("..", "mcmc_samples", f"fit_mcmc_{basename}.hdf5")
         logger.info("Loading MCMC samples from %s", os.path.abspath(mcmc_data_path))
@@ -65,9 +44,6 @@ def check_posterior_predictive(cfg: DictConfig):
         data = read_data_from_txt(os.path.join(cfg["test_data_path"], "test_data", filename))
 
         data_x = data["x"][is_converged]
-
-        data[meta_param_name_1] = np.array(p1)
-        data[meta_param_name_2] = np.array(p2)
 
         df_mcmc = calc_posterior_predictive(data_x, posterior_mcmc, data["num_obs"], simulator, cfg["test_num_posterior_predictive_samples"])
         df_mcmc["name"] = basename
@@ -85,6 +61,7 @@ def check_posterior_predictive(cfg: DictConfig):
         dfs.append(pd.merge(df_npe, df_mcmc, on=["id", "sample", "acc_true", "quantile", "rt_true"], suffixes=["_npe", "_mcmc"]))
 
     pd.concat(dfs).to_csv(os.path.join("posterior_predictive", "ppd.csv"))
+
 
 if __name__ == "__main__":
     check_posterior_predictive()

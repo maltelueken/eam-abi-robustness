@@ -1,12 +1,7 @@
 import logging
 import os
 
-if "KERAS_BACKEND" not in os.environ:
-    # set this to "torch", "tensorflow", or "jax"
-    os.environ["KERAS_BACKEND"] = "jax"
-
 import hydra
-import keras
 import numpy as np
 from hydra.utils import instantiate
 from omegaconf import DictConfig

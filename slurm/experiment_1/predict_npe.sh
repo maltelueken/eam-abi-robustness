@@ -15,15 +15,8 @@ module load 2023
 
 source bin/activate
 
-python experiment_1/predict_npe.py \
-    --multirun \
-    sweeper=basic \
-    inference_mlp_depth=5 \
-    inference_mlp_width=8 \
-    approximator.inference_network.use_optimal_transport=true \
-    approximator.summary_network.summary_dim=19 \
-    embed_depth=1 \
-    embed_width=4 \
-    mlp_depth=2 \
-    mlp_width=5 \
-    approximator.summary_network.num_seeds=3
+experiment=experiment_1
+
+for model in "rdm_simple" "rdm_simple_discrete_lower" "rdm_simple_discrete_upper" "rdm_simple_discrete_full"; do
+    python experiment_1/predict_npe.py experiment=$experiment model=$model
+done

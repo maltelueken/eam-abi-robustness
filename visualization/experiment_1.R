@@ -19,54 +19,28 @@ study_labels <- c(
   TeX("D: 50, 100, ..., 1200")
 )
 
+models <- c(
+  "rdm_simple",
+  "rdm_simple_discrete_lower",
+  "rdm_simple_discrete_upper",
+  "rdm_simple_discrete_full"
+)
+
 data_path <- "outputs/experiment_1"
 
-df_robustness_a <- read.csv(file.path(data_path, "rdm_simple/flow_matching/robustness/mmd.csv"))[,-1] # Skip first index column
-
-df_robustness_b <- read.csv(file.path(data_path, "rdm_simple_discrete_lower/flow_matching/robustness/mmd.csv"))[,-1]
-
-df_robustness_c <- read.csv(file.path(data_path, "rdm_simple_discrete_upper/flow_matching/robustness/mmd.csv"))[,-1]
-
-df_robustness_d <- read.csv(file.path(data_path, "rdm_simple_discrete_full/flow_matching/robustness/mmd.csv"))[,-1]
-
-df_summary_a <- read.csv(file.path(data_path, "rdm_simple/flow_matching/metrics/summary_stats.csv"))[,-1]
-
-df_summary_b <- read.csv(file.path(data_path, "rdm_simple_discrete_lower/flow_matching/metrics/summary_stats.csv"))[,-1]
-
-df_summary_c <- read.csv(file.path(data_path, "rdm_simple_discrete_upper/flow_matching/metrics/summary_stats.csv"))[,-1]
-
-df_summary_d <- read.csv(file.path(data_path, "rdm_simple_discrete_full/flow_matching/metrics/summary_stats.csv"))[,-1]
-
-join_robustness_summary_dfs <- function(df_summary, df_robustness) {
-  return(df_summary |>
-           group_by(sample_size, param) |>
-           mutate(id = row_number(), .before = 1) |>
-           left_join(df_robustness |>
-                       group_by(sample_size) |>
-                       mutate(id = row_number()),
-                     by=c("sample_size", "id")))
-}
-
-df_join_a <- join_robustness_summary_dfs(df_summary_a, df_robustness_a)
-df_join_b <- join_robustness_summary_dfs(df_summary_b, df_robustness_b)
-df_join_c <- join_robustness_summary_dfs(df_summary_c, df_robustness_c)
-df_join_d <- join_robustness_summary_dfs(df_summary_d, df_robustness_d)
-
-df_join <- rbind(
-  df_join_a |> mutate(study = "study_a"),
-  df_join_b |> mutate(study = "study_b"),
-  df_join_c |> mutate(study = "study_c"),
-  df_join_d |> mutate(study = "study_d")
-)
+df_summary <- Reduce(rbind, lapply(models, function(mod) {
+  read.csv(file.path(data_path, mod, "flow_matching/metrics/summary_stats.csv"))[,-1] |>
+    mutate(study = mod)
+}))
 
 df_range <- data.frame(
   param = rep(c("b", "s_true", "t0", "v_intercept", "v_slope"), each = 2),
-  true = c(0, 3, 0, 3, 0, 1, 0, 4, 0, 4),
-  value = c(0, 3, 0, 3, 0, 1, 0, 4, 0, 4),
+  true = c(0, 3, 0, 3, 0, 1.07, 0, 4, 0, 4),
+  value = c(0, 3, 0, 3, 0, 1.07, 0, 4, 0, 4),
   method = "MCMC"
 )
 
-df_join |>
+df_summary |>
   pivot_longer(c(mcmc_median, npe_median), names_to = "method") |>
   mutate(
     study = factor(study, labels = study_labels),
@@ -74,11 +48,12 @@ df_join |>
   ) |>
   ggplot(aes(x = true, y = value, color = method)) +
   facet_grid2(rows = vars(study), cols = vars(param), scales = "free", independent = "y") +
-  geom_point() +
+  geom_point(alpha = 0.5, size = 0.5) +
   geom_abline(slope = 1, intercept = 0) +
   geom_blank(data = df_range) +
   labs(x = "True parameter", y = "Posterior median", color = "") +
-  scale_color_viridis_d() +
+  # scale_color_viridis_d() +
+  scale_color_manual(values = c("indianred", "lightblue")) +
   theme_half_open() +
   theme(
     legend.position = "top",
@@ -91,12 +66,40 @@ ggsave(file.path(figure_path, "study_1_recovery.png"), width = 10, height = 6)
 
 df_range <- data.frame(
   param = rep(c("b", "s_true", "t0", "v_intercept", "v_slope"), each = 2),
+  mcmc_median = c(0, 3, 0.5, 2.5, 0, 1.07, 0, 3, 0, 3),
+  npe_median = c(0, 3, 0.5, 2.5, 0, 1.07, 0, 3, 0, 3)
+)
+
+df_summary |>
+  filter(sample_size == 50) |>
+  mutate(
+    study = factor(study, labels = study_labels)
+  ) |>
+  ggplot(aes(x = mcmc_median, y = npe_median, color = study)) +
+  facet_grid2(rows = vars(study), cols = vars(param), scales = "free", independent = "y") +
+  geom_point() +
+  geom_abline(intercept = 0, slope = 1) +
+  geom_blank(data = df_range, mapping = aes(x = mcmc_median, y = npe_median), inherit.aes = FALSE) +
+  labs(x = "MCMC posterior median", y = "NPE posterior median", color = "") +
+  # scale_color_viridis_d() +
+  scale_color_brewer(palette = "Dark2", labels = study_labels) +
+  theme_half_open() +
+  theme(
+    legend.position = "none",
+    strip.text.y = element_text(angle=360, hjust = 0),
+    strip.background.y = element_blank()
+  )
+
+ggsave(file.path(figure_path, "study_1_posterior_mismatch_50.png"), width = 10, height = 6)
+
+df_range <- data.frame(
+  param = rep(c("b", "s_true", "t0", "v_intercept", "v_slope"), each = 2),
   sample_size = rep(c(50, 1250), each = 5),
   median_diff = c(0, 0.08, 0., 0.06, 0, 0.03, 0., 0.2, 0, 0.15),
   study = "study_a"
 )
 
-df_join |>
+df_summary |>
   mutate(median_diff = abs(mcmc_median - npe_median)) |>
   group_by(sample_size, param, study) |>
   summarise(median_diff = median(median_diff)) |>
@@ -111,124 +114,15 @@ df_join |>
     color = "Trial number\n(training datasets)"
   ) +
   scale_x_continuous(breaks = c(50, 250, 500, 750, 1000, 1200), limits = c(50, 1200)) +
-  scale_color_discrete(labels = study_labels) +
+  scale_color_brewer(palette = "Dark2", labels = study_labels) +
   theme_half_open()
 
 ggsave(file.path(figure_path, "study_1_posterior_mismatch.png"), width = 10, height = 8)
 
-
-# Metrics -----------------------------------------------------------------
-
-df_metrics_a <- read.csv("outputs/experiment_1/rdm_simple/flow_matching/metrics/metrics.csv")[,-1] # Skip first index column
-
-df_metrics_b <- read.csv("outputs/experiment_1/rdm_simple_discrete_lower/flow_matching/metrics/metrics.csv")[,-1] # Skip first index column
-
-df_metrics_c <- read.csv("outputs/experiment_1/rdm_simple_discrete_upper/flow_matching/metrics/metrics.csv")[,-1] # Skip first index column
-
-df_metrics_d <- read.csv("outputs/experiment_1/rdm_simple_discrete_full/flow_matching/metrics/metrics.csv")[,-1] # Skip first index column
-
-df_metrics <- rbind(
-  df_metrics_a |>
-    mutate(study = "study_a"),
-  df_metrics_b |>
-    mutate(study = "study_b"),
-  df_metrics_c |>
-    mutate(study = "study_c"),
-  df_metrics_d |>
-    mutate(study = "study_d")
-) |>
-  mutate(
-    diff_rmsd = npe_rmsd - mcmc_rmsd,
-    diff_pc = -(npe_pc - mcmc_pc),
-    diff_ce = npe_ce - mcmc_ce
-  ) |>
-  pivot_longer(starts_with("diff"), names_to = c("metric"), names_prefix = "diff_", values_to = "diff") |>
-  mutate(
-    metric = fct_relabel(factor(metric, levels = c("rmsd", "pc", "ce")), toupper)
+df_summary |>
+  filter(sample_size == 50) |>
+  group_by(param) |>
+  summarise(
+    mcmc_rmsd = sqrt(mean((true - mcmc_median)^2)),
+    npe_rmsd = sqrt(mean((true - npe_median)^2))
   )
-
-df_join <- df_robustness |>
-  group_by(study, sample_size) |>
-  summarize(mmd = median(sqrt(mmd))) |>
-  left_join(df_metrics, by = c("study", "sample_size"))
-
-df_join |>
-  filter(metric == "RMSD") |>
-  ggplot(aes(x = mmd, y = diff, color = study)) +
-  facet_wrap(
-    vars(param),
-    labeller = label_parsed
-  ) +
-  geom_hline(yintercept = 0, color = "grey") +
-  geom_point(alpha = 0.5) +
-  # geom_smooth(mapping = aes(x = mmd, y = diff), inherit.aes = FALSE, method= "lm", color = "black") +
-  # geom_density2d() +
-  # geom_smooth(method = "lm", data = df_join |> filter(sample_size != 50)) +
-  # geom_vline(xintercept = c(250, 500, 750, 1000), alpha = 0.1) +
-  labs(x = "Posterior mismatch (median MMD)", y = "Difference RMSD (NPE - MCMC)", color = "Trial number (training datasets)") +
-  scale_x_continuous(breaks = seq(0.1, 0.4, 0.1), limits = c(0.08, 0.4)) +
-  scale_color_discrete(labels = study_labels) +
-  theme_half_open() +
-  theme(
-    strip.background = element_rect(color = NA, fill = "lightgrey"),
-    # strip.placement = "outside",
-    legend.position = c(0.85, 0.2),
-    legend.direction = "vertical",
-    legend.justification = "center"
-  )
-
-ggsave(file.path(figure_path, "study_1_rmsd.png"))
-
-df_join |>
-  filter(metric == "PC") |>
-  ggplot(aes(x = mmd, y = diff, color = study)) +
-  facet_wrap(
-    vars(param),
-    labeller = label_parsed
-  ) +
-  geom_hline(yintercept = 0, color = "grey") +
-  geom_point(alpha = 0.5) +
-  # geom_smooth(mapping = aes(x = mmd, y = diff), inherit.aes = FALSE, method= "lm", color = "black") +
-  # geom_density2d() +
-  # geom_smooth(method = "lm", data = df_join |> filter(sample_size != 50)) +
-  # geom_vline(xintercept = c(250, 500, 750, 1000), alpha = 0.1) +
-  labs(x = "Posterior mismatch (median MMD)", y = "Difference PC (NPE - MCMC)", color = "Trial number (training datasets)") +
-  scale_x_continuous(breaks = seq(0.1, 0.4, 0.1), limits = c(0.08, 0.4)) +
-  scale_color_discrete(labels = study_labels) +
-  theme_half_open() +
-  theme(
-    strip.background = element_rect(color = NA, fill = "lightgrey"),
-    # strip.placement = "outside",
-    legend.position = c(0.85, 0.2),
-    legend.direction = "vertical",
-    legend.justification = "center"
-  )
-
-ggsave(file.path(figure_path, "appendix_study_1_pc.png"))
-
-df_join |>
-  filter(metric == "CE") |>
-  ggplot(aes(x = mmd, y = diff, color = study)) +
-  facet_wrap(
-    vars(param),
-    labeller = label_parsed
-  ) +
-  geom_hline(yintercept = 0, color = "grey") +
-  geom_point(alpha = 0.5) +
-  # geom_smooth(mapping = aes(x = mmd, y = diff), inherit.aes = FALSE, method= "lm", color = "black") +
-  # geom_density2d() +
-  # geom_smooth(method = "lm", data = df_join |> filter(sample_size != 50)) +
-  # geom_vline(xintercept = c(250, 500, 750, 1000), alpha = 0.1) +
-  labs(x = "Posterior mismatch (median MMD)", y = "Difference CE (NPE - MCMC)", color = "Trial number (training datasets)") +
-  scale_x_continuous(breaks = seq(0.1, 0.4, 0.1), limits = c(0.08, 0.4)) +
-  scale_color_discrete(labels = study_labels) +
-  theme_half_open() +
-  theme(
-    strip.background = element_rect(color = NA, fill = "lightgrey"),
-    # strip.placement = "outside",
-    legend.position = c(0.85, 0.2),
-    legend.direction = "vertical",
-    legend.justification = "center"
-  )
-
-ggsave(file.path(figure_path, "appendix_study_1_ce.png"))

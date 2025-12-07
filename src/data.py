@@ -1,9 +1,11 @@
+"""Data utilities for saving and loading HDF5 files."""
 
 import h5py
 
 
 def save_hdf5(filename, data_dict):
-    with h5py.File(filename, 'w') as file:
+    """Save a dictionary to an HDF5 file."""
+    with h5py.File(filename, "w") as file:
         for key, val in data_dict.items():
             if val is not None:
                 _ = file.create_dataset(key, data=val)
@@ -12,13 +14,12 @@ def save_hdf5(filename, data_dict):
 
 
 def load_hdf5(filename):
+    """Load a dictionary from an HDF5 file."""
     data_dict = {}
-
-    with h5py.File(filename, 'r') as file:
+    with h5py.File(filename, "r") as file:
         for key, val in file.items():
             if val.shape is not None:
                 data_dict[key] = val[()]
             else:
                 data_dict[key] = None
-
     return data_dict

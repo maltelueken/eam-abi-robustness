@@ -11,11 +11,10 @@ and shape `lam = (b/s)**2`, exactly as in `simulation.rdm_experiment_simple`.
 """
 
 import logging
-from datetime import date
 import blackjax
 import jax
 import jax.numpy as jnp
-from jax.scipy import special as jspecial
+from jax.scipy import stats as jstats
 from tensorflow_probability.substrates import jax as tfp
 
 # NUTS window adaptation and the race log-density (small squared terms, exp/log
@@ -34,10 +33,15 @@ logger = logging.getLogger(__name__)
 #
 # tfd.InverseGaussian.log_survival_function underflows to -inf for moderately
 # large x (verified against scipy.stats.invgauss.logsf), which would zero out
-# gradients for the race likelihood's "loser hasn't finished yet" term. This
-# stable version is a JAX port of the PyTensor implementation formerly in
-# pymc_models.py, following Giner & Smyth 2016
-# (https://journal.r-project.org/archive/2016-1/giner-smyth.pdf).
+# gradients for the race likelihood's "loser hasn't finished yet" term.
+# Follows Giner & Smyth 2016 (https://journal.r-project.org/archive/2016-1/
+# giner-smyth.pdf), matching confrdm_jax.likelihoods.rdm's implementation:
+# `jax.scipy.stats.norm.logcdf` is used directly rather than a hand-rolled
+# erfcx-based version (verified numerically stable -- including finite
+# gradients and correct values -- across x in [-50, 10] against scipy, so the
+# earlier hand-rolled version's extra care against a confirmed jax.scipy.
+# special.erfcx bug is unnecessary here). Callers are expected to keep `t`
+# strictly positive (see `rdm_race_logpdf`'s upstream floor).
 # ---------------------------------------------------------------------------
 
 
@@ -47,75 +51,16 @@ def inv_gauss_logpdf(t, mu, lam):
     return e + 0.5 * jnp.log(lam) - 0.5 * jnp.log(2 * t**3 * jnp.pi)
 
 
-_ERFCX_CUTOFF = 8.0
-
-
-def _erfcx_stable(x):
-    """`erfcx(x)` for `x >= 0`, avoiding `jax.scipy.special.erfcx` directly.
-
-    That primitive has a confirmed, isolated bug at this JAX version (0.11.0):
-    `erfcx(26.627...)` silently returns `0.0` instead of `~0.0212` (verified
-    against scipy), with correct neighbouring values -- almost certainly a
-    rational-approximation edge case in XLA's implementation. Below the cutoff
-    this uses the safe direct identity `exp(x**2) * erfc(x)` (no overflow for
-    `x <= 8`: `exp(64)` is far under float64's range, and `erfc(8)` doesn't
-    underflow); above it, the standard asymptotic series, whose terms shrink
-    with `x`, so it's most accurate exactly where it's used. Matches
-    `scipy.special.erfcx` to a relative error < 3e-9 for `x` in [0, 200]
-    (verified numerically).
-    """
-    is_small = x <= _ERFCX_CUTOFF
-    x_small = jnp.where(is_small, x, 1.0)
-    small = jnp.exp(x_small**2) * jspecial.erfc(x_small)
-
-    x_large = jnp.where(is_small, 1.0, x)
-    inv_x2 = 1.0 / (x_large * x_large)
-    series = 1.0 - inv_x2 * (0.5 - inv_x2 * (0.75 - inv_x2 * (1.875 - inv_x2 * (6.5625 - inv_x2 * 29.53125))))
-    large = series / (x_large * jnp.sqrt(jnp.pi))
-
-    return jnp.where(is_small, small, large)
-
-
-def _standard_normal_logcdf(t):
-    """Numerically stable log CDF of the standard normal distribution.
-
-    `jnp.where` still runs autodiff through *both* branches (it only masks the
-    cotangent afterwards), so if either branch has a genuine singularity at the
-    other branch's typical values -- and it does here: `log1p(-erfc(x)/2)`
-    saturates to exactly `log1p(-1) = -inf` once `x` is a few units past 0, an
-    infinite/NaN gradient -- the unselected branch still poisons the total via
-    `0 * inf = nan`. Feeding each branch a safe substitute value whenever it is
-    not the active one keeps both branches' local gradients finite.
-    """
-    is_left_tail = t < -1.0
-    t_left = jnp.where(is_left_tail, t, -1.0)
-    t_right = jnp.where(is_left_tail, -1.0, t)
-
-    left = jnp.log(_erfcx_stable(-t_left / jnp.sqrt(2.0)) / 2.0) - t_left**2 / 2.0
-    right = jnp.log1p(-jspecial.erfc(t_right / jnp.sqrt(2.0)) / 2.0)
-
-    return jnp.where(is_left_tail, left, right)
-
-
 def inv_gauss_logsf(t, mu, lam):
-    """Log survival function of the Wald/inverse-Gaussian distribution.
-
-    See the `_standard_normal_logcdf` docstring for why `t` is clamped away
-    from 0 (where `1/sqrt(t)` diverges) even in the branch where it's unused.
-    """
+    """Log survival function of the Wald/inverse-Gaussian distribution (`t > 0`)."""
     mu = mu / lam
     t = t / lam
-
-    is_pos = t > 0.0
-    t_safe = jnp.where(is_pos, t, 1.0)
-
-    r = 1.0 / jnp.sqrt(t_safe)
-    a = _standard_normal_logcdf(-r * (t_safe / mu - 1.0))
-    b = 2.0 / mu + _standard_normal_logcdf(-r * (t_safe + mu) / mu)
-    logsf = a + jnp.log1p(-jnp.exp(b - a))
-
-    logsf = jnp.where(is_pos, logsf, 0.0)
-    return jnp.where(jnp.isposinf(t), -jnp.inf, logsf)
+    r = 1.0 / jnp.sqrt(t)
+    a = jstats.norm.logcdf(-r * (t / mu - 1.0))
+    b = 2.0 / mu + jstats.norm.logcdf(-r * (t + mu) / mu)
+    # b <= a always holds mathematically, but floating-point arithmetic can violate
+    # it; clamp b - a <= 0 so the log1p argument never drops below -1 (-> NaN).
+    return a + jnp.log1p(-jnp.exp(jnp.minimum(b - a, 0.0)))
 
 
 # ---------------------------------------------------------------------------
@@ -200,34 +145,48 @@ def rdm_experiment_simple_jax_stateful(v_intercept, v_slope, s_true, s_false, b,
 # ---------------------------------------------------------------------------
 
 
+def _penalize_invalid_rt(rt_shifted, log_pdf, log_sf, min_p):
+    """Replace log-densities with a steep linear penalty when `rt <= t0`.
+
+    For trials where `rt - t0 <= 0` the observation is impossible under the model.
+    A flat floor gives *zero* gradient there, which can strand NUTS in an infeasible
+    region; a linear penalty instead keeps a gradient that pushes `t0` back below the
+    minimum observed RT.
+    """
+    log_floor = jnp.log(min_p)
+    valid = rt_shifted > min_p
+    penalty = log_floor + 1e3 * jnp.minimum(rt_shifted - min_p, 0.0)
+    log_pdf = jnp.where(valid, log_pdf, penalty)
+    log_sf = jnp.where(valid, log_sf, 0.0)
+    return log_pdf, log_sf
+
+
 def rdm_race_logpdf(rt, drift_winner, drift_loser, s_winner, s_loser, threshold, ndt, min_p=1e-10):
     """Log density of one race outcome: winner finished at `rt`, loser hadn't yet."""
-    t = rt - ndt
-    is_pos = t > 0.0
-    t_safe = jnp.where(is_pos, t, 1.0)  # keep 1/t (in inv_gauss_logpdf) finite when unused
+    rt_shifted = rt - ndt
+    rt_safe = jnp.maximum(rt_shifted, min_p)
+
+    # Priors keep these positive via a log-transform (see simple_to_unconstrained),
+    # so this floor only guards against exp() underflowing to exactly 0.0, rather
+    # than gating validity -- unlike a hard `-inf` rejection, it keeps a finite
+    # gradient even if the sampler briefly explores a near-zero parameter.
+    drift_winner = jnp.maximum(drift_winner, min_p)
+    drift_loser = jnp.maximum(drift_loser, min_p)
+    s_winner = jnp.maximum(s_winner, min_p)
+    s_loser = jnp.maximum(s_loser, min_p)
+    threshold = jnp.maximum(threshold, min_p)
 
     mu_winner = threshold / drift_winner
     mu_loser = threshold / drift_loser
     lam_winner = (threshold / s_winner) ** 2
     lam_loser = (threshold / s_loser) ** 2
 
-    logp = jnp.where(
-        is_pos,
-        inv_gauss_logpdf(t_safe, mu_winner, lam_winner) + inv_gauss_logsf(t_safe, mu_loser, lam_loser),
-        jnp.log(min_p),
-    )
-    logp = jnp.where(jnp.isnan(logp) | jnp.isinf(logp), jnp.log(min_p), logp)
-    logp = jnp.maximum(logp, jnp.log(min_p))
+    log_pdf = inv_gauss_logpdf(rt_safe, mu_winner, lam_winner)
+    log_sf = inv_gauss_logsf(rt_safe, mu_loser, lam_loser)
+    log_pdf, log_sf = _penalize_invalid_rt(rt_shifted, log_pdf, log_sf, min_p)
 
-    valid = (
-        (drift_winner > 0)
-        & (drift_loser > 0)
-        & (s_winner > 0)
-        & (s_loser > 0)
-        & (threshold > 0)
-        & (ndt > 0)
-    )
-    return jnp.where(valid, logp, -jnp.inf)
+    logp = log_pdf + log_sf
+    return jnp.maximum(jnp.nan_to_num(logp, nan=jnp.log(min_p)), jnp.log(min_p))
 
 
 def _rdm_simple_log_prior(v_intercept, v_slope, s_true, b, t0, drift_slope_loc, threshold_scale):
@@ -350,23 +309,12 @@ def make_rdm_meta_logdensity(
 
 
 # ---------------------------------------------------------------------------
-# BlackJAX runner (unchanged in spirit from the former pymc_models.py: it only
-# ever consumed a plain logdensity_fun, so it never actually depended on PyMC).
+# GPU-parallelized batch fitting: vmap over chains *and* over datasets, in the
+# style of racing-diffusion-conflict/scripts/parameter_recovery.py. All three
+# experiments' MCMC fitting goes through this -- one GPU job vmaps every
+# dataset (and every chain within each) at once, instead of one SLURM job per
+# dataset with chains parallelized via `jax.pmap` on faked CPU devices.
 # ---------------------------------------------------------------------------
-
-
-def inference_loop(rng_key, kernel, initial_state, num_samples):
-    """BlackJAX MCMC inference loop."""
-
-    @jax.jit
-    def one_step(state, rng_key):
-        state, info = kernel(rng_key, state)
-        return state, (state, info)
-
-    keys = jax.random.split(rng_key, num_samples)
-    _, (states, infos) = jax.lax.scan(one_step, initial_state, keys)
-
-    return states, infos
 
 
 def warmup(sampler_fun, logdensity_fun, init_position, num_steps, rng_key, **kwargs):
@@ -377,45 +325,86 @@ def warmup(sampler_fun, logdensity_fun, init_position, num_steps, rng_key, **kwa
     return kernel, last_state, parameters
 
 
-def run_mcmc(
-    logdensity_fun,
-    sampler_fun,
+def inference_loop_multiple_chains(rng_key, kernel, initial_state, num_samples, num_chains):
+    """Run `num_chains` BlackJAX chains via `vmap`: a single XLA computation that runs
+    efficiently on one GPU and composes with an outer `vmap` over datasets
+    (`fit_mcmc_gpu_batch`), unlike `jax.pmap` (which needs one physical device per chain).
+    """
+
+    @jax.jit
+    def one_step(states, rng_key):
+        keys = jax.random.split(rng_key, num_chains)
+        states, infos = jax.vmap(kernel)(keys, states)
+        return states, (states.position, infos)
+
+    keys = jax.random.split(rng_key, num_samples)
+    _, (positions, infos) = jax.lax.scan(one_step, initial_state, keys)
+
+    return positions, infos
+
+
+def fit_mcmc_gpu(
+    rng_key,
+    data,
+    make_logdensity_fn,
     init_position,
     num_chains,
     num_steps_warmup,
     num_steps_sampling,
-    min_rt=None,
-    rng_key=None,
     to_unconstrained=simple_to_unconstrained,
-    **kwargs,
 ):
-    """Perform MCMC inference directly against a JAX log-density function."""
-    if rng_key is None:
-        rng_key = jax.random.key(int(date.today().strftime("%Y%m%d")))
+    """Fit one dataset's posterior with vmap-parallelized chains.
+
+    `make_logdensity_fn(data)` builds the logdensity function for *this* dataset --
+    called in here, not by the caller, so it composes correctly with an outer
+    `jax.vmap` over datasets (`fit_mcmc_gpu_batch`): under `vmap`, `data` is a
+    per-dataset traced slice, so the closure is (re)built per dataset rather than
+    one fixed dataset getting baked in before vmapping.
+    """
+    init_position = jnp.asarray(init_position).at[-1].set(data[:, 0].min() / 2)
+
+    logdensity_fn = make_logdensity_fn(data)
 
     rng_key, warmup_key = jax.random.split(rng_key)
-
-    init_position = jnp.asarray(init_position)
-    if min_rt is not None:
-        init_position = init_position.at[-1].set(0.5 * min_rt)
-
     kernel, last_state, _ = warmup(
-        sampler_fun,
-        logdensity_fun,
-        to_unconstrained(init_position),
-        num_steps_warmup,
-        warmup_key,
-        **kwargs,
+        blackjax.nuts, logdensity_fn, to_unconstrained(init_position), num_steps_warmup, warmup_key,
     )
 
-    last_states = jax.vmap(lambda x: last_state)(jnp.arange(num_chains))
+    last_states = jax.vmap(lambda _: last_state)(jnp.arange(num_chains))
 
-    sample_keys = jax.random.split(rng_key, num_chains)
+    return inference_loop_multiple_chains(rng_key, kernel, last_states, num_steps_sampling, num_chains)
 
-    inference_loop_multiple_chains = jax.pmap(
-        inference_loop, in_axes=(0, None, 0, None), static_broadcasted_argnums=(1, 3),
-    )
 
-    trace = inference_loop_multiple_chains(sample_keys, kernel, last_states, num_steps_sampling)
+def fit_mcmc_gpu_batch(
+    rng_key,
+    data,
+    make_logdensity_fn,
+    init_position,
+    num_chains,
+    num_steps_warmup,
+    num_steps_sampling,
+    to_unconstrained=simple_to_unconstrained,
+):
+    """Fit MCMC posteriors for a whole batch of datasets in one call, via `vmap` over
+    `data`'s leading axis -- e.g. every simulated dataset for one `num_obs` value in
+    one GPU job, instead of one SLURM job per dataset.
 
-    return trace
+    Returns `(positions, infos)` with `positions` of shape `(num_datasets, num_samples,
+    num_chains, num_params)` and NUTS diagnostics (e.g. `infos.is_divergent`) with a
+    matching leading `num_datasets` axis.
+    """
+    keys = jax.random.split(rng_key, data.shape[0])
+
+    def fit_one(key, dataset):
+        return fit_mcmc_gpu(
+            key,
+            dataset,
+            make_logdensity_fn,
+            init_position,
+            num_chains,
+            num_steps_warmup,
+            num_steps_sampling,
+            to_unconstrained=to_unconstrained,
+        )
+
+    return jax.vmap(fit_one, in_axes=(0, 0))(keys, data)

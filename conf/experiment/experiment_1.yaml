@@ -51,10 +51,10 @@ test_num_obs:
   stop: 1250
   step: 50
 
-mcmc_sampler: blackjax.nuts
-
+# GPU-parallelized MCMC fitting (experiment_*/fit_mcmc_gpu.py): vmaps BlackJAX NUTS
+# over chains *and* over every dataset in one call. See rdm_jax.fit_mcmc_gpu_batch.
 mcmc_sampling_fun:
-  _target_: rdm_jax.run_mcmc
+  _target_: rdm_jax.fit_mcmc_gpu_batch
   _partial_: true
   _convert_: object
   init_position:

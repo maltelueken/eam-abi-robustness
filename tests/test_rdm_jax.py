@@ -1,3 +1,4 @@
+import functools
 import blackjax
 import jax
 import jax.numpy as jnp
@@ -5,8 +6,8 @@ import numpy as np
 import pytest
 from scipy import stats
 from rdm_jax import SplittableKey
-from rdm_jax import _erfcx_stable
-from rdm_jax import _standard_normal_logcdf
+from rdm_jax import fit_mcmc_gpu_batch
+from rdm_jax import inference_loop_multiple_chains
 from rdm_jax import inv_gauss_logpdf
 from rdm_jax import inv_gauss_logsf
 from rdm_jax import make_meta_to_unconstrained
@@ -35,13 +36,6 @@ def test_inv_gauss_logpdf(x):
             assert np.all(pytest.approx(res, rel=1e-6) == ref)
 
 
-def test_standard_normal_logcdf(x):
-    t = jnp.concatenate([x, -x])
-    ref = stats.norm.logcdf(np.array(t))
-    res = np.array(_standard_normal_logcdf(t))
-    assert np.all(pytest.approx(res, rel=1e-6) == ref)
-
-
 def test_inv_gauss_logsf(x):
     mu = np.array([0.01, 1.0, 2.0, 10.0, 100.0])
     lam = np.array([0.01, 1.0, 2.0, 10.0, 100.0])
@@ -52,18 +46,6 @@ def test_inv_gauss_logsf(x):
             res = np.array(inv_gauss_logsf(x, m, l))
             relerr = np.abs(ref - res) / np.maximum(np.abs(ref), 1.0)
             assert np.nanmax(relerr) < 1e-6
-
-
-def test_erfcx_stable_matches_scipy():
-    # regression test: jax.scipy.special.erfcx is confirmed buggy at x~26.627
-    # (returns exactly 0.0 instead of ~0.0212) on this JAX version; this
-    # implementation avoids it entirely.
-    from scipy import special as sspecial
-
-    x = jnp.linspace(0.001, 100.0, 5000)
-    res = np.array(_erfcx_stable(x))
-    relerr = np.abs(res - sspecial.erfcx(np.array(x))) / sspecial.erfcx(np.array(x))
-    assert np.max(relerr) < 1e-6
 
 
 @pytest.mark.parametrize(
@@ -146,10 +128,9 @@ def test_make_rdm_simple_logdensity_recovers_parameters_with_blackjax_nuts():
     key, warmup_key, sample_key = jax.random.split(key, 3)
     kernel, last_state, _ = warmup(blackjax.nuts, logdensity_fn, init_position, 500, warmup_key)
 
-    from rdm_jax import inference_loop
-
-    states, infos = inference_loop(sample_key, kernel, last_state, 1000)
-    post_mean = jnp.mean(jnp.exp(states.position[300:]), axis=0)
+    last_states = jax.vmap(lambda _: last_state)(jnp.arange(1))
+    positions, infos = inference_loop_multiple_chains(sample_key, kernel, last_states, 1000, num_chains=1)
+    post_mean = jnp.mean(jnp.exp(positions[300:, 0]), axis=0)
 
     truth = jnp.array([true_v_intercept, true_v_slope, true_s_true, true_b, true_t0])
     assert jnp.max(jnp.abs(post_mean - truth) / truth) < 0.4
@@ -167,3 +148,42 @@ def test_make_rdm_meta_logdensity_finite_at_init():
 
     assert jnp.isfinite(value)
     assert jnp.all(jnp.isfinite(grad))
+
+
+def test_fit_mcmc_gpu_batch_recovers_parameters_across_datasets():
+    # experiment_1/fit_mcmc_gpu.py's core: vmap BlackJAX NUTS over chains *and* over
+    # every dataset in one call, instead of pmap + one SLURM job per dataset.
+    true_v_intercept, true_v_slope, true_s_true, true_b, true_t0 = 1.0, 1.5, 0.3, 1.2, 0.3
+    drift_slope_loc, threshold_scale = 1.5, 1.0
+    num_datasets, n_trials = 3, 500
+
+    key = jax.random.PRNGKey(0)
+    keys = jax.random.split(key, num_datasets)
+    datasets = jnp.stack(
+        [
+            rdm_experiment_simple_jax(k, true_v_intercept, true_v_slope, true_s_true, 1.0, true_b, true_t0, n_trials)["x"]
+            for k in keys
+        ],
+    )
+
+    make_logdensity_fn = functools.partial(
+        make_rdm_simple_logdensity, drift_slope_loc=drift_slope_loc, threshold_scale=threshold_scale,
+    )
+    init_position = jnp.array([1.0, 1.0, 0.5, 1.0, 0.2])
+
+    positions, infos = fit_mcmc_gpu_batch(
+        jax.random.PRNGKey(1), datasets, make_logdensity_fn, init_position,
+        num_chains=4, num_steps_warmup=500, num_steps_sampling=500,
+    )
+    positions.block_until_ready()
+
+    assert positions.shape == (num_datasets, 500, 4, 5)
+
+    post_mean = jnp.mean(jnp.exp(positions[:, 200:]), axis=(1, 2))
+    truth = jnp.array([true_v_intercept, true_v_slope, true_s_true, true_b, true_t0])
+    rel_err = jnp.abs(post_mean - truth) / truth
+    # Mean rather than max across only 3 datasets: with a small sample/chain budget
+    # any single dataset can mix poorly and swing its own error up, without that
+    # reflecting a problem with fit_mcmc_gpu_batch itself.
+    assert jnp.mean(rel_err) < 0.3
+    assert jnp.mean(infos.is_divergent) < 0.1

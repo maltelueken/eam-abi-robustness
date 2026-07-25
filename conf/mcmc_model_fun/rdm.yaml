@@ -1,2 +1,2 @@
-_target_: pymc_models.rdm_model_simple
+_target_: rdm_jax.make_rdm_simple_logdensity
 _partial_: true

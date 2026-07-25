@@ -54,7 +54,7 @@ test_num_obs:
 mcmc_sampler: blackjax.nuts
 
 mcmc_sampling_fun:
-  _target_: pymc_models.run_mcmc
+  _target_: rdm_jax.run_mcmc
   _partial_: true
   _convert_: object
   init_position:

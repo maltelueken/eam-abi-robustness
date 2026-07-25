@@ -14,26 +14,28 @@ classifiers = [
     "Apache Software License 2.0: License :: OSI Approved :: Apache Software License",
     "Natural Language :: English",
     "Programming Language :: Python :: 3",
-    "Programming Language :: Python :: 3.10",
     "Programming Language :: Python :: 3.11",
     "Programming Language :: Python :: 3.12",
 ]
 dependencies = [
-  "bayesflow==2.0.7",
+  "arviz",
+  "bayesflow==2.0.12",
   "blackjax",
   "hydra-core",
   "hydra-optuna-sweeper",
-  "jax==0.5.0",
+  "jax",
+  "matplotlib",
+  "netcdf4",
   "optuna",
   "pandas",
   "polars",
-  "pymc"
+  "tfp-nightly",
 ]
 description = "Model training and analysis pipeline for assessing the obustness of amortized Bayesian inference for evidence accumulation models."
 license = {file = "LICENSE"}
 name = "eam_abi_robustness"
 readme = {file = "README.md", content-type = "text/markdown"}
-requires-python = ">=3.10"
+requires-python = ">=3.12"
 version = "0.0.1"
 
 [tool.pytest.ini_options]

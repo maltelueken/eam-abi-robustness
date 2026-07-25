@@ -45,7 +45,7 @@ def fit_mcmc(cfg: DictConfig):
         _p1_lower = cfg["simulator"]["meta_simulator"]["sample_fn"]["min_value"][0]
         _p1_upper = cfg["simulator"]["meta_simulator"]["sample_fn"]["max_value"][0]
         _p2_lower = cfg["simulator"]["meta_simulator"]["sample_fn"]["min_value"][1]
-        _p2_upper = cfg["simulator"]["meta_simulator"]["sample_fn"]["max_value"][0]
+        _p2_upper = cfg["simulator"]["meta_simulator"]["sample_fn"]["max_value"][1]
         model = model_fun(sim_data[idx, :, :], _p1_lower, _p1_upper, _p2_lower, _p2_upper)
 
     trace = sampling_fun(model, min_rt=sim_data[idx, :, 0].min())

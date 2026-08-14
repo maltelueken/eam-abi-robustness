@@ -1,11 +1,5 @@
 # @package _global_
 
 defaults:
-- override /simulator: rdm
-- override /approximator/adapter: rdm_simple
-
-simulator.design_simulator.sample_fn.values:
-  _target_: numpy.arange
-  start: 50
-  stop: 250
-  step: 50
+- rdm_simple
+- override /simulator/design_simulator: random_num_obs_discrete_lower

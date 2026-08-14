@@ -1,0 +1,6 @@
+_target_: simulation.create_data_adapter
+inference_variables: ["v_intercept", "v_slope", "s_true", "A", "B", "t0"]
+inference_conditions:
+- num_obs
+summary_variables:
+- x

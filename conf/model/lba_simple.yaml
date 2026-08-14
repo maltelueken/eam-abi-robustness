@@ -1,0 +1,23 @@
+# @package _global_
+
+defaults:
+- override /simulator: lba
+- override /mcmc_model_fun: lba
+- override /approximator/adapter: lba_simple
+
+is_meta: false
+
+# The LBA has six parameters where the RDM has five, so the length-5 default in
+# conf/experiment/experiment_1.yaml does not fit. Order matches the unconstrained position
+# in lba_jax.make_lba_simple_logdensity: [v_intercept, v_slope, s_true, A, B, t0], where B is
+# the threshold gap b - A (so the implied threshold here is 0.5 + 1.0 = 1.5).
+mcmc_sampling_fun:
+  init_position:
+    _target_: numpy.array
+    object:
+      - 1
+      - 2
+      - 1
+      - 0.5
+      - 1.0
+      - 0.2

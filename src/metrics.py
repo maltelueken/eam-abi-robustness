@@ -4,9 +4,13 @@ import numpy as np
 import pandas as pd
 
 
-def calc_posterior_predictive(data, posterior, num_obs, simulator, num_samples):
-    """Calculate posterior predictive statistics for response time and accuracy."""
-    
+def calc_posterior_predictive(data, posterior, num_obs, simulator, num_samples, param_names):
+    """Calculate posterior predictive statistics for response time and accuracy.
+
+    `param_names` must list the model's parameters in the same order as `posterior`'s last
+    axis -- i.e. the adapter's `inference_variables` -- so that this works for any model
+    family (the RDM's five parameters, the LBA's six) rather than a fixed set.
+    """
     idx = []
     posterior_sample = []
     acc_true = []
@@ -18,11 +22,7 @@ def calc_posterior_predictive(data, posterior, num_obs, simulator, num_samples):
     for i in range(data.shape[0]):
         for j in range(num_samples):
             sim = simulator.experiment_simulator.sample_fn(
-                v_intercept=posterior[i, j, 0],
-                v_slope=posterior[i, j, 1],
-                s_true=posterior[i, j, 2],
-                b=posterior[i, j, 3],
-                t0=posterior[i, j, 4],
+                **dict(zip(param_names, posterior[i, j])),
                 num_obs=num_obs,
             )
             idx.append(i)
@@ -42,5 +42,5 @@ def calc_posterior_predictive(data, posterior, num_obs, simulator, num_samples):
             "quantile": quantile,
             "rt_true": rt_true,
             "rt_est": rt_est,
-        }
+        },
     ).explode(["quantile", "rt_true", "rt_est"])

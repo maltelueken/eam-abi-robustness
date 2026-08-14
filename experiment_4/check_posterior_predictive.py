@@ -45,7 +45,7 @@ def check_posterior_predictive(cfg: DictConfig):
 
         data_x = data["x"][is_converged]
 
-        df_mcmc = calc_posterior_predictive(data_x, posterior_mcmc, data["num_obs"], simulator, cfg["test_num_posterior_predictive_samples"])
+        df_mcmc = calc_posterior_predictive(data_x, posterior_mcmc, data["num_obs"], simulator, cfg["test_num_posterior_predictive_samples"], param_names)
         df_mcmc["name"] = basename
 
         npe_samples = approximator.sample(
@@ -55,7 +55,7 @@ def check_posterior_predictive(cfg: DictConfig):
 
         posterior_npe = convert_posterior_samples(npe_samples, param_names)[is_converged]
 
-        df_npe = calc_posterior_predictive(data_x, posterior_npe, data["num_obs"], simulator, cfg["test_num_posterior_predictive_samples"])
+        df_npe = calc_posterior_predictive(data_x, posterior_npe, data["num_obs"], simulator, cfg["test_num_posterior_predictive_samples"], param_names)
         df_npe["name"] = basename
 
         dfs.append(pd.merge(df_npe, df_mcmc, on=["id", "sample", "acc_true", "quantile", "rt_true"], suffixes=["_npe", "_mcmc"]))

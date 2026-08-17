@@ -38,7 +38,7 @@ keep the literal names, because `simulation.CustomSimulator` splats the prior's 
 keyword arguments and the names have to line up.
 
 Note `rdm_jax` enables float64 globally on import; this module relies on that, and on its
-`_as_scalar` / `_penalize_invalid_rt` helpers, rather than duplicating them.
+`_as_scalar` / `_finalize_race_logp` helpers, rather than duplicating them.
 """
 
 import jax
@@ -46,7 +46,7 @@ import jax.numpy as jnp
 from jax.scipy import stats as jstats
 from tensorflow_probability.substrates import jax as tfp
 from rdm_jax import _as_scalar
-from rdm_jax import _penalize_invalid_rt
+from rdm_jax import _finalize_race_logp
 
 tfd = tfp.distributions
 tfb = tfp.bijectors
@@ -75,8 +75,9 @@ tfb = tfp.bijectors
 # equal terms and underflows to exactly 0. A signed-logsumexp reformulation was
 # tried and buys only about one decade (down to t ~ 0.05) before the
 # cancellation eats all precision, so it is not worth the complexity: floor the
-# density and let `_penalize_invalid_rt` supply the sloped gradient that keeps
-# NUTS from stranding when t0 crowds the fastest observed RT.
+# density at `min_p` (the same constant EMC2 floors its race likelihood at) and
+# let `_finalize_race_logp` supply the sloped gradient that keeps NUTS from
+# stranding when t0 crowds the fastest observed RT.
 # ---------------------------------------------------------------------------
 
 
@@ -112,7 +113,19 @@ def lba_logpdf(t, v, s, sp_max, b, min_p=1e-10):
 
     bracket = -v * jstats.norm.cdf(z1) + s * jstats.norm.pdf(z1) + v * jstats.norm.cdf(z2) - s * jstats.norm.pdf(z2)
 
-    return jnp.log(jnp.maximum(bracket, min_p)) - jnp.log(sp_max) - _lba_log_truncation(v, s)
+    log_d = jnp.log(jnp.maximum(bracket, min_p)) - jnp.log(sp_max) - _lba_log_truncation(v, s)
+
+    # What gets floored has to be the *density*, not the bracket. Clamping only the bracket (as
+    # this did originally) leaves `-log(sp_max) - log Phi(v/s)` to be applied afterwards, and
+    # those two terms are usually positive, so they lift the clamped value back *above* the
+    # floor: at A=0.6, b=1.8, v=3.5, s=1.2, t=0.05 that returned -22.51 where the true density
+    # is e^-146. So substitute the floor outright wherever the bracket has underflowed, and
+    # keep a plain lower bound for the (rarer, sp_max > 1) case where the normalization pushes
+    # a non-underflowed value below it instead. `min_p` is the same constant as EMC2's
+    # `min_ll`, so the floored value is exactly what EMC2's log_likelihood_race records here.
+    log_floor = jnp.log(min_p)
+
+    return jnp.where(bracket > min_p, jnp.maximum(log_d, log_floor), log_floor)
 
 
 def lba_logsf(t, v, s, sp_max, b, min_p=1e-10):
@@ -210,10 +223,8 @@ def lba_race_logpdf(rt, drift_winner, drift_loser, s_winner, s_loser, sp_max, sp
 
     log_pdf = lba_logpdf(rt_safe, drift_winner, s_winner, sp_max, threshold, min_p=min_p)
     log_sf = lba_logsf(rt_safe, drift_loser, s_loser, sp_max, threshold, min_p=min_p)
-    log_pdf, log_sf = _penalize_invalid_rt(rt_shifted, log_pdf, log_sf, min_p)
 
-    logp = log_pdf + log_sf
-    return jnp.maximum(jnp.nan_to_num(logp, nan=jnp.log(min_p)), jnp.log(min_p))
+    return _finalize_race_logp(rt_shifted, log_pdf, log_sf, min_p)
 
 
 def _lba_simple_log_prior(

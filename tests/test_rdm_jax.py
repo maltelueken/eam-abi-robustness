@@ -73,6 +73,20 @@ def test_rdm_race_logpdf_gradient_finite_random_sweep():
     assert jnp.all(jnp.isfinite(jnp.stack(grads, axis=-1)))
 
 
+def test_rdm_race_logpdf_penalty_slopes_when_rt_precedes_ndt():
+    # `rt <= t0` is impossible under the model, and _finalize_race_logp answers with a sloped
+    # penalty rather than a flat floor so NUTS keeps a gradient pushing t0 back below the
+    # fastest observed RT. That slope used to be applied *before* the log(min_p) floor, which
+    # clamped it straight back off and left this gradient at exactly -0.0.
+    grad = jax.grad(rdm_race_logpdf, argnums=6)(jnp.array(0.20), 3.5, 2.0, 1.2, 1.0, 1.2, jnp.array(0.30))
+    assert jnp.isfinite(grad)
+    assert grad < -1.0
+
+    # ... while a feasible RT is unaffected, and never drops below the floor.
+    logp = rdm_race_logpdf(jnp.array(0.50), 3.5, 2.0, 1.2, 1.0, 1.2, 0.30)
+    assert logp > jnp.log(1e-10)
+
+
 def test_rdm_experiment_simple_jax_matches_numpy_reference():
     v_intercept, v_slope, s_true, s_false, b, t0 = 1.0, 1.5, 0.3, 1.0, 1.2, 0.3
     num_obs = 100_000

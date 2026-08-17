@@ -101,6 +101,35 @@ def test_lba_race_logpdf_gradient_finite_random_sweep():
     assert jnp.all(jnp.isfinite(jnp.stack(grads, axis=-1)))
 
 
+def test_lba_race_logpdf_penalty_slopes_when_rt_precedes_ndt():
+    # Same contract as the RDM's equivalent test: the `rt <= t0` region must keep a usable
+    # gradient rather than a flat floor. The LBA reuses rdm_jax._finalize_race_logp, so this
+    # pins that the shared helper is wired in on this side too.
+    grad = jax.grad(lba_race_logpdf, argnums=7)(
+        jnp.array(0.20), 3.5, 2.0, 1.2, 1.0, 0.6, 1.2, jnp.array(0.30),
+    )
+    assert jnp.isfinite(grad)
+    assert grad < -1.0
+
+
+def test_lba_logpdf_floors_the_density_not_the_bracket():
+    # The closed form is a difference of nearly equal terms and underflows in float64 at small
+    # decision times. What gets floored there has to be the density: clamping the intermediate
+    # `bracket` instead leaves `-log(A) - log Phi(v/s)` to be applied afterwards, which lifts
+    # the clamped value back *above* the floor -- so the far-left tail came out overstated
+    # rather than clamped (-22.51 here, against a true density of e^-146).
+    log_floor = float(jnp.log(1e-10))
+    underflowed = lba_logpdf(jnp.array([0.05, 0.1]), V_TRUE, S_TRUE, SP_MAX, THRESHOLD)
+
+    assert jnp.all(underflowed == pytest.approx(log_floor))
+    # The floor is EMC2's min_ll, so a floored trial contributes exactly what EMC2 records.
+    assert float(lba_race_logpdf(jnp.array(0.35), V_TRUE, V_FALSE, S_TRUE, S_FALSE, SP_MAX, SP_GAP, 0.3)) == (
+        pytest.approx(log_floor)
+    )
+    # Just past the underflow the density is well conditioned again and well above the floor.
+    assert float(lba_logpdf(jnp.array(0.2), V_TRUE, S_TRUE, SP_MAX, THRESHOLD)) > log_floor + 10
+
+
 def test_lba_experiment_simple_jax_stateful_matches_bayesflow_calling_convention():
     # BayesFlow's LambdaSimulator/batched_call indexes batched prior draws down to
     # shape-(1,) arrays (not scalars) per call; `s_false` also arrives as a plain int

@@ -145,20 +145,28 @@ def rdm_experiment_simple_jax_stateful(v_intercept, v_slope, s_true, s_false, b,
 # ---------------------------------------------------------------------------
 
 
-def _penalize_invalid_rt(rt_shifted, log_pdf, log_sf, min_p):
-    """Replace log-densities with a steep linear penalty when `rt <= t0`.
+def _finalize_race_logp(rt_shifted, log_pdf, log_sf, min_p):
+    """Combine a winner's log-density with a loser's log-survival into one trial's log-likelihood.
 
-    For trials where `rt - t0 <= 0` the observation is impossible under the model.
-    A flat floor gives *zero* gradient there, which can strand NUTS in an infeasible
-    region; a linear penalty instead keeps a gradient that pushes `t0` back below the
-    minimum observed RT.
+    Two things happen here, and the order between them is the whole point:
+
+    1. Feasible trials are floored at `log(min_p)`. This matches EMC2's `log_likelihood_race`,
+       which floors each trial at `min_ll = log(1e-10)` -- the same constant -- so the two
+       implementations agree even where the density underflows.
+    2. Trials with `rt - t0 <= 0` are impossible under the model, and get a steep linear penalty
+       instead. A flat floor would give *zero* gradient there, which can strand NUTS in the
+       infeasible region; the slope keeps a gradient that pushes `t0` back below the minimum
+       observed RT.
+
+    Applying the floor after the penalty (which is what the previous `_penalize_invalid_rt` plus
+    a trailing `jnp.maximum` in each race function did) clamps the slope straight back off and
+    leaves an exactly-zero gradient -- precisely the failure the penalty exists to prevent. So
+    the floor goes first, and the penalty is substituted in afterwards.
     """
     log_floor = jnp.log(min_p)
-    valid = rt_shifted > min_p
+    logp = jnp.maximum(jnp.nan_to_num(log_pdf + log_sf, nan=log_floor), log_floor)
     penalty = log_floor + 1e3 * jnp.minimum(rt_shifted - min_p, 0.0)
-    log_pdf = jnp.where(valid, log_pdf, penalty)
-    log_sf = jnp.where(valid, log_sf, 0.0)
-    return log_pdf, log_sf
+    return jnp.where(rt_shifted > min_p, logp, penalty)
 
 
 def rdm_race_logpdf(rt, drift_winner, drift_loser, s_winner, s_loser, threshold, ndt, min_p=1e-10):
@@ -183,10 +191,8 @@ def rdm_race_logpdf(rt, drift_winner, drift_loser, s_winner, s_loser, threshold,
 
     log_pdf = inv_gauss_logpdf(rt_safe, mu_winner, lam_winner)
     log_sf = inv_gauss_logsf(rt_safe, mu_loser, lam_loser)
-    log_pdf, log_sf = _penalize_invalid_rt(rt_shifted, log_pdf, log_sf, min_p)
 
-    logp = log_pdf + log_sf
-    return jnp.maximum(jnp.nan_to_num(logp, nan=jnp.log(min_p)), jnp.log(min_p))
+    return _finalize_race_logp(rt_shifted, log_pdf, log_sf, min_p)
 
 
 def _rdm_simple_log_prior(v_intercept, v_slope, s_true, b, t0, drift_slope_loc, threshold_scale):

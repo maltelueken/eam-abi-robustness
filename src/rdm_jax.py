@@ -285,3 +285,170 @@ def make_rdm_meta_logdensity(
         return log_prior + jacobian + log_lik
 
     return logdensity_fn
+
+
+# ---------------------------------------------------------------------------
+# Speed-vs-accuracy variant (study 3).
+#
+# Each dataset contains two blocks of trials -- a speed-instructed and an
+# accuracy-instructed one -- differing in the response threshold and nothing
+# else, the standard threshold account of the speed-accuracy tradeoff. The
+# threshold *difference* is a parameter (`b_diff`) rather than a second
+# threshold, so that `b_accuracy > b_speed` holds by construction and both
+# parameters stay strictly positive, i.e. log-transformable like every other
+# parameter here (the same trick `priors.lba_prior_simple` uses for `A`/`B`).
+#
+# The condition is carried as a third channel of `x`, alongside RT and response,
+# because the adapter treats `x` as a set: anything the likelihood needs per
+# trial has to travel with that trial rather than in a separate array.
+# ---------------------------------------------------------------------------
+
+
+def sat_conditions(num_obs):
+    """Condition indicator per trial: the first half speed (0), the rest accuracy (1).
+
+    A fixed split rather than a random assignment -- the number of trials per condition is
+    then a design constant instead of a source of between-dataset variance, and `x` is
+    permutation-invariant downstream anyway (`simulation.create_data_adapter` marks it
+    `as_set`), so the ordering carries no information.
+    """
+    return jnp.arange(num_obs) >= num_obs // 2
+
+
+def rdm_experiment_sat_jax(key, v_intercept, v_slope, s_true, s_false, b, b_diff, t0, num_obs):
+    """Simulate `num_obs` trials, half under a speed and half under an accuracy instruction.
+
+    Returns `x` with three channels: response time, response (0 = false, 1 = true) and
+    condition (0 = speed, 1 = accuracy). `num_obs` must be static, as in
+    `rdm_experiment_simple_jax`.
+    """
+    v_intercept, v_slope, s_true, s_false, b, b_diff, t0 = (
+        _as_scalar(x) for x in (v_intercept, v_slope, s_true, s_false, b, b_diff, t0)
+    )
+    num_obs = int(num_obs)
+
+    is_accuracy = sat_conditions(num_obs)
+    threshold = jnp.where(is_accuracy, b + b_diff, b)
+
+    v_arr = jnp.stack([v_intercept, v_intercept + v_slope])
+    s_arr = jnp.stack([s_false, s_true])
+
+    # (num_obs, 2): one row per trial, one column per accumulator, so the per-trial
+    # threshold broadcasts into both accumulators of that trial.
+    mu = threshold[:, None] / v_arr[None, :]
+    lam = (threshold[:, None] / s_arr[None, :]) ** 2
+
+    fpt = tfd.InverseGaussian(mu, lam).sample(seed=key)
+
+    resp = jnp.argmin(fpt, axis=-1)
+    rt = jnp.min(fpt, axis=-1) + t0
+
+    return {"x": jnp.stack([rt, resp.astype(rt.dtype), is_accuracy.astype(rt.dtype)], axis=-1)}
+
+
+def rdm_experiment_sat_jax_stateful(v_intercept, v_slope, s_true, s_false, b, b_diff, t0, num_obs, rng):
+    """`rdm_experiment_sat_jax` under the `sample_fn(..., rng)` convention, with `rng` a `SplittableKey`."""
+    return rdm_experiment_sat_jax(rng.next(), v_intercept, v_slope, s_true, s_false, b, b_diff, t0, num_obs)
+
+
+def _rdm_sat_log_prior(
+    v_intercept, v_slope, s_true, b, b_diff, t0,
+    drift_slope_loc, threshold_scale, threshold_diff_shape, threshold_diff_scale,
+):
+    """Log prior for the speed-accuracy model: the simple model's, plus the threshold difference.
+
+    `threshold_diff_shape`/`threshold_diff_scale` parameterize `Gamma(shape, scale)` exactly as
+    `priors.rdm_prior_sat` draws it -- both are interpolated from the same prior config in
+    `conf/mcmc/rdm_sat.yaml`, so the sampled prior and the fitted prior cannot drift apart.
+    """
+    lp = _rdm_simple_log_prior(v_intercept, v_slope, s_true, b, t0, drift_slope_loc, threshold_scale)
+    return lp + tfd.Gamma(threshold_diff_shape, 1.0 / threshold_diff_scale).log_prob(b_diff)
+
+
+def _rdm_sat_log_likelihood(rt, is_true, is_accuracy, v_intercept, v_slope, s_true, b, b_diff, t0):
+    """As `_rdm_simple_log_likelihood`, but with a per-trial threshold."""
+    threshold = jnp.where(is_accuracy, b + b_diff, b)
+
+    v_true_drift = v_intercept + v_slope
+    v_false_drift = v_intercept
+
+    ll_true = rdm_race_logpdf(rt, v_true_drift, v_false_drift, s_true, 1.0, threshold, t0)
+    ll_false = rdm_race_logpdf(rt, v_false_drift, v_true_drift, 1.0, s_true, threshold, t0)
+
+    return jnp.sum(jnp.where(is_true, ll_true, 0.0)) + jnp.sum(jnp.where(~is_true, ll_false, 0.0))
+
+
+def make_rdm_sat_logdensity(data_x, drift_slope_loc, threshold_scale, threshold_diff_shape, threshold_diff_scale):
+    """Build a BlackJAX-ready log-density for the speed-accuracy RDM.
+
+    `position` is a length-6 array of *unconstrained* (log-space) values in the order
+    [v_intercept, v_slope, s_true, b, b_diff, t0] -- matching `mcmc_param_names` in
+    `conf/mcmc/rdm_sat.yaml`. `t0` stays last: `mcmc.fit_mcmc_gpu` initializes the final
+    entry from the smallest observed RT.
+    """
+    data_x = jnp.asarray(data_x)
+    rt = data_x[:, 0]
+    is_true = data_x[:, 1] == 1
+    is_accuracy = data_x[:, 2] == 1
+
+    def logdensity_fn(position):
+        position = jnp.asarray(position)
+        v_intercept, v_slope, s_true, b, b_diff, t0 = _EXP.forward(position)
+        jacobian = jnp.sum(_EXP.forward_log_det_jacobian(position, event_ndims=0))
+
+        log_prior = _rdm_sat_log_prior(
+            v_intercept, v_slope, s_true, b, b_diff, t0,
+            drift_slope_loc, threshold_scale, threshold_diff_shape, threshold_diff_scale,
+        )
+        log_lik = _rdm_sat_log_likelihood(
+            rt, is_true, is_accuracy, v_intercept, v_slope, s_true, b, b_diff, t0,
+        )
+
+        return log_prior + jacobian + log_lik
+
+    return logdensity_fn
+
+
+def make_rdm_sat_meta_logdensity(
+    data_x, drift_slope_loc, threshold_scale, threshold_diff_shape,
+    threshold_diff_scale_lower, threshold_diff_scale_upper,
+):
+    """Build a BlackJAX-ready log-density for the hierarchical speed-accuracy RDM.
+
+    `position` is a length-7 array of *unconstrained* values in the order
+    [threshold_diff_scale, v_intercept, v_slope, s_true, b, b_diff, t0]: the leading
+    hyperparameter is Uniform on its support and so uses a Sigmoid bijector, the rest are
+    positive and use Exp. See `mcmc.make_bounded_to_unconstrained` for the matching forward
+    transform.
+    """
+    data_x = jnp.asarray(data_x)
+    rt = data_x[:, 0]
+    is_true = data_x[:, 1] == 1
+    is_accuracy = data_x[:, 2] == 1
+
+    scale_bij = tfb.Sigmoid(low=threshold_diff_scale_lower, high=threshold_diff_scale_upper)
+
+    def logdensity_fn(position):
+        position = jnp.asarray(position)
+        y_scale, y_rest = position[0], position[1:]
+
+        threshold_diff_scale = scale_bij.forward(y_scale)
+        v_intercept, v_slope, s_true, b, b_diff, t0 = _EXP.forward(y_rest)
+
+        jacobian = scale_bij.forward_log_det_jacobian(y_scale, event_ndims=0) + jnp.sum(
+            _EXP.forward_log_det_jacobian(y_rest, event_ndims=0),
+        )
+
+        log_prior = tfd.Uniform(threshold_diff_scale_lower, threshold_diff_scale_upper).log_prob(
+            threshold_diff_scale,
+        ) + _rdm_sat_log_prior(
+            v_intercept, v_slope, s_true, b, b_diff, t0,
+            drift_slope_loc, threshold_scale, threshold_diff_shape, threshold_diff_scale,
+        )
+        log_lik = _rdm_sat_log_likelihood(
+            rt, is_true, is_accuracy, v_intercept, v_slope, s_true, b, b_diff, t0,
+        )
+
+        return log_prior + jacobian + log_lik
+
+    return logdensity_fn

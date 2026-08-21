@@ -23,7 +23,15 @@ class CustomSimulator(bf.simulators.Simulator):
 
     @allow_batch_size
     def sample(self, batch_shape: Shape, **kwargs) -> dict[str, np.ndarray]:
-        prior_dict = self.prior_simulator.sample(batch_shape)
+        # `kwargs` goes to the prior as well as the design, so a test case can shift a prior
+        # hyperparameter (`threshold_diff_scale` in study 3, `drift_slope_loc` /
+        # `threshold_scale` in study 2) away from the value the approximator was trained on --
+        # which is the whole point of those studies. `LambdaSimulator.sample` filters kwargs
+        # against `sample_fn`'s signature, so unrelated ones (`num_obs`) are dropped here and
+        # the hyperparameters are dropped by the experiment simulator below; a hyperparameter
+        # passed at call time overrides the one bound into the `_partial_` in
+        # `conf/simulator/prior_simulator/*.yaml`.
+        prior_dict = self.prior_simulator.sample(batch_shape, **kwargs)
 
         design_dict = self.design_simulator.sample(batch_shape)
 

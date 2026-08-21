@@ -2,7 +2,7 @@
 
 import numpy as np
 import pytest
-from cases import Case, meta_param_grid, num_obs_grid, subject_files
+from cases import Case, meta_param_grid, num_obs_grid, prior_param_grid, subject_files
 
 
 def test_num_obs_grid_keys_match_the_stored_filenames():
@@ -25,6 +25,20 @@ def test_meta_param_grid_is_the_outer_product_in_row_major_order():
     ]
     assert cases[0].labels == {"drift_slope_loc": 0.5, "threshold_scale": 0.05}
     assert cases[0].sim_kwargs["num_obs"] == 500
+
+
+def test_prior_param_grid_sweeps_one_hyperparameter_at_a_fixed_sample_size():
+    cases = prior_param_grid("threshold_diff_scale", [0.02, 0.1, 0.18], num_obs=500)
+
+    assert [case.key for case in cases] == [
+        "threshold_diff_scale_0.02",
+        "threshold_diff_scale_0.1",
+        "threshold_diff_scale_0.18",
+    ]
+    assert cases[0].labels == {"threshold_diff_scale": 0.02}
+    # The swept hyperparameter is passed to `simulator.sample`, which forwards it to the
+    # prior: this is what makes study 3's test prior differ from its training prior.
+    assert cases[0].sim_kwargs == {"threshold_diff_scale": 0.02, "num_obs": 500}
 
 
 def test_subject_files_are_sorted_and_filtered(tmp_path):

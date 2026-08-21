@@ -108,3 +108,55 @@ def lba_prior_simple(
         "B": sp_gap,
         "t0": t0,
     }
+
+
+def rdm_prior_sat(
+    drift_intercept_loc,
+    drift_intercept_scale,
+    drift_slope_loc,
+    drift_slope_scale,
+    sd_true_shape,
+    sd_true_scale,
+    threshold_shape,
+    threshold_scale,
+    threshold_diff_shape,
+    threshold_diff_scale,
+    t0_loc,
+    t0_scale,
+    t0_lower,
+    rng,
+):
+    """Prior for the racing diffusion model with a speed-vs-accuracy manipulation.
+
+    `rdm_prior_simple` plus `b_diff`, the amount by which the threshold is raised under the
+    accuracy instruction. Sampling the *difference* rather than a second threshold keeps
+    `b_accuracy > b_speed` true by construction and leaves every parameter positive, so the
+    same log-transform unconstrains the whole vector (cf. the `A`/`B` parameterization in
+    `lba_prior_simple`).
+
+    `threshold_diff_scale` is the hyperparameter study 3 shifts between training and test:
+    it sets the expected size of the speed-accuracy effect, `threshold_diff_shape *
+    threshold_diff_scale`.
+
+    Returned keys are ordered to match `conf/approximator/adapter/rdm_sat.yaml` and the
+    unconstrained position vector built by `rdm_jax.make_rdm_sat_logdensity`.
+    """
+    drift_intercept = truncated_normal_rvs(
+        drift_intercept_loc, drift_intercept_scale, random_state=rng,
+    )
+    drift_slope = truncated_normal_rvs(
+        drift_slope_loc, drift_slope_scale, random_state=rng,
+    )
+    sd_true = rng.gamma(shape=sd_true_shape, scale=sd_true_scale)
+    threshold = rng.gamma(shape=threshold_shape, scale=threshold_scale)
+    threshold_diff = rng.gamma(shape=threshold_diff_shape, scale=threshold_diff_scale)
+    t0 = truncated_normal_rvs(t0_loc, t0_scale, lower=t0_lower, random_state=rng)
+
+    return {
+        "v_intercept": drift_intercept,
+        "v_slope": drift_slope,
+        "s_true": sd_true,
+        "b": threshold,
+        "b_diff": threshold_diff,
+        "t0": t0,
+    }

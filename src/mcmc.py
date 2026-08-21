@@ -52,42 +52,51 @@ def simple_to_constrained(position):
     return jnp.exp(position)
 
 
-def make_meta_to_unconstrained(param_1_lower, param_1_upper, param_2_lower, param_2_upper):
-    """Build the natural-scale -> unconstrained transform for a hierarchical model.
+def make_bounded_to_unconstrained(lower, upper):
+    """Build the natural-scale -> unconstrained transform for a partly bounded parameter vector.
 
-    `position` is `[hyper_1, hyper_2, *subject_level_params]`. The two hyperparameters are
-    Uniform-distributed (bounded both sides), so they use a Sigmoid bijector rather than
-    the Exp/log transform used for the remaining, strictly positive parameters.
+    `position` is `[*bounded_params, *positive_params]`, with one entry per element of
+    `lower`/`upper` in the bounded block. The hierarchical models' prior hyperparameters are
+    Uniform (bounded both sides), so they need a Sigmoid bijector rather than the Exp/log
+    transform the strictly positive subject-level parameters use. Study 2's models have two
+    such hyperparameters, study 3's has one.
     """
-    bij_1 = tfb.Sigmoid(low=param_1_lower, high=param_1_upper)
-    bij_2 = tfb.Sigmoid(low=param_2_lower, high=param_2_upper)
+    bijectors = [tfb.Sigmoid(low=low, high=high) for low, high in zip(list(lower), list(upper), strict=True)]
 
     def to_unconstrained(position):
         position = jnp.asarray(position)
-        y_1 = bij_1.inverse(position[..., 0])
-        y_2 = bij_2.inverse(position[..., 1])
-        y_rest = jnp.log(position[..., 2:])
-        return jnp.concatenate([jnp.stack([y_1, y_2], axis=-1), y_rest], axis=-1)
+        y_bounded = jnp.stack(
+            [bij.inverse(position[..., i]) for i, bij in enumerate(bijectors)], axis=-1,
+        )
+        y_rest = jnp.log(position[..., len(bijectors) :])
+        return jnp.concatenate([y_bounded, y_rest], axis=-1)
 
     return to_unconstrained
 
 
-def make_meta_to_constrained(param_1_lower, param_1_upper, param_2_lower, param_2_upper):
-    """Build the unconstrained -> natural-scale transform for a hierarchical model.
-
-    Exact inverse of `make_meta_to_unconstrained`.
-    """
-    bij_1 = tfb.Sigmoid(low=param_1_lower, high=param_1_upper)
-    bij_2 = tfb.Sigmoid(low=param_2_lower, high=param_2_upper)
+def make_bounded_to_constrained(lower, upper):
+    """Build the unconstrained -> natural-scale transform. Exact inverse of `make_bounded_to_unconstrained`."""
+    bijectors = [tfb.Sigmoid(low=low, high=high) for low, high in zip(list(lower), list(upper), strict=True)]
 
     def to_constrained(position):
         position = jnp.asarray(position)
-        x_1 = bij_1.forward(position[..., 0])
-        x_2 = bij_2.forward(position[..., 1])
-        x_rest = jnp.exp(position[..., 2:])
-        return jnp.concatenate([jnp.stack([x_1, x_2], axis=-1), x_rest], axis=-1)
+        x_bounded = jnp.stack(
+            [bij.forward(position[..., i]) for i, bij in enumerate(bijectors)], axis=-1,
+        )
+        x_rest = jnp.exp(position[..., len(bijectors) :])
+        return jnp.concatenate([x_bounded, x_rest], axis=-1)
 
     return to_constrained
+
+
+def make_meta_to_unconstrained(param_1_lower, param_1_upper, param_2_lower, param_2_upper):
+    """`make_bounded_to_unconstrained` for the two-hyperparameter hierarchical models of study 2."""
+    return make_bounded_to_unconstrained([param_1_lower, param_2_lower], [param_1_upper, param_2_upper])
+
+
+def make_meta_to_constrained(param_1_lower, param_1_upper, param_2_lower, param_2_upper):
+    """`make_bounded_to_constrained` for the two-hyperparameter hierarchical models of study 2."""
+    return make_bounded_to_constrained([param_1_lower, param_2_lower], [param_1_upper, param_2_upper])
 # ---------------------------------------------------------------------------
 # GPU-parallelized batch fitting: vmap over chains *and* over datasets, in the
 # style of racing-diffusion-conflict/scripts/parameter_recovery.py. All three
@@ -269,16 +278,21 @@ def load_mcmc_posterior(filename, *, to_constrained, param_names, psrf_threshold
     return theta[:, ::stride, :][:, :num_target_samples, :], is_converged
 
 
-def meta_init_position(param_1_lower, param_1_upper, param_2_lower, param_2_upper, subject_init):
+def bounded_init_position(lower, upper, subject_init):
     """Build a hierarchical model's initial position, starting the hyperparameters mid-support.
 
-    The two hyperparameters are Sigmoid-transformed, so `to_unconstrained` returns NaN for a
+    The hyperparameters are Sigmoid-transformed, so `to_unconstrained` returns NaN for a
     starting value outside `[lower, upper]` -- and the `_lower`/`_upper` model variants narrow
     those bounds without touching the initial position. Deriving the midpoint from the same
     bounds the bijector uses keeps the two in step by construction.
     """
-    return np.array([
-        0.5 * (param_1_lower + param_1_upper),
-        0.5 * (param_2_lower + param_2_upper),
-        *subject_init,
-    ])
+    midpoints = [0.5 * (low + high) for low, high in zip(list(lower), list(upper), strict=True)]
+
+    return np.array([*midpoints, *subject_init])
+
+
+def meta_init_position(param_1_lower, param_1_upper, param_2_lower, param_2_upper, subject_init):
+    """`bounded_init_position` for the two-hyperparameter hierarchical models of study 2."""
+    return bounded_init_position(
+        [param_1_lower, param_2_lower], [param_1_upper, param_2_upper], subject_init,
+    )

@@ -1,6 +1,6 @@
 # Pipeline scripts
 
-One config-driven script per pipeline stage, shared by all three studies. Which test cases
+One config-driven script per pipeline stage, shared by all four studies. Which test cases
 a stage loops over comes from the `test_case` config group (`conf/test_case/`), so the
 studies differ only in configuration, not in code.
 
@@ -23,6 +23,7 @@ studies differ only in configuration, not in code.
 python scripts/train_npe.py       experiment=experiment_1 model=rdm_simple
 python scripts/fit_mcmc_gpu.py    experiment=experiment_2 model=rdm_simple_meta
 python scripts/check_robustness.py experiment=experiment_4 model=rdm_simple
+python scripts/generate_test_data.py experiment=experiment_3 model=rdm_sat
 ```
 
 Any `conf/**/*.yaml` key can be overridden on the command line. `fit_mcmc_gpu.py` accepts

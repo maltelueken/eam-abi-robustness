@@ -405,6 +405,7 @@ dependencies = [
     { name = "arviz" },
     { name = "bayesflow" },
     { name = "blackjax" },
+    { name = "h5py" },
     { name = "hydra-core" },
     { name = "hydra-optuna-sweeper" },
     { name = "jax" },
@@ -415,6 +416,7 @@ dependencies = [
     { name = "polars" },
     { name = "sqlalchemy" },
     { name = "tfp-nightly" },
+    { name = "xarray" },
 ]
 
 [package.dev-dependencies]
@@ -427,6 +429,7 @@ requires-dist = [
     { name = "arviz" },
     { name = "bayesflow", specifier = "==2.0.12" },
     { name = "blackjax" },
+    { name = "h5py" },
     { name = "hydra-core", specifier = "==1.3.4" },
     { name = "hydra-optuna-sweeper", specifier = "==1.2.0" },
     { name = "jax" },
@@ -437,6 +440,7 @@ requires-dist = [
     { name = "polars" },
     { name = "sqlalchemy", specifier = "<2" },
     { name = "tfp-nightly" },
+    { name = "xarray" },
 ]
 
 [package.metadata.requires-dev]

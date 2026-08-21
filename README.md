@@ -7,9 +7,9 @@ diffusion model" (LINK).
 ## Overview
 
 - `conf`: This directory contains Hydra configuration files. See https://hydra.cc/docs/intro/ for details.
-- `scripts`: One Python script per pipeline stage, shared by all three studies. Which study a run
-belongs to is a configuration choice (`experiment=experiment_1|experiment_2|experiment_4`), not a
-different script. See `scripts/README.md`.
+- `scripts`: One Python script per pipeline stage, shared by all four studies. Which study a run
+belongs to is a configuration choice (`experiment=experiment_1|experiment_2|experiment_3|experiment_4`),
+not a different script. See `scripts/README.md`.
 - `multirun`: Contains results from the hyperparameter optimization. See Fig Share (LINK).
 - `outputs`: Contains all other results and simulated data. See Fig Share (LINK).
 - `slurm`: Slurm submission scripts (`submit.sh` plus the job table in `jobs.tsv`).
@@ -17,10 +17,19 @@ different script. See `scripts/README.md`.
 - `tests`: Unit tests.
 - `visualization`: R code for creating the figures in the paper.
 
-The paper reports three studies: two simulation studies (`experiment_1`, `experiment_2`) and an
-empirical study (`experiment_4`). Originally, we had a third simulation study planned but chose not
-to conduct it because the results from the first two were already clear. Hence, `experiment_3` is
-missing.
+The paper reports four studies: three simulation studies and an empirical one.
+
+| study | what varies between training and test | test cases |
+|---|---|---|
+| `experiment_1` | the number of observations per dataset | a sweep of `num_obs` |
+| `experiment_2` | two prior hyperparameters | a 5 x 5 grid of `drift_slope_loc` x `threshold_scale` |
+| `experiment_3` | the prior on the speed-vs-accuracy threshold difference | a sweep of `threshold_diff_scale` |
+| `experiment_4` | (empirical data) | one case per subject file |
+
+Study 3 simulates a speed-vs-accuracy manipulation: every dataset contains a speed-instructed and an
+accuracy-instructed block of trials, differing only in response threshold. The test cases shift the
+prior on that threshold *difference* away from the prior the approximator was trained on. Its models
+are `conf/model/rdm_sat*.yaml`.
 
 ## Running the pipeline
 

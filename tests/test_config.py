@@ -16,7 +16,7 @@ from hydra.utils import instantiate
 
 CONFIG_PATH = "../conf"
 
-EXPERIMENTS = ["experiment_1", "experiment_2", "experiment_4"]
+EXPERIMENTS = ["experiment_1", "experiment_2", "experiment_3", "experiment_4"]
 
 MODELS = [
     "rdm_simple",
@@ -37,7 +37,17 @@ MODELS = [
     "lba_simple_discrete_lower",
     "lba_simple_discrete_upper",
     "lba_simple_discrete_full",
+    "rdm_sat",
+    "rdm_sat_lower",
+    "rdm_sat_upper",
+    "rdm_sat_meta",
+    "rdm_sat_meta_lower",
+    "rdm_sat_meta_upper",
 ]
+
+# The models whose simulator and MCMC configs are only coherent under their own study's
+# test-case group; the shared checks below compose them against it rather than experiment_2.
+EXPERIMENT_BY_MODEL = {model: "experiment_3" for model in MODELS if model.startswith("rdm_sat")}
 
 
 def build(overrides):
@@ -62,7 +72,7 @@ def test_every_experiment_and_model_composes(experiment, model):
 
 @pytest.mark.parametrize("model", MODELS)
 def test_simulator_and_mcmc_instantiate_and_agree_on_parameter_count(model):
-    cfg = build(["experiment=experiment_2", f"model={model}"])
+    cfg = build([f"experiment={EXPERIMENT_BY_MODEL.get(model, 'experiment_2')}", f"model={model}"])
 
     instantiate(cfg["simulator"], _convert_="partial")
 
@@ -77,7 +87,7 @@ def test_simulator_and_mcmc_instantiate_and_agree_on_parameter_count(model):
 
 @pytest.mark.parametrize("model", MODELS)
 def test_transform_pair_round_trips_on_the_configured_initial_position(model):
-    cfg = build(["experiment=experiment_2", f"model={model}"])
+    cfg = build([f"experiment={EXPERIMENT_BY_MODEL.get(model, 'experiment_2')}", f"model={model}"])
 
     to_unconstrained = instantiate(cfg["mcmc_to_unconstrained"])
     to_constrained = instantiate(cfg["mcmc_to_constrained"])
@@ -94,10 +104,12 @@ def test_transform_pair_round_trips_on_the_configured_initial_position(model):
     [
         ("experiment_1", "sample_size_50"),
         ("experiment_2", "drift_slope_loc_0.5_threshold_scale_0.05"),
+        ("experiment_3", "threshold_diff_scale_0.02"),
     ],
 )
 def test_test_case_groups_enumerate_the_expected_cases(experiment, expected_first_key):
-    cfg = build([f"experiment={experiment}", "model=rdm_simple"])
+    model = "rdm_sat" if experiment == "experiment_3" else "rdm_simple"
+    cfg = build([f"experiment={experiment}", f"model={model}"])
 
     cases = instantiate(cfg["test_case"])
 
@@ -111,3 +123,45 @@ def test_approximator_instantiates_for_the_default_config():
     assert instantiate(cfg["approximator"], _convert_="partial") is not None
     assert instantiate(cfg["optimizer"], _convert_="partial") is not None
     assert instantiate(cfg["callbacks"], _convert_="partial")
+
+
+@pytest.mark.parametrize("model", ["rdm_sat_meta", "rdm_sat_meta_lower", "rdm_sat_meta_upper"])
+def test_the_hierarchical_sat_models_randomize_the_hyperparameter_the_test_cases_sweep(model):
+    """The name is spelled out in three files; a mismatch would be silent.
+
+    `conf/simulator/meta_simulator/random_prior_meta_continuous_sat*.yaml` decides which
+    hyperparameter is drawn per dataset, `conf/test_case/threshold_diff_grid.yaml` decides
+    which one the test cases shift, and `conf/mcmc/rdm_sat_meta.yaml` names it in the stored
+    parameter vector. If they disagree, `CustomMetaSimulator.update_existing` silently
+    ignores the test case's value and every case is drawn from the training prior.
+    """
+    cfg = build(["experiment=experiment_3", f"model={model}"])
+
+    randomized = list(cfg["simulator"]["meta_simulator"]["sample_fn"]["name"])
+    swept = cfg["test_case"]["name"]
+
+    assert randomized == [swept]
+    assert cfg["mcmc_param_names"][0] == swept
+
+
+def test_the_swept_hyperparameter_actually_shifts_the_prior_it_names():
+    """Study 3's premise: the test prior must differ from the training prior.
+
+    `CustomSimulator` forwards the test case's kwargs to the prior simulator, where they
+    override the value bound in `conf/simulator/prior_simulator/rdm_sat.yaml`. Without that
+    forwarding every case would be drawn from the training prior and merely *labelled* with a
+    different hyperparameter -- a sweep that looks fine in every artifact but measures nothing.
+    """
+    cfg = build(["experiment=experiment_3", "model=rdm_sat"])
+    simulator = instantiate(cfg["simulator"], _convert_="partial")
+
+    cases = instantiate(cfg["test_case"])
+    means = [
+        np.mean(simulator.sample(200, **(case.sim_kwargs | {"num_obs": np.array(10)}))["b_diff"])
+        for case in [cases[0], cases[-1]]
+    ]
+
+    shape = cfg["simulator"]["prior_simulator"]["sample_fn"]["threshold_diff_shape"]
+    expected = [shape * case.labels["threshold_diff_scale"] for case in [cases[0], cases[-1]]]
+
+    assert np.allclose(means, expected, rtol=0.2)

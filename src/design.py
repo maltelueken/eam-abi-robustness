@@ -10,6 +10,11 @@ def random_num_obs_discrete(batch_shape, values, rng) -> int:
 def random_prior_meta_continuous_multivariate(
     batch_shape, min_value, max_value, name, rng
 ):
-    """Generate random continuous meta-priors for multiple variables."""
-    x = rng.uniform(low=min_value, high=max_value, size=(*batch_shape, 2)).T
+    """Generate random continuous meta-priors for one or more variables.
+
+    `name` decides how many hyperparameters are randomized: two for the hierarchical models
+    of study 2, one for study 3's speed-accuracy model, which shifts only the prior on the
+    threshold difference.
+    """
+    x = rng.uniform(low=min_value, high=max_value, size=(*batch_shape, len(name))).T
     return {key: val for key, val in zip(name, x)}

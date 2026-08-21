@@ -1,0 +1,41 @@
+# @package _global_
+
+# The hierarchical speed-accuracy RDM samples the prior hyperparameter it is amortized over --
+# the scale of the prior on the threshold difference -- alongside the subject-level parameters,
+# so its parameter vector is one longer than the NPE's; the check scripts select by name. The
+# bounds come from the meta simulator, so the Sigmoid bijector used to fit matches the Uniform
+# the data were generated under, and the `_lower`/`_upper` variants stay consistent for free.
+mcmc_bounds:
+  lower: ["${simulator.meta_simulator.sample_fn.min_value[0]}"]
+  upper: ["${simulator.meta_simulator.sample_fn.max_value[0]}"]
+
+mcmc_param_names: ["threshold_diff_scale", "v_intercept", "v_slope", "s_true", "b", "b_diff", "t0"]
+
+mcmc_model_fun:
+  _target_: rdm_jax.make_rdm_sat_meta_logdensity
+  _partial_: true
+  drift_slope_loc: ${simulator.prior_simulator.sample_fn.drift_slope_loc}
+  threshold_scale: ${simulator.prior_simulator.sample_fn.threshold_scale}
+  threshold_diff_shape: ${simulator.prior_simulator.sample_fn.threshold_diff_shape}
+  threshold_diff_scale_lower: ${mcmc_bounds.lower[0]}
+  threshold_diff_scale_upper: ${mcmc_bounds.upper[0]}
+
+mcmc_to_unconstrained:
+  _target_: mcmc.make_bounded_to_unconstrained
+  lower: ${mcmc_bounds.lower}
+  upper: ${mcmc_bounds.upper}
+
+mcmc_to_constrained:
+  _target_: mcmc.make_bounded_to_constrained
+  lower: ${mcmc_bounds.lower}
+  upper: ${mcmc_bounds.upper}
+
+# Start the hyperparameter at the midpoint of its support: a fixed starting value falls outside
+# the narrowed bounds of the `_lower`/`_upper` variants, and the Sigmoid inverse of an
+# out-of-bounds value is NaN.
+mcmc_sampling_fun:
+  init_position:
+    _target_: mcmc.bounded_init_position
+    lower: ${mcmc_bounds.lower}
+    upper: ${mcmc_bounds.upper}
+    subject_init: [1, 2, 1, 1, 0.5, 0.2]

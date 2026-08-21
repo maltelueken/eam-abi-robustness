@@ -87,3 +87,20 @@ def subject_files(directory, pattern="*.txt"):
         )
         for path in sorted(glob(os.path.join(directory, pattern)))
     ]
+
+
+def prior_param_grid(name, values, num_obs):
+    """Sweep one prior hyperparameter at a fixed number of observations (study 3).
+
+    The one-dimensional counterpart of `meta_param_grid`: study 3 shifts a single
+    hyperparameter -- the scale of the prior on the speed-accuracy threshold difference --
+    away from the value the approximator was trained on.
+    """
+    return [
+        Case(
+            key=f"{name}_{value}",
+            labels={name: value},
+            sim_kwargs={name: np.array(value), "num_obs": np.array(num_obs)},
+        )
+        for value in np.asarray(values).tolist()
+    ]

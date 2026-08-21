@@ -1,0 +1,16 @@
+# Study 3's hierarchical variant: the prior on the threshold difference is itself drawn per
+# dataset, so the approximator is amortized over the hyperparameter the test cases sweep.
+# The name must match the one swept in conf/test_case/threshold_diff_grid.yaml and stored in
+# `mcmc_param_names` in conf/mcmc/rdm_sat_meta.yaml; tests/test_config.py checks that it does.
+_target_: bayesflow.simulators.LambdaSimulator
+sample_fn:
+  _target_: design.random_prior_meta_continuous_multivariate
+  _partial_: true
+  min_value: [0.02]
+  max_value: [0.18]
+  name:
+  - threshold_diff_scale
+  rng:
+    _target_: numpy.random.default_rng
+    seed: ${seed}
+is_batched: true

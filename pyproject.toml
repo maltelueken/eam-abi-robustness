@@ -26,9 +26,16 @@ dependencies = [
   # up 1.4.0.dev pre-releases unless this is pinned.
   "hydra-core==1.3.4",
   "hydra-optuna-sweeper==1.2.0",
+  # h5py is only needed by data.load_hdf5, the read-only shim for artifacts produced
+  # before the NetCDF switch (see scripts/convert_hdf5_to_netcdf.py). It used to be
+  # relied on transitively.
+  "h5py",
   "jax",
   "matplotlib",
+  # Artifacts are NetCDF: xarray writes them, netcdf4 is the engine, and arviz reads
+  # posteriors back as a DataTree.
   "netcdf4",
+  "xarray",
   "optuna",
   "pandas",
   "polars",

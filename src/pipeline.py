@@ -1,0 +1,121 @@
+"""Script-level helpers shared by the stages in `scripts/`.
+
+The four comparison scripts all begin the same way: for one test case, load the NPE and
+MCMC posteriors, drop the datasets whose MCMC chains did not converge, and align the two
+on the same parameters and the same number of draws. That is `load_paired_posteriors`.
+"""
+
+import logging
+
+import numpy as np
+from hydra.utils import instantiate
+
+from artifacts import Artifacts
+from config import get_param_names
+from data import load_dataset, load_posterior
+from mcmc import load_mcmc_posterior
+from utils import convert_prior_samples, read_data_from_txt
+
+logger = logging.getLogger(__name__)
+
+
+def setup(cfg):
+    """Return the artifact paths, test cases and parameter names for this run."""
+    return Artifacts(cfg), instantiate(cfg["test_case"]), get_param_names(cfg)
+
+
+def select_cases(cases, key):
+    """Filter `cases` down to the one matching `key`, or return all of them when it is None."""
+    if key is None:
+        return cases
+
+    selected = [case for case in cases if case.key == key]
+
+    if not selected:
+        msg = f"No test case named {key!r}; available cases are {[case.key for case in cases]}."
+        raise ValueError(msg)
+
+    return selected
+
+
+def load_case_data(case, artifacts):
+    """Load a case's test data as a dict of arrays, from NetCDF or from an empirical file."""
+    if case.is_simulated:
+        return load_dataset(artifacts.test_data(case))
+
+    return read_data_from_txt(artifacts.test_data(case))
+
+
+def load_npe_posterior(filename, param_names):
+    """Load NPE samples as `(dataset, draw, param)`, selected by parameter name."""
+    posterior = load_posterior(filename)
+
+    return (
+        posterior["theta"]
+        .sel(param=list(param_names))
+        .stack(sample=("chain", "draw"))
+        .transpose("dataset", "sample", "param")
+        .to_numpy()
+    )
+
+
+def load_paired_posteriors(cfg, artifacts, case, param_names):
+    """Load a case's NPE and MCMC posteriors, aligned and restricted to converged datasets.
+
+    Returns `(posterior_npe, posterior_mcmc, is_converged)`, both posteriors shaped
+    `(num_converged_datasets, num_draws, len(param_names))`.
+    """
+    logger.info("Loading MCMC samples from %s", artifacts.mcmc_samples(case))
+    posterior_mcmc, is_converged = load_mcmc_posterior(
+        artifacts.mcmc_samples(case),
+        to_constrained=instantiate(cfg["mcmc_to_constrained"]),
+        param_names=param_names,
+        psrf_threshold=cfg["psrf_threshold"],
+        num_target_samples=cfg["test_num_posterior_samples"],
+    )
+
+    logger.info("Loading NPE samples from %s", artifacts.npe_samples(case))
+    posterior_npe = load_npe_posterior(artifacts.npe_samples(case), param_names)[is_converged]
+
+    return posterior_npe, posterior_mcmc, is_converged
+
+
+def iter_comparable_cases(cfg, artifacts, cases, param_names):
+    """Yield `(case, posterior_npe, posterior_mcmc, is_converged)` for every usable case.
+
+    A case whose MCMC chains all failed to converge has no ground truth to compare against,
+    so it is skipped with a warning rather than aborting the whole run -- one bad case in a
+    sweep should not cost the other twenty-odd.
+    """
+    for case in cases:
+        posterior_npe, posterior_mcmc, is_converged = load_paired_posteriors(cfg, artifacts, case, param_names)
+
+        if not is_converged.any():
+            logger.warning(
+                "Skipping case %s: none of its %s MCMC fits reached R-hat < %s. "
+                "Consider more warmup steps (mcmc_sampling_fun.num_steps_warmup) or a looser psrf_threshold.",
+                case.key,
+                is_converged.size,
+                cfg["psrf_threshold"],
+            )
+            continue
+
+        yield case, posterior_npe, posterior_mcmc, is_converged
+
+
+def load_true_params(case, artifacts, param_names, is_converged):
+    """Load the ground-truth parameters for a simulated case, restricted to converged datasets.
+
+    Returns None for empirical cases, which have no ground truth.
+    """
+    if not case.is_simulated:
+        return None
+
+    forward_dict = load_dataset(artifacts.test_data(case))
+
+    return convert_prior_samples(forward_dict, param_names)[is_converged]
+
+
+def error_rate(data_x, is_converged):
+    """Mean accuracy per dataset, for the converged datasets."""
+    return np.mean(np.asarray(data_x)[:, :, 1], axis=1)[is_converged]

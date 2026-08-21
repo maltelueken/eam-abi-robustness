@@ -1,3 +1,5 @@
+source("visualization/load_results.R")
+
 
 
 library(ggplot2)
@@ -34,18 +36,12 @@ models <- c(
 
 data_path <- "outputs/experiment_2"
 
-df_summary <- Reduce(rbind, lapply(models, function(mod) {
-  read.csv(file.path(data_path, mod, "flow_matching/metrics/summary_stats.csv"))[,-1] |>
-    mutate(study = mod)
-}))
+df_summary <- read_by_model(data_path, models, "flow_matching/metrics/summary_stats.csv", read_summary_stats)
 
-df_prior <- Reduce(rbind, lapply(models, function(mod) {
-  read.csv(file.path(data_path, mod, "flow_matching/metrics/prior_stats.csv"))[,-1] |>
-    mutate(study = mod)
-}))
+df_prior <- read_by_model(data_path, models, "flow_matching/metrics/prior_stats.csv", read_prior_stats)
 
+# prior_stats.csv is already long (draw, param, value), so no pivot is needed here.
 df_segment_prior <- df_prior |>
-  pivot_longer(cols = c(v_intercept, v_slope, s_true, b, t0), names_to = "param") |>
   group_by(study, param) |>
   summarize(
     x = quantile(value, 0.001),

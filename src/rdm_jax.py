@@ -7,11 +7,10 @@ parameter array and are passed straight to BlackJAX (e.g. `blackjax.nuts`) -- no
 PyMC model object or jaxification step involved.
 
 Both accumulators' first-passage times are Wald/inverse-Gaussian with mean `mu = b/v`
-and shape `lam = (b/s)**2`, exactly as in `simulation.rdm_experiment_simple`.
+and shape `lam = (b/s)**2`.
 """
 
 import logging
-import blackjax
 import jax
 import jax.numpy as jnp
 from jax.scipy import stats as jstats
@@ -82,8 +81,7 @@ def _as_scalar(x):
 def rdm_experiment_simple_jax(key, v_intercept, v_slope, s_true, s_false, b, t0, num_obs):
     """Simulate `num_obs` trials from the two-accumulator racing diffusion model.
 
-    JAX/TFP equivalent of `simulation.rdm_experiment_simple`: draws first-passage
-    times from `tfd.InverseGaussian(mu, lam)` instead of `numpy.random.Generator.wald`.
+    Draws first-passage times from `tfd.InverseGaussian(mu, lam)`.
     `num_obs` must be static (it sets the sample shape) so this is jit/vmap-able over
     `key` and the scalar parameters.
     """
@@ -174,7 +172,7 @@ def rdm_race_logpdf(rt, drift_winner, drift_loser, s_winner, s_loser, threshold,
     rt_shifted = rt - ndt
     rt_safe = jnp.maximum(rt_shifted, min_p)
 
-    # Priors keep these positive via a log-transform (see simple_to_unconstrained),
+    # Priors keep these positive via a log-transform (see mcmc.simple_to_unconstrained),
     # so this floor only guards against exp() underflowing to exactly 0.0, rather
     # than gating validity -- unlike a hard `-inf` rejection, it keeps a finite
     # gradient even if the sampler briefly explores a near-zero parameter.
@@ -220,17 +218,12 @@ def _rdm_simple_log_likelihood(rt, is_true, v_intercept, v_slope, s_true, b, t0)
 _EXP = tfb.Exp()
 
 
-def simple_to_unconstrained(position):
-    """[v_intercept, v_slope, s_true, b, t0] natural scale -> unconstrained log-space."""
-    return jnp.log(position)
-
-
 def make_rdm_simple_logdensity(data_x, drift_slope_loc, threshold_scale):
     """Build a BlackJAX-ready log-density function for the simple (non-hierarchical) RDM.
 
     `position` passed to the returned function is a length-5 array of *unconstrained*
     (log-space) values in the order [v_intercept, v_slope, s_true, b, t0] -- matching
-    `mcmc_sampling_fun.init_position` in conf/experiment/*.yaml (via `simple_to_unconstrained`).
+    `mcmc_sampling_fun.init_position` in conf/experiment/*.yaml (via `mcmc.simple_to_unconstrained`).
     """
     data_x = jnp.asarray(data_x)
     rt = data_x[:, 0]
@@ -250,26 +243,6 @@ def make_rdm_simple_logdensity(data_x, drift_slope_loc, threshold_scale):
     return logdensity_fn
 
 
-def make_meta_to_unconstrained(drift_slope_loc_lower, drift_slope_loc_upper, threshold_scale_lower, threshold_scale_upper):
-    """Build the natural-scale -> unconstrained transform for the meta RDM.
-
-    position = [drift_slope_loc, threshold_scale, v_intercept, v_slope, s_true, b, t0].
-    The two hyperparameters are Uniform-distributed (bounded both sides), so they use a
-    Sigmoid bijector rather than the Exp/log-transform used for the other five.
-    """
-    slope_bij = tfb.Sigmoid(low=drift_slope_loc_lower, high=drift_slope_loc_upper)
-    scale_bij = tfb.Sigmoid(low=threshold_scale_lower, high=threshold_scale_upper)
-
-    def to_unconstrained(position):
-        position = jnp.asarray(position)
-        y_slope = slope_bij.inverse(position[0])
-        y_scale = scale_bij.inverse(position[1])
-        y_rest = jnp.log(position[2:])
-        return jnp.concatenate([jnp.stack([y_slope, y_scale]), y_rest])
-
-    return to_unconstrained
-
-
 def make_rdm_meta_logdensity(
     data_x, drift_slope_loc_lower, drift_slope_loc_upper, threshold_scale_lower, threshold_scale_upper,
 ):
@@ -277,7 +250,7 @@ def make_rdm_meta_logdensity(
 
     `position` passed to the returned function is a length-7 array of *unconstrained*
     values in the order [drift_slope_loc, threshold_scale, v_intercept, v_slope, s_true,
-    b, t0] (see `make_meta_to_unconstrained` for the matching forward transform).
+    b, t0] (see `mcmc.make_meta_to_unconstrained` for the matching forward transform).
     """
     data_x = jnp.asarray(data_x)
     rt = data_x[:, 0]
@@ -312,105 +285,3 @@ def make_rdm_meta_logdensity(
         return log_prior + jacobian + log_lik
 
     return logdensity_fn
-
-
-# ---------------------------------------------------------------------------
-# GPU-parallelized batch fitting: vmap over chains *and* over datasets, in the
-# style of racing-diffusion-conflict/scripts/parameter_recovery.py. All three
-# experiments' MCMC fitting goes through this -- one GPU job vmaps every
-# dataset (and every chain within each) at once, instead of one SLURM job per
-# dataset with chains parallelized via `jax.pmap` on faked CPU devices.
-# ---------------------------------------------------------------------------
-
-
-def warmup(sampler_fun, logdensity_fun, init_position, num_steps, rng_key, **kwargs):
-    """BlackJAX window adaptation warmup."""
-    adapt = blackjax.window_adaptation(sampler_fun, logdensity_fun, **kwargs)
-    (last_state, parameters), _ = adapt.run(rng_key, init_position, num_steps=num_steps)
-    kernel = sampler_fun(logdensity_fun, **parameters).step
-    return kernel, last_state, parameters
-
-
-def inference_loop_multiple_chains(rng_key, kernel, initial_state, num_samples, num_chains):
-    """Run `num_chains` BlackJAX chains via `vmap`: a single XLA computation that runs
-    efficiently on one GPU and composes with an outer `vmap` over datasets
-    (`fit_mcmc_gpu_batch`), unlike `jax.pmap` (which needs one physical device per chain).
-    """
-
-    @jax.jit
-    def one_step(states, rng_key):
-        keys = jax.random.split(rng_key, num_chains)
-        states, infos = jax.vmap(kernel)(keys, states)
-        return states, (states.position, infos)
-
-    keys = jax.random.split(rng_key, num_samples)
-    _, (positions, infos) = jax.lax.scan(one_step, initial_state, keys)
-
-    return positions, infos
-
-
-def fit_mcmc_gpu(
-    rng_key,
-    data,
-    make_logdensity_fn,
-    init_position,
-    num_chains,
-    num_steps_warmup,
-    num_steps_sampling,
-    to_unconstrained=simple_to_unconstrained,
-):
-    """Fit one dataset's posterior with vmap-parallelized chains.
-
-    `make_logdensity_fn(data)` builds the logdensity function for *this* dataset --
-    called in here, not by the caller, so it composes correctly with an outer
-    `jax.vmap` over datasets (`fit_mcmc_gpu_batch`): under `vmap`, `data` is a
-    per-dataset traced slice, so the closure is (re)built per dataset rather than
-    one fixed dataset getting baked in before vmapping.
-    """
-    init_position = jnp.asarray(init_position).at[-1].set(data[:, 0].min() / 2)
-
-    logdensity_fn = make_logdensity_fn(data)
-
-    rng_key, warmup_key = jax.random.split(rng_key)
-    kernel, last_state, _ = warmup(
-        blackjax.nuts, logdensity_fn, to_unconstrained(init_position), num_steps_warmup, warmup_key,
-    )
-
-    last_states = jax.vmap(lambda _: last_state)(jnp.arange(num_chains))
-
-    return inference_loop_multiple_chains(rng_key, kernel, last_states, num_steps_sampling, num_chains)
-
-
-def fit_mcmc_gpu_batch(
-    rng_key,
-    data,
-    make_logdensity_fn,
-    init_position,
-    num_chains,
-    num_steps_warmup,
-    num_steps_sampling,
-    to_unconstrained=simple_to_unconstrained,
-):
-    """Fit MCMC posteriors for a whole batch of datasets in one call, via `vmap` over
-    `data`'s leading axis -- e.g. every simulated dataset for one `num_obs` value in
-    one GPU job, instead of one SLURM job per dataset.
-
-    Returns `(positions, infos)` with `positions` of shape `(num_datasets, num_samples,
-    num_chains, num_params)` and NUTS diagnostics (e.g. `infos.is_divergent`) with a
-    matching leading `num_datasets` axis.
-    """
-    keys = jax.random.split(rng_key, data.shape[0])
-
-    def fit_one(key, dataset):
-        return fit_mcmc_gpu(
-            key,
-            dataset,
-            make_logdensity_fn,
-            init_position,
-            num_chains,
-            num_steps_warmup,
-            num_steps_sampling,
-            to_unconstrained=to_unconstrained,
-        )
-
-    return jax.vmap(fit_one, in_axes=(0, 0))(keys, data)

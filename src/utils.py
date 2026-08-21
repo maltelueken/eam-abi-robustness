@@ -2,6 +2,12 @@
 
 import os
 
+# Keras picks its backend at import time, and defaults to TensorFlow, which is not a
+# project dependency. Hydra's `env_set` sets this too, but only once the job starts --
+# by then any module that imported keras at module level has already failed. `setdefault`
+# leaves an explicit KERAS_BACKEND from the environment alone.
+os.environ.setdefault("KERAS_BACKEND", "jax")
+
 import keras
 import numpy as np
 import polars as pl
@@ -37,11 +43,26 @@ def get_decay_steps(num_epochs, num_batches):
     return num_epochs * num_batches
 
 
+def get_checkpoint_path(cfg):
+    """Return the ModelCheckpoint's filepath from the callbacks config.
+
+    Selected by `_target_` rather than by position: the callback lists differ in length
+    between `conf/callbacks/basic.yaml` and `conf/callbacks/tensorboard.yaml`, so a fixed
+    index picks a different callback depending on which group is active.
+    """
+    for callback in cfg["callbacks"]:
+        if callback["_target_"].endswith("ModelCheckpoint"):
+            return callback["filepath"]
+
+    msg = "No ModelCheckpoint callback found in cfg['callbacks']; cannot locate the saved model."
+    raise ValueError(msg)
+
+
 def load_approximator(cfg):
     """Load an approximator object."""
     simulator = instantiate(cfg["simulator"], _convert_="partial")
 
-    approximator = keras.saving.load_model(cfg["callbacks"][1]["filepath"])
+    approximator = keras.saving.load_model(get_checkpoint_path(cfg))
 
     return approximator, simulator
 

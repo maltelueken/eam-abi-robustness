@@ -1,14 +1,18 @@
 # @package _global_
 
+# Order matters: `simulator`, `approximator` and `mcmc` are listed before `model` so that
+# `model` can override them, and `inference-method`/`summary-method` come last so they win
+# over `model`'s approximator choice.
 defaults:
   - _self_
   - sweeper: basic
+  - test_case: num_obs_grid
   - experiment: experiment_1
-  - mcmc_model_fun: rdm
+  - mcmc: rdm
   - approximator: continuous_approximator
   - optimizer: adam_cosine_decay
   - simulator: rdm
   - callbacks: basic # use `callbacks=tensorboard` where tensorflow is installed
-  - model: rdm_simple # Overrides simulator and approximator
+  - model: rdm_simple # Overrides simulator, approximator and mcmc
   - inference-method: flow_matching # Overrides approximator
   - summary-method: set_transformer

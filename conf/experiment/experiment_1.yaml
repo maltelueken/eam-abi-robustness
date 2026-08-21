@@ -1,5 +1,8 @@
 # @package _global_
 
+defaults:
+- override /test_case: num_obs_grid
+
 hydra:
   run:
     dir: outputs/${hydra:runtime.choices.experiment}/${hydra:runtime.choices.model}/${hydra:runtime.choices.inference-method}/${hydra.job.override_dirname}
@@ -13,11 +16,15 @@ hydra:
     config:
       override_dirname:
         item_sep: "/"
+        # Group choices that already appear in hydra.run.dir, so they must not be repeated
+        # in the override_dirname suffix.
         exclude_keys:
           - experiment
           - model
-          - method,
-          - mcmc_model_fun
+          - inference-method
+          - summary-method
+          - mcmc
+          - test_case
   job_logging:
     handlers:
       file:
@@ -30,41 +37,32 @@ eval_num_obs: 1000
 diag_batch_size: 100
 diag_num_posterior_samples: 1000
 
-diag_num_obs:
-  _target_: numpy.array
-  object: ${simulator.design_simulator.sample_fn.values}
-
 epochs: 100
 iterations_per_epoch: 500
 batch_size: 64
 
+# Shared across inference methods: test data and MCMC ground truth do not depend on the
+# approximator, so every method is compared against the same held-out data.
 test_data_path: ${hydra:runtime.cwd}/outputs/${hydra:runtime.choices.experiment}/${hydra:runtime.choices.model}
 
 test_batch_size: 100
 test_num_posterior_samples: 2000
 
+# scripts/prior_stats.py: the figures take 0.1% and 99.9% quantiles of these draws, which
+# needs far more than test_batch_size samples to be meaningful.
+prior_stats_num_draws: 20000
+
 psrf_threshold: 1.01
 
-test_num_obs:
-  _target_: numpy.arange
-  start: 50
-  stop: 1250
-  step: 50
+# One case may be selected by key (`case=sample_size_50`); null fits every case.
+case: null
 
-# GPU-parallelized MCMC fitting (experiment_*/fit_mcmc_gpu.py): vmaps BlackJAX NUTS
-# over chains *and* over every dataset in one call. See rdm_jax.fit_mcmc_gpu_batch.
+# GPU-parallelized MCMC fitting (scripts/fit_mcmc_gpu.py): vmaps BlackJAX NUTS over chains
+# *and* over every dataset in one call. See mcmc.fit_mcmc_gpu_batch.
 mcmc_sampling_fun:
-  _target_: rdm_jax.fit_mcmc_gpu_batch
+  _target_: mcmc.fit_mcmc_gpu_batch
   _partial_: true
   _convert_: object
-  init_position:
-    _target_: numpy.array
-    object:
-      - 1
-      - 2
-      - 1
-      - 1
-      - 0.2
   num_chains: 4
   num_steps_warmup: 2000
   num_steps_sampling: ${test_num_posterior_samples}

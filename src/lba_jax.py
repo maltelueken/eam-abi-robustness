@@ -273,7 +273,7 @@ def make_lba_simple_logdensity(data_x, drift_slope_loc, threshold_scale):
     `position` passed to the returned function is a length-6 array of *unconstrained*
     (log-space) values in the order [v_intercept, v_slope, s_true, A, B, t0], where `B` is the
     threshold gap `b - A` -- matching `mcmc_sampling_fun.init_position` in
-    conf/model/lba_simple.yaml (via `rdm_jax.simple_to_unconstrained`, which is just `jnp.log`
+    conf/model/lba_simple.yaml (via `mcmc.simple_to_unconstrained`, which is just `jnp.log`
     and so is length-agnostic).
     """
     data_x = jnp.asarray(data_x)
@@ -304,7 +304,7 @@ def make_lba_meta_logdensity(
     `position` passed to the returned function is a length-8 array of *unconstrained*
     values in the order [drift_slope_loc, threshold_scale, v_intercept, v_slope, s_true,
     A, B, t0], where `B` is the threshold gap `b - A`.
-    `rdm_jax.make_meta_to_unconstrained` is the matching forward transform -- it
+    `mcmc.make_meta_to_unconstrained` is the matching forward transform -- it
     Sigmoid-transforms the two leading hyperparameters and log-transforms `position[2:]`, so it
     applies unchanged to the LBA's six subject-level parameters.
     """

@@ -2,23 +2,5 @@
 
 defaults:
 - override /simulator: lba_meta
-- override /mcmc_model_fun: lba_meta
+- override /mcmc: lba_meta
 - override /approximator/adapter: lba_simple
-
-is_meta: true
-
-# The two meta hyperparameters prepended to the six subject-level parameters:
-# [drift_slope_loc, threshold_scale, v_intercept, v_slope, s_true, A, B, t0], where B is the
-# threshold gap b - A.
-mcmc_sampling_fun:
-  init_position:
-    _target_: numpy.array
-    object:
-      - 1.5
-      - 0.15
-      - 1
-      - 2
-      - 1
-      - 0.5
-      - 1.0
-      - 0.2

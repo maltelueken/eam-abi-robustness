@@ -6,18 +6,18 @@ import numpy as np
 import pytest
 from scipy import stats
 from rdm_jax import SplittableKey
-from rdm_jax import fit_mcmc_gpu_batch
-from rdm_jax import inference_loop_multiple_chains
+from mcmc import fit_mcmc_gpu_batch
+from mcmc import inference_loop_multiple_chains
 from rdm_jax import inv_gauss_logpdf
 from rdm_jax import inv_gauss_logsf
-from rdm_jax import make_meta_to_unconstrained
+from mcmc import make_meta_to_unconstrained
 from rdm_jax import make_rdm_meta_logdensity
 from rdm_jax import make_rdm_simple_logdensity
 from rdm_jax import rdm_experiment_simple_jax
 from rdm_jax import rdm_experiment_simple_jax_stateful
 from rdm_jax import rdm_race_logpdf
-from rdm_jax import simple_to_unconstrained
-from rdm_jax import warmup
+from mcmc import simple_to_unconstrained
+from mcmc import warmup
 
 
 @pytest.fixture

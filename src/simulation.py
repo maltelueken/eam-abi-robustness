@@ -5,7 +5,6 @@ from typing import Callable
 import bayesflow as bf
 import numpy as np
 
-from bayesflow.utils import batched_call, tree_stack
 from bayesflow.utils.decorators import allow_batch_size
 from bayesflow.types import Shape
 
@@ -89,32 +88,6 @@ class CustomMetaSimulator(bf.simulators.Simulator):
         return data
 
 
-def rdm_experiment_simple(v_intercept, v_slope, s_true, s_false, b, t0, num_obs, rng):
-    """Simulates data from a single subject in a multi-alternative response times experiment."""
-    # if np.any(np.array((v_intercept, v_slope, s_true, s_false, b, t0)) <= 0):
-    #     raise ValueError("Model parameters must be positive")
-
-    num_accumulators = 2
-
-    # Acc1 = false, Acc2 = true
-    v = np.hstack([v_intercept, v_intercept + v_slope])
-    s = np.hstack([s_false, s_true])
-
-    mu = b / v
-    lam = (b / s) ** 2
-
-    # First passage time
-    fpt = np.zeros((num_accumulators, num_obs))
-
-    for i in range(num_accumulators):
-        fpt[i, :] = rng.wald(mu[i], lam[i], size=num_obs)
-
-    resp = fpt.argmin(axis=0)
-    rt = fpt.min(axis=0) + t0
-
-    return {"x": np.c_[rt, resp]}
-
-
 def create_data_adapter(
     inference_variables, inference_conditions=None, summary_variables=None
 ):
@@ -140,3 +113,17 @@ def create_data_adapter(
     )
 
     return adapter
+
+
+def sample_prior(simulator, batch_shape):
+    """Draw from a simulator's prior without running the (expensive) forward model.
+
+    `simulator.sample()` would simulate a full dataset per draw; the prior-range figures
+    only need the parameters. For the hierarchical simulators the prior is conditional on
+    the meta-parameters, so those are drawn first.
+    """
+    if isinstance(simulator, CustomMetaSimulator):
+        meta_dict = simulator.meta_simulator.sample(batch_shape)
+        return simulator.prior_simulator.sample(batch_shape, **meta_dict)
+
+    return simulator.prior_simulator.sample(batch_shape)

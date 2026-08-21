@@ -13,11 +13,11 @@ from lba_jax import lba_race_logpdf
 from lba_jax import make_lba_meta_logdensity
 from lba_jax import make_lba_simple_logdensity
 from rdm_jax import SplittableKey
-from rdm_jax import fit_mcmc_gpu_batch
-from rdm_jax import inference_loop_multiple_chains
-from rdm_jax import make_meta_to_unconstrained
-from rdm_jax import simple_to_unconstrained
-from rdm_jax import warmup
+from mcmc import fit_mcmc_gpu_batch
+from mcmc import inference_loop_multiple_chains
+from mcmc import make_meta_to_unconstrained
+from mcmc import simple_to_unconstrained
+from mcmc import warmup
 
 # One representative parameter set, shared by the analytic tests below:
 # false accumulator (v=2.0, s=1.0) racing the true one (v=3.5, s=1.2), i.e. the centre of

@@ -1,3 +1,5 @@
+source("visualization/load_results.R")
+
 
 library(ggplot2)
 library(ggh4x)
@@ -28,10 +30,7 @@ models <- c(
 
 data_path <- "outputs/experiment_1"
 
-df_summary <- Reduce(rbind, lapply(models, function(mod) {
-  read.csv(file.path(data_path, mod, "flow_matching/metrics/summary_stats.csv"))[,-1] |>
-    mutate(study = mod)
-}))
+df_summary <- read_by_model(data_path, models, "flow_matching/metrics/summary_stats.csv", read_summary_stats)
 
 df_range <- data.frame(
   param = rep(c("b", "s_true", "t0", "v_intercept", "v_slope"), each = 2),

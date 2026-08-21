@@ -11,7 +11,16 @@ def calc_posterior_predictive(data, posterior, num_obs, simulator, num_samples, 
     `param_names` must list the model's parameters in the same order as `posterior`'s last
     axis -- i.e. the adapter's `inference_variables` -- so that this works for any model
     family (the RDM's five parameters, the LBA's six) rather than a fixed set.
+
+    Simulates one dataset per posterior draw, but a whole subject's draws in one vmapped call
+    rather than one call each: at 100 datasets x 100 draws this was the worst-scaling loop in
+    the pipeline. Going through `experiment_simulator.sample` rather than its `sample_fn` also
+    means `filter_kwargs` drops the hierarchical models' extra hyperparameters, which the
+    forward model does not take.
     """
+    num_obs = int(num_obs)
+    quantiles = np.arange(1, 10) / 10
+
     idx = []
     posterior_sample = []
     acc_true = []
@@ -21,18 +30,25 @@ def calc_posterior_predictive(data, posterior, num_obs, simulator, num_samples, 
     rt_est = []
 
     for i in range(data.shape[0]):
-        for j in range(num_samples):
-            sim = simulator.experiment_simulator.sample_fn(
-                **dict(zip(param_names, posterior[i, j])),
-                num_obs=num_obs,
-            )
+        draws = np.asarray(posterior[i, :num_samples])
+
+        # One dataset per draw, chunked per subject: the round stays at num_samples x num_obs,
+        # and the vmap sees a single batch size, so XLA compiles it once.
+        sim = simulator.experiment_simulator.sample(
+            draws.shape[0],
+            **{name: draws[:, k] for k, name in enumerate(param_names)},
+            num_obs=num_obs,
+        )
+        sim_x = np.asarray(sim["x"])
+
+        for j in range(draws.shape[0]):
             idx.append(i)
             posterior_sample.append(j)
-            acc_est.append(sim["x"][:, 1].mean())
+            acc_est.append(sim_x[j, :, 1].mean())
             acc_true.append(data[i, :, 1].mean())
-            quantile.append((np.arange(1, 10) / 10).tolist())
-            rt_est.append(np.quantile(sim["x"][:, 0], q=np.arange(1, 10) / 10).tolist())
-            rt_true.append(np.quantile(data[i, :, 0], q=np.arange(1, 10) / 10).tolist())
+            quantile.append(quantiles.tolist())
+            rt_est.append(np.quantile(sim_x[j, :, 0], q=quantiles).tolist())
+            rt_true.append(np.quantile(data[i, :, 0], q=quantiles).tolist())
 
     return pd.DataFrame(
         {

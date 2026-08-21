@@ -29,7 +29,8 @@ The paper reports four studies: three simulation studies and an empirical one.
 Study 3 simulates a speed-vs-accuracy manipulation: every dataset contains a speed-instructed and an
 accuracy-instructed block of trials, differing only in response threshold. The test cases shift the
 prior on that threshold *difference* away from the prior the approximator was trained on. Its models
-are `conf/model/rdm_sat*.yaml`.
+are `conf/model/rdm_sat*.yaml` for the racing diffusion model and `conf/model/lba_sat*.yaml` for the
+linear ballistic accumulator.
 
 ## Running the pipeline
 

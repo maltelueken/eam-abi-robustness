@@ -116,6 +116,16 @@ def load_true_params(case, artifacts, param_names, is_converged):
     return convert_prior_samples(forward_dict, param_names)[is_converged]
 
 
-def error_rate(data_x, is_converged):
-    """Mean accuracy per dataset, for the converged datasets."""
-    return np.mean(np.asarray(data_x)[:, :, 1], axis=1)[is_converged]
+def accuracy(data_x, is_converged=None):
+    """Mean accuracy per dataset -- the fraction of trials the correct accumulator won.
+
+    Channel 1 of `x` is 1 when the true accumulator finished first, so this is accuracy, not the
+    error rate the previous name claimed. Study 5 manipulates exactly this quantity, so the two
+    had better not be confused.
+
+    `is_converged` restricts the result to the datasets whose MCMC chains converged, matching the
+    posteriors `load_paired_posteriors` returns.
+    """
+    per_dataset = np.mean(np.asarray(data_x)[:, :, 1], axis=1)
+
+    return per_dataset if is_converged is None else per_dataset[is_converged]

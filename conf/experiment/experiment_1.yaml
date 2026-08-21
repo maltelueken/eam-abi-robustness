@@ -41,9 +41,14 @@ epochs: 100
 iterations_per_epoch: 500
 batch_size: 64
 
+# Which set of held-out data a run compares against. Defaults to the model itself; study 5's
+# accuracy-band models override it so a family's four training conditions share one set, since
+# their test cases and MCMC ground truth are identical.
+model_family: ${hydra:runtime.choices.model}
+
 # Shared across inference methods: test data and MCMC ground truth do not depend on the
 # approximator, so every method is compared against the same held-out data.
-test_data_path: ${hydra:runtime.cwd}/outputs/${hydra:runtime.choices.experiment}/${hydra:runtime.choices.model}
+test_data_path: ${hydra:runtime.cwd}/outputs/${hydra:runtime.choices.experiment}/${model_family}
 
 test_batch_size: 100
 test_num_posterior_samples: 2000

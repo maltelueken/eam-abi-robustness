@@ -6,7 +6,7 @@ import bayesflow as bf
 import hydra
 from omegaconf import DictConfig
 
-from pipeline import error_rate, iter_comparable_cases, load_case_data, setup
+from pipeline import accuracy, iter_comparable_cases, load_case_data, setup
 from results import write_long_csv
 
 logger = logging.getLogger(__name__)
@@ -22,14 +22,14 @@ def check_robustness(cfg: DictConfig):
     for case, posterior_npe, posterior_mcmc, is_converged in iter_comparable_cases(cfg, artifacts, cases, param_names):
         logger.info("Computing MMD for case %s", case.key)
 
-        rates = error_rate(load_case_data(case, artifacts)["x"], is_converged)
+        rates = accuracy(load_case_data(case, artifacts)["x"], is_converged)
 
         for index, (mcmc_draws, npe_draws) in enumerate(zip(posterior_mcmc, posterior_npe, strict=True)):
             records.append(
                 {
                     **case.labels,
                     "dataset": index,
-                    "error_rate": float(rates[index]),
+                    "accuracy": float(rates[index]),
                     "mmd": float(bf.metrics.functional.maximum_mean_discrepancy(mcmc_draws, npe_draws)),
                 },
             )

@@ -16,7 +16,7 @@ from hydra.utils import instantiate
 
 CONFIG_PATH = "../conf"
 
-EXPERIMENTS = ["experiment_1", "experiment_2", "experiment_3", "experiment_4"]
+EXPERIMENTS = ["experiment_1", "experiment_2", "experiment_3", "experiment_4", "experiment_5"]
 
 MODELS = [
     "rdm_simple",
@@ -43,11 +43,23 @@ MODELS = [
     "rdm_sat_meta",
     "rdm_sat_meta_lower",
     "rdm_sat_meta_upper",
+    "lba_sat",
+    "lba_sat_lower",
+    "lba_sat_upper",
+    "lba_sat_meta",
+    "lba_sat_meta_lower",
+    "lba_sat_meta_upper",
+    *[f"{family}_simple_meta_acc_{band}"
+      for family in ("rdm", "lba")
+      for band in ("low", "medium", "high", "full")],
 ]
 
 # The models whose simulator and MCMC configs are only coherent under their own study's
 # test-case group; the shared checks below compose them against it rather than experiment_2.
-EXPERIMENT_BY_MODEL = {model: "experiment_3" for model in MODELS if model.startswith("rdm_sat")}
+EXPERIMENT_BY_MODEL = {
+    **{model: "experiment_3" for model in MODELS if "_sat" in model},
+    **{model: "experiment_5" for model in MODELS if "_acc_" in model},
+}
 
 
 def build(overrides):
@@ -105,10 +117,11 @@ def test_transform_pair_round_trips_on_the_configured_initial_position(model):
         ("experiment_1", "sample_size_50"),
         ("experiment_2", "drift_slope_loc_0.5_threshold_scale_0.05"),
         ("experiment_3", "threshold_diff_scale_0.02"),
+        ("experiment_5", "accuracy_50_60"),
     ],
 )
 def test_test_case_groups_enumerate_the_expected_cases(experiment, expected_first_key):
-    model = "rdm_sat" if experiment == "experiment_3" else "rdm_simple"
+    model = {"experiment_3": "rdm_sat", "experiment_5": "rdm_simple_meta_acc_full"}.get(experiment, "rdm_simple")
     cfg = build([f"experiment={experiment}", f"model={model}"])
 
     cases = instantiate(cfg["test_case"])
@@ -125,7 +138,10 @@ def test_approximator_instantiates_for_the_default_config():
     assert instantiate(cfg["callbacks"], _convert_="partial")
 
 
-@pytest.mark.parametrize("model", ["rdm_sat_meta", "rdm_sat_meta_lower", "rdm_sat_meta_upper"])
+@pytest.mark.parametrize(
+    "model",
+    [f"{family}_sat_meta{suffix}" for family in ("rdm", "lba") for suffix in ("", "_lower", "_upper")],
+)
 def test_the_hierarchical_sat_models_randomize_the_hyperparameter_the_test_cases_sweep(model):
     """The name is spelled out in three files; a mismatch would be silent.
 
@@ -165,3 +181,42 @@ def test_the_swept_hyperparameter_actually_shifts_the_prior_it_names():
     expected = [shape * case.labels["threshold_diff_scale"] for case in [cases[0], cases[-1]]]
 
     assert np.allclose(means, expected, rtol=0.2)
+
+
+@pytest.mark.parametrize("family", ["rdm", "lba"])
+def test_the_accuracy_band_models_share_one_set_of_held_out_data(family):
+    """Study 5's four training conditions differ only in training, so their test data are identical.
+
+    `test_data_path` normally carries the model name; these point it at the family instead, so
+    one `generate_test_data` and one `fit_mcmc_gpu` run serves all four -- MCMC being by far the
+    most expensive artifact in the pipeline.
+    """
+    paths = {
+        build(["experiment=experiment_5", f"model={family}_simple_meta_acc_{band}"])["test_data_path"]
+        for band in ("low", "medium", "high", "full")
+    }
+
+    assert len(paths) == 1
+    assert paths.pop().endswith(f"experiment_5/{family}_acc")
+
+
+def test_the_accuracy_bands_cover_the_test_bins_they_are_read_against():
+    """The four training bands are spelled out in conf/simulator/*_meta_acc_*.yaml and the five
+    test bins in conf/test_case/accuracy_bins.yaml. Nothing ties them together, deliberately --
+    but three of the bands should coincide with a test bin, which is what makes each narrow
+    model's inside-band and outside-band behaviour comparable."""
+    edges = instantiate(build(["experiment=experiment_5", "model=rdm_simple_meta_acc_full"])["test_case"])
+    bins = {(case.labels["accuracy_lower"], case.labels["accuracy_upper"]) for case in edges}
+
+    bands = {
+        band: (
+            build(["experiment=experiment_5", f"model=rdm_simple_meta_acc_{band}"])["simulator"]["acc_lower"],
+            build(["experiment=experiment_5", f"model=rdm_simple_meta_acc_{band}"])["simulator"]["acc_upper"],
+        )
+        for band in ("low", "medium", "high", "full")
+    }
+
+    assert bands["low"] in bins
+    assert bands["medium"] in bins
+    assert bands["high"] in bins
+    assert bands["full"] == (min(l for l, _ in bins), max(u for _, u in bins))

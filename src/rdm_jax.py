@@ -10,9 +10,13 @@ Both accumulators' first-passage times are Wald/inverse-Gaussian with mean `mu =
 and shape `lam = (b/s)**2`.
 """
 
+import functools
 import logging
+import threading
+
 import jax
 import jax.numpy as jnp
+import numpy as np
 from jax.scipy import stats as jstats
 from tensorflow_probability.substrates import jax as tfp
 
@@ -109,24 +113,95 @@ def rdm_experiment_simple_jax(key, v_intercept, v_slope, s_true, s_false, b, t0,
 
 
 class SplittableKey:
-    """Stateful `jax.random.PRNGKey` wrapper, for use as `rdm_experiment_simple_jax_stateful`'s `rng`.
+    """Stateful `jax.random.PRNGKey` wrapper, for use as the experiment simulators' `rng`.
 
-    `bayesflow.utils.batched_call` calls `sample_fn` once per batch element via a plain
-    Python for-loop, passing the *same* `rng` object reference on every call -- exactly
-    how `numpy.random.default_rng()` is used elsewhere in this pipeline (`conf/simulator/
-    */*.yaml`), which works because a numpy `Generator` mutates its own state on every
-    draw. A bare `jax.random.PRNGKey` is immutable/stateless, so this wraps one to give
-    the same call-by-reference-then-advance behaviour: `.next()` splits off and returns a
-    fresh subkey, then updates its own internal state, so repeated calls (e.g. across
-    training batches) never repeat the same randomness.
+    BayesFlow's `LambdaSimulator` passes the *same* `rng` object reference on every call --
+    exactly how `numpy.random.default_rng()` is used elsewhere in this pipeline
+    (`conf/simulator/*/*.yaml`), which works because a numpy `Generator` mutates its own state
+    on every draw. A bare `jax.random.PRNGKey` is immutable/stateless, so this wraps one to give
+    the same call-by-reference-then-advance behaviour: `.next()` splits off fresh subkeys, then
+    updates its own internal state, so repeated calls (e.g. across training batches) never
+    repeat the same randomness.
+
+    The lock is load-bearing. Keras runs `OnlineDataset.__getitem__` on up to `cpu_count()`
+    worker *threads* sharing this one object, so without it two threads can read `self._key`
+    before either writes, derive the same subkey, and hand the trainer two identical batches.
     """
 
     def __init__(self, seed):
         self._key = jax.random.PRNGKey(seed)
+        self._lock = threading.Lock()
 
-    def next(self):
-        self._key, subkey = jax.random.split(self._key)
-        return subkey
+    def next(self, num=None):
+        """Return one fresh subkey, or `num` of them, advancing the internal state exactly once."""
+        with self._lock:
+            keys = jax.random.split(self._key, (num or 1) + 1)
+            self._key = keys[0]
+
+        return keys[1] if num is None else keys[1:]
+
+
+def static_num_obs(num_obs):
+    """Normalize `num_obs` to the single Python int that jit/vmap needs.
+
+    `num_obs` sets the sample shape of the first-passage-time draws, so it has to be static and
+    shared by the whole batch. Every producer already satisfies that -- the design simulator
+    draws one value per batch, and a `Case` pins one -- so this is a guard with a message rather
+    than a conversion that ever does real work.
+    """
+    array = np.asarray(num_obs)
+
+    if array.size != 1:
+        msg = (
+            f"num_obs must be a single value shared by the whole batch, got shape {array.shape}. "
+            "The design simulator draws one num_obs per batch; per-dataset trial counts are not "
+            "supported."
+        )
+        raise ValueError(msg)
+
+    return int(array.reshape(()))
+
+
+@functools.lru_cache(maxsize=None)
+def _compiled_experiment(single_fn):
+    """`jax.jit(jax.vmap(single_fn))`, cached so each simulator is traced once per shape."""
+
+    def call(keys, params, num_obs):
+        return jax.vmap(lambda key, args: single_fn(key, *args, num_obs))(keys, params)
+
+    return jax.jit(call, static_argnums=2)
+
+
+def batched_experiment(single_fn, batch_shape, num_obs, rng, params):
+    """Run a single-dataset simulator once per batch element, under one `vmap`.
+
+    BayesFlow's default path calls `sample_fn` once per batch element in a Python for-loop,
+    which costs ~7 ms per dataset *regardless of `num_obs`* -- pure dispatch overhead, and the
+    binding constraint on training throughput. Mapping the same pure function over the batch
+    instead costs ~40 us per dataset, which is what makes study 5's rejection sampling (up to
+    17 draws per accepted dataset) affordable.
+
+    `single_fn` is the untouched `(key, *scalar_params, num_obs)` simulator, so the batched and
+    per-dataset paths are the same function by construction rather than by agreement.
+    """
+    # `LambdaSimulator` passes the tuple through from `allow_batch_size`, but accept a bare int
+    # too, so calling one of these directly (as `metrics.calc_posterior_predictive` does) works.
+    batch_shape = (batch_shape,) if isinstance(batch_shape, int) else tuple(batch_shape)
+    size = int(np.prod(batch_shape))
+    num_obs = static_num_obs(num_obs)
+
+    # Priors hand over `(batch, 1)`, a `Case` may pin a 0-d value, and `s_false` is a bare int
+    # from the yaml; flattening and broadcasting here means `single_fn` needs no such handling.
+    # The explicit dtype matters for the LBA, whose TFP distributions reject mixed int/float.
+    float_dtype = jnp.result_type(float)
+    params = tuple(
+        jnp.broadcast_to(jnp.reshape(jnp.asarray(value, dtype=float_dtype), (-1,)), (size,))
+        for value in params
+    )
+
+    out = _compiled_experiment(single_fn)(rng.next(size), params, num_obs)
+
+    return {key: np.asarray(value).reshape(*batch_shape, *value.shape[1:]) for key, value in out.items()}
 
 
 def rdm_experiment_simple_jax_stateful(v_intercept, v_slope, s_true, s_false, b, t0, num_obs, rng):
@@ -135,6 +210,19 @@ def rdm_experiment_simple_jax_stateful(v_intercept, v_slope, s_true, s_false, b,
     with `rng` a `SplittableKey` instead of a `numpy.random.Generator`.
     """
     return rdm_experiment_simple_jax(rng.next(), v_intercept, v_slope, s_true, s_false, b, t0, num_obs)
+
+
+def rdm_experiment_simple_jax_batched(batch_shape, v_intercept, v_slope, s_true, s_false, b, t0, num_obs, rng):
+    """`rdm_experiment_simple_jax` for a whole batch at once.
+
+    This is what `conf/simulator/experiment_simulator/rdm_simple.yaml` points at
+    (`is_batched: true`); the per-dataset `_stateful` wrapper above is kept as the reference the
+    equivalence test in `tests/test_batched_simulators.py` compares against.
+    """
+    return batched_experiment(
+        rdm_experiment_simple_jax, batch_shape, num_obs, rng,
+        (v_intercept, v_slope, s_true, s_false, b, t0),
+    )
 
 
 # ---------------------------------------------------------------------------
@@ -349,6 +437,14 @@ def rdm_experiment_sat_jax(key, v_intercept, v_slope, s_true, s_false, b, b_diff
 def rdm_experiment_sat_jax_stateful(v_intercept, v_slope, s_true, s_false, b, b_diff, t0, num_obs, rng):
     """`rdm_experiment_sat_jax` under the `sample_fn(..., rng)` convention, with `rng` a `SplittableKey`."""
     return rdm_experiment_sat_jax(rng.next(), v_intercept, v_slope, s_true, s_false, b, b_diff, t0, num_obs)
+
+
+def rdm_experiment_sat_jax_batched(batch_shape, v_intercept, v_slope, s_true, s_false, b, b_diff, t0, num_obs, rng):
+    """`rdm_experiment_sat_jax` for a whole batch at once."""
+    return batched_experiment(
+        rdm_experiment_sat_jax, batch_shape, num_obs, rng,
+        (v_intercept, v_slope, s_true, s_false, b, b_diff, t0),
+    )
 
 
 def _rdm_sat_log_prior(

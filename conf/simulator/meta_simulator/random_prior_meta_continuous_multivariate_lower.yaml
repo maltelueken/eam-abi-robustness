@@ -1,12 +1,17 @@
+# Which hyperparameters this simulator randomizes. Spelled out rather than interpolated from
+# `meta_param_name_*`: those live in conf/test_case/meta_param_grid.yaml, so interpolating them
+# made every hierarchical model fail to compose under any other study's test-case group -- and
+# study 5 reuses this simulator with a different one. tests/test_config.py checks that the names
+# here match the ones the study-2 test cases sweep.
 _target_: bayesflow.simulators.LambdaSimulator
 sample_fn:
   _target_: design.random_prior_meta_continuous_multivariate
   _partial_: true
   min_value: [0.5, 0.05]
   max_value: [1.0, 0.1]
-  name: 
-  - ${meta_param_name_1}
-  - ${meta_param_name_2}
+  name:
+  - drift_slope_loc
+  - threshold_scale
   rng:
     _target_: numpy.random.default_rng
     seed: ${seed}

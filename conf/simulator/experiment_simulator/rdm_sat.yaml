@@ -1,8 +1,11 @@
 _target_: bayesflow.simulators.LambdaSimulator
 sample_fn:
-  _target_: rdm_jax.rdm_experiment_sat_jax_stateful
+  _target_: rdm_jax.rdm_experiment_sat_jax_batched
   _partial_: true
   s_false: 1
   rng:
     _target_: rdm_jax.SplittableKey
     seed: ${seed}
+# One vmapped call per batch instead of one Python-loop call per dataset: ~180x faster,
+# which is what makes study 5's rejection sampling affordable. See rdm_jax.batched_experiment.
+is_batched: true

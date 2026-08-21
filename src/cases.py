@@ -104,3 +104,28 @@ def prior_param_grid(name, values, num_obs):
         )
         for value in np.asarray(values).tolist()
     ]
+
+
+def accuracy_bins(edges, num_obs):
+    """Bin the empirical accuracy of the generated data (study 5).
+
+    Unlike studies 2 and 3 this does not move the prior: `sim_kwargs` overrides the *rejection
+    band* the approximator was trained on, so every case draws from the same wide prior and
+    differs only in which datasets are kept.
+
+    That distinction is what makes the untouched MCMC the right reference. Accuracy is a
+    deterministic function of `x`, so the selection indicator cancels out of
+    `p(theta | x, accuracy in band) = p(theta | x)` -- there is no prior tilt to correct for,
+    the same ground-truth fits serve every band, and what the study measures is amortization
+    coverage rather than prior misspecification.
+    """
+    edges = np.asarray(edges).tolist()
+
+    return [
+        Case(
+            key=f"accuracy_{round(lower * 100)}_{round(upper * 100)}",
+            labels={"accuracy_lower": lower, "accuracy_upper": upper},
+            sim_kwargs={"acc_lower": lower, "acc_upper": upper, "num_obs": np.array(num_obs)},
+        )
+        for lower, upper in zip(edges[:-1], edges[1:])
+    ]

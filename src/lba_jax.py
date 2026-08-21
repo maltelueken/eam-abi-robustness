@@ -47,6 +47,8 @@ from jax.scipy import stats as jstats
 from tensorflow_probability.substrates import jax as tfp
 from rdm_jax import _as_scalar
 from rdm_jax import _finalize_race_logp
+from rdm_jax import batched_experiment
+from rdm_jax import sat_conditions
 
 tfd = tfp.distributions
 tfb = tfp.bijectors
@@ -204,6 +206,14 @@ def lba_experiment_simple_jax_stateful(v_intercept, v_slope, s_true, s_false, A,
     return lba_experiment_simple_jax(rng.next(), v_intercept, v_slope, s_true, s_false, A, B, t0, num_obs)
 
 
+def lba_experiment_simple_jax_batched(batch_shape, v_intercept, v_slope, s_true, s_false, A, B, t0, num_obs, rng):  # noqa: N803
+    """`lba_experiment_simple_jax` for a whole batch at once, via `rdm_jax.batched_experiment`."""
+    return batched_experiment(
+        lba_experiment_simple_jax, batch_shape, num_obs, rng,
+        (v_intercept, v_slope, s_true, s_false, A, B, t0),
+    )
+
+
 # ---------------------------------------------------------------------------
 # Race log-likelihood: pdf(winner) * survival(loser), mirroring rdm_race_logpdf.
 # ---------------------------------------------------------------------------
@@ -337,6 +347,174 @@ def make_lba_meta_logdensity(
             v_intercept, v_slope, s_true, sp_max, sp_gap, t0, drift_slope_loc, threshold_scale,
         )
         log_lik = _lba_simple_log_likelihood(rt, is_true, v_intercept, v_slope, s_true, sp_max, sp_gap, t0)
+
+        return log_prior + jacobian + log_lik
+
+    return logdensity_fn
+
+
+# ---------------------------------------------------------------------------
+# Speed-vs-accuracy variant (study 3).
+#
+# Twin of `rdm_jax.rdm_experiment_sat_jax`: two blocks of trials per dataset,
+# speed-instructed and accuracy-instructed, differing only in response
+# threshold, with the condition carried as a third channel of `x`.
+#
+# The accuracy instruction raises the threshold *gap* -- `B_accuracy = B +
+# B_diff`, so `b = A + B + B_diff` -- rather than the threshold itself. That
+# keeps the module's central invariant (`b > A`, structurally, for both
+# conditions) and leaves every parameter strictly positive, so the whole vector
+# still log-transforms.
+# ---------------------------------------------------------------------------
+
+
+def lba_experiment_sat_jax(key, v_intercept, v_slope, s_true, s_false, A, B, B_diff, t0, num_obs):  # noqa: N803
+    """Simulate `num_obs` LBA trials, half under a speed and half under an accuracy instruction.
+
+    Returns `x` with three channels: response time, response (0 = false, 1 = true) and
+    condition (0 = speed, 1 = accuracy), matching `rdm_jax.rdm_experiment_sat_jax`.
+    """
+    float_dtype = jnp.result_type(float)
+    v_intercept, v_slope, s_true, s_false, sp_max, sp_gap, sp_gap_diff, t0 = (
+        _as_scalar(x).astype(float_dtype)
+        for x in (v_intercept, v_slope, s_true, s_false, A, B, B_diff, t0)
+    )
+    num_obs = int(num_obs)
+
+    is_accuracy = sat_conditions(num_obs)
+
+    # Per-trial threshold; the start-point range `A` is shared across conditions, so only the
+    # gap moves. Shape (num_obs,), which broadcasts against the per-trial draws below.
+    b = sp_max + jnp.where(is_accuracy, sp_gap + sp_gap_diff, sp_gap)
+
+    v_false, v_true = v_intercept, v_intercept + v_slope
+
+    keys = jax.random.split(key, 4)
+
+    start_false = tfd.Uniform(0.0, sp_max).sample(num_obs, seed=keys[0])
+    drift_false = tfd.TruncatedNormal(v_false, s_false, 0.0, jnp.inf).sample(num_obs, seed=keys[1])
+    start_true = tfd.Uniform(0.0, sp_max).sample(num_obs, seed=keys[2])
+    drift_true = tfd.TruncatedNormal(v_true, s_true, 0.0, jnp.inf).sample(num_obs, seed=keys[3])
+
+    fpt = jnp.stack([(b - start_false) / drift_false, (b - start_true) / drift_true], axis=0)
+    resp = jnp.argmin(fpt, axis=0)
+    rt = jnp.min(fpt, axis=0) + t0
+
+    return {"x": jnp.stack([rt, resp.astype(rt.dtype), is_accuracy.astype(rt.dtype)], axis=-1)}
+
+
+def lba_experiment_sat_jax_stateful(v_intercept, v_slope, s_true, s_false, A, B, B_diff, t0, num_obs, rng):  # noqa: N803
+    """`lba_experiment_sat_jax` under the `sample_fn(..., rng)` convention, with `rng` a `SplittableKey`."""
+    return lba_experiment_sat_jax(rng.next(), v_intercept, v_slope, s_true, s_false, A, B, B_diff, t0, num_obs)
+
+
+def lba_experiment_sat_jax_batched(batch_shape, v_intercept, v_slope, s_true, s_false, A, B, B_diff, t0, num_obs, rng):  # noqa: N803
+    """`lba_experiment_sat_jax` for a whole batch at once."""
+    return batched_experiment(
+        lba_experiment_sat_jax, batch_shape, num_obs, rng,
+        (v_intercept, v_slope, s_true, s_false, A, B, B_diff, t0),
+    )
+
+
+def _lba_sat_log_prior(
+    v_intercept, v_slope, s_true, sp_max, sp_gap, sp_gap_diff, t0,
+    drift_slope_loc, threshold_scale, threshold_diff_shape, threshold_diff_scale,
+):
+    """Log prior for the speed-accuracy LBA: the simple model's, plus the threshold difference.
+
+    `threshold_diff_shape`/`threshold_diff_scale` parameterize `Gamma(shape, scale)` exactly as
+    `priors.lba_prior_sat` draws it; both are interpolated from the same prior config in
+    `conf/mcmc/lba_sat.yaml`.
+    """
+    lp = _lba_simple_log_prior(
+        v_intercept, v_slope, s_true, sp_max, sp_gap, t0, drift_slope_loc, threshold_scale,
+    )
+    return lp + tfd.Gamma(threshold_diff_shape, 1.0 / threshold_diff_scale).log_prob(sp_gap_diff)
+
+
+def _lba_sat_log_likelihood(
+    rt, is_true, is_accuracy, v_intercept, v_slope, s_true, sp_max, sp_gap, sp_gap_diff, t0,
+):
+    """As `_lba_simple_log_likelihood`, but with a per-trial threshold gap."""
+    gap = jnp.where(is_accuracy, sp_gap + sp_gap_diff, sp_gap)
+
+    v_true_drift = v_intercept + v_slope
+    v_false_drift = v_intercept
+
+    ll_true = lba_race_logpdf(rt, v_true_drift, v_false_drift, s_true, 1.0, sp_max, gap, t0)
+    ll_false = lba_race_logpdf(rt, v_false_drift, v_true_drift, 1.0, s_true, sp_max, gap, t0)
+
+    return jnp.sum(jnp.where(is_true, ll_true, 0.0)) + jnp.sum(jnp.where(~is_true, ll_false, 0.0))
+
+
+def make_lba_sat_logdensity(data_x, drift_slope_loc, threshold_scale, threshold_diff_shape, threshold_diff_scale):
+    """Build a BlackJAX-ready log-density for the speed-accuracy LBA.
+
+    `position` is a length-7 array of *unconstrained* (log-space) values in the order
+    [v_intercept, v_slope, s_true, A, B, B_diff, t0] -- matching `mcmc_param_names` in
+    `conf/mcmc/lba_sat.yaml`, with `t0` last as `mcmc.fit_mcmc_gpu` requires.
+    """
+    data_x = jnp.asarray(data_x)
+    rt = data_x[:, 0]
+    is_true = data_x[:, 1] == 1
+    is_accuracy = data_x[:, 2] == 1
+
+    def logdensity_fn(position):
+        position = jnp.asarray(position)
+        v_intercept, v_slope, s_true, sp_max, sp_gap, sp_gap_diff, t0 = _EXP.forward(position)
+        jacobian = jnp.sum(_EXP.forward_log_det_jacobian(position, event_ndims=0))
+
+        log_prior = _lba_sat_log_prior(
+            v_intercept, v_slope, s_true, sp_max, sp_gap, sp_gap_diff, t0,
+            drift_slope_loc, threshold_scale, threshold_diff_shape, threshold_diff_scale,
+        )
+        log_lik = _lba_sat_log_likelihood(
+            rt, is_true, is_accuracy, v_intercept, v_slope, s_true, sp_max, sp_gap, sp_gap_diff, t0,
+        )
+
+        return log_prior + jacobian + log_lik
+
+    return logdensity_fn
+
+
+def make_lba_sat_meta_logdensity(
+    data_x, drift_slope_loc, threshold_scale, threshold_diff_shape,
+    threshold_diff_scale_lower, threshold_diff_scale_upper,
+):
+    """Build a BlackJAX-ready log-density for the hierarchical speed-accuracy LBA.
+
+    `position` is a length-8 array of *unconstrained* values in the order
+    [threshold_diff_scale, v_intercept, v_slope, s_true, A, B, B_diff, t0]: the leading
+    hyperparameter is Uniform on its support and uses a Sigmoid bijector, the rest use Exp.
+    See `mcmc.make_bounded_to_unconstrained` for the matching forward transform.
+    """
+    data_x = jnp.asarray(data_x)
+    rt = data_x[:, 0]
+    is_true = data_x[:, 1] == 1
+    is_accuracy = data_x[:, 2] == 1
+
+    scale_bij = tfb.Sigmoid(low=threshold_diff_scale_lower, high=threshold_diff_scale_upper)
+
+    def logdensity_fn(position):
+        position = jnp.asarray(position)
+        y_scale, y_rest = position[0], position[1:]
+
+        threshold_diff_scale = scale_bij.forward(y_scale)
+        v_intercept, v_slope, s_true, sp_max, sp_gap, sp_gap_diff, t0 = _EXP.forward(y_rest)
+
+        jacobian = scale_bij.forward_log_det_jacobian(y_scale, event_ndims=0) + jnp.sum(
+            _EXP.forward_log_det_jacobian(y_rest, event_ndims=0),
+        )
+
+        log_prior = tfd.Uniform(threshold_diff_scale_lower, threshold_diff_scale_upper).log_prob(
+            threshold_diff_scale,
+        ) + _lba_sat_log_prior(
+            v_intercept, v_slope, s_true, sp_max, sp_gap, sp_gap_diff, t0,
+            drift_slope_loc, threshold_scale, threshold_diff_shape, threshold_diff_scale,
+        )
+        log_lik = _lba_sat_log_likelihood(
+            rt, is_true, is_accuracy, v_intercept, v_slope, s_true, sp_max, sp_gap, sp_gap_diff, t0,
+        )
 
         return log_prior + jacobian + log_lik
 

@@ -1,5 +1,7 @@
 _target_: bayesflow.networks.FlowMatching
-subnet: mlp
+# FlowMatching subnets receive a tuple (target, time, conditions); the plain
+# "mlp" subnet only accepts a single tensor, so use the time-conditioned MLP.
+subnet: time_mlp
 subnet_kwargs:
   _target_: builtins.dict
   widths:
@@ -10,14 +12,6 @@ subnet_kwargs:
       base: 2
       exp: ${inference_mlp_width}
   dropout: 0.00
-  activation: mish
-  kernel_initializer: he_normal
-  residual: false
-  spectral_normalization: false
-base_distribution: normal
-loss_fn: mse
-use_optimal_transport: false
-optimal_transport_kwargs: null
 integrate_kwargs:
   _target_: builtins.dict
   method: euler

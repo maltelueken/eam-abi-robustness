@@ -8,7 +8,7 @@ defaults:
   - approximator: continuous_approximator
   - optimizer: adam_cosine_decay
   - simulator: rdm
-  - callbacks: tensorboard
+  - callbacks: basic # use `callbacks=tensorboard` where tensorflow is installed
   - model: rdm_simple # Overrides simulator and approximator
   - inference-method: flow_matching # Overrides approximator
   - summary-method: set_transformer

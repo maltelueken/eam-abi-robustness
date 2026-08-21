@@ -11,5 +11,4 @@ hydra:
     params:
       inference_mlp_depth: range(2, 12)
       inference_mlp_width: range(6, 10)
-      approximator.inference_network.use_optimal_transport: choice(true, false)
       

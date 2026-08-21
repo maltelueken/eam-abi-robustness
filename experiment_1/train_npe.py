@@ -19,7 +19,7 @@ def train_npe(cfg: DictConfig):
 
     approximator.compile(optimizer)
 
-    callbacks = instantiate(cfg["callbacks"], _convert_="partial") # [keras.callbacks.TensorBoard()]
+    callbacks = instantiate(cfg["callbacks"], _convert_="partial")
 
     history = approximator.fit(
         epochs=cfg["epochs"],

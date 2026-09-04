@@ -1,4 +1,11 @@
-"""Maximum mean discrepancy between the NPE and MCMC posteriors, per dataset."""
+"""Maximum mean discrepancy between the NPE and MCMC posteriors, per dataset and member.
+
+One row per ensemble member per dataset. For a single-network run there is exactly one
+member and the table is what it always was, with a constant `member` column; for an ensemble
+the spread of `mmd` across members at a fixed dataset is the inference variability -- how
+much of the mismatch is this particular approximator rather than the method -- read on the
+same scale as the mismatch itself.
+"""
 
 import logging
 
@@ -6,7 +13,7 @@ import bayesflow as bf
 import hydra
 from omegaconf import DictConfig
 
-from pipeline import accuracy, iter_comparable_cases, load_case_data, rt_range, setup
+from pipeline import accuracy, iter_comparable_cases, load_case_data, load_npe_members, rt_range, setup
 from results import write_long_csv
 
 logger = logging.getLogger(__name__)
@@ -14,12 +21,12 @@ logger = logging.getLogger(__name__)
 
 @hydra.main(version_base=None, config_path="../conf", config_name="config")
 def check_robustness(cfg: DictConfig):
-    """Write `robustness/mmd.csv`, one row per dataset per case."""
+    """Write `robustness/mmd.csv`, one row per ensemble member per dataset per case."""
     artifacts, cases, param_names = setup(cfg)
 
     records = []
 
-    for case, posterior_npe, posterior_mcmc, is_converged in iter_comparable_cases(cfg, artifacts, cases, param_names):
+    for case, _pooled_npe, posterior_mcmc, is_converged in iter_comparable_cases(cfg, artifacts, cases, param_names):
         logger.info("Computing MMD for case %s", case.key)
 
         # Per-dataset properties of the generated data, carried alongside the mismatch: the
@@ -28,17 +35,23 @@ def check_robustness(cfg: DictConfig):
         rates = accuracy(data_x, is_converged)
         lowest_rt, highest_rt = rt_range(data_x, is_converged)
 
-        for index, (mcmc_draws, npe_draws) in enumerate(zip(posterior_mcmc, posterior_npe, strict=True)):
-            records.append(
-                {
-                    **case.labels,
-                    "dataset": index,
-                    "accuracy": float(rates[index]),
-                    "rt_min": float(lowest_rt[index]),
-                    "rt_max": float(highest_rt[index]),
-                    "mmd": float(bf.metrics.functional.maximum_mean_discrepancy(mcmc_draws, npe_draws)),
-                },
-            )
+        # Members separately, not the pooled posterior `iter_comparable_cases` yields: pooling
+        # them first would average the ensemble into one approximator and lose the spread.
+        members = load_npe_members(artifacts.npe_samples(case), param_names)[:, is_converged]
+
+        for member, member_draws in enumerate(members):
+            for index, (mcmc_draws, npe_draws) in enumerate(zip(posterior_mcmc, member_draws, strict=True)):
+                records.append(
+                    {
+                        **case.labels,
+                        "member": member,
+                        "dataset": index,
+                        "accuracy": float(rates[index]),
+                        "rt_min": float(lowest_rt[index]),
+                        "rt_max": float(highest_rt[index]),
+                        "mmd": float(bf.metrics.functional.maximum_mean_discrepancy(mcmc_draws, npe_draws)),
+                    },
+                )
 
     path = artifacts.csv("robustness", "mmd")
     logger.info("Writing %s", path)

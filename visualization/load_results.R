@@ -32,7 +32,12 @@ read_prior_stats <- function(path) {
   read.csv(path)
 }
 
-#' Read the per-dataset MMD table (columns: <case labels...>, dataset, error_rate, mmd).
+#' Read the per-dataset MMD table (columns: <case labels...>, member, dataset, accuracy,
+#' rt_min, rt_max, mmd).
+#'
+#' `member` indexes the ensemble member the NPE posterior came from; a single-network run has
+#' one member and one row per dataset, as before. Aggregate over `member` for a run's overall
+#' mismatch, or read its spread at a fixed dataset as the inference variability.
 read_mmd <- function(path) {
   read.csv(path)
 }

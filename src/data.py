@@ -6,7 +6,8 @@ Two kinds of artifact live here:
   response-time/choice array ``x``). Stored as a plain :class:`xarray.Dataset`.
 * **Posteriors** -- NPE and MCMC posterior samples alike. Stored as an ArviZ-style
   :class:`xarray.DataTree` with a ``posterior`` group holding a single ``theta`` variable
-  with dims ``(chain, draw, dataset, param)``. NPE samples simply have ``chain`` of size 1.
+  with dims ``(chain, draw, dataset, param)``. A single-network NPE simply has ``chain`` of
+  size 1; an ensemble stores one chain per member (see :func:`stack_posterior_members`).
 
 Storing both posterior kinds in the same layout means one reader serves both, and naming
 the ``param`` axis means parameters are selected by name rather than by position -- which
@@ -117,6 +118,22 @@ def stack_posterior_dict(samples, param_names):
     theta = np.stack(columns, axis=-1)
 
     return np.transpose(theta, (1, 0, 2))[np.newaxis, ...]
+
+
+def stack_posterior_members(samples_by_member, param_names):
+    """Stack one BayesFlow sample dict per ensemble member into ``(chain, draw, dataset, param)``.
+
+    Each member becomes one chain, in the iteration order of ``samples_by_member`` -- which is
+    the member order of :func:`ensemble.member_names`. Reusing the ``chain`` axis rather than
+    adding a ``member`` one is what lets every existing reader keep working: a single-network
+    run is just the one-member case, and pooling the chains (what
+    :func:`pipeline.load_npe_posterior` does) gives the ensemble's combined posterior, while
+    selecting one chain gives that member's own.
+    """
+    return np.concatenate(
+        [stack_posterior_dict(samples, param_names) for samples in samples_by_member.values()],
+        axis=0,
+    )
 
 
 def load_hdf5(filename):

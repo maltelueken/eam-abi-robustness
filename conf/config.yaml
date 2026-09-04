@@ -3,13 +3,19 @@
 # Order matters: `simulator`, `approximator` and `mcmc` are listed before `model` so that
 # `model` can override them, and `inference-method`/`summary-method` come last so they win
 # over `model`'s approximator choice.
+#
+# `approximator` defaults to the ensemble: every experiment is trained and evaluated as one, so
+# no stage has to be reminded of it on the command line -- which matters because `hydra.run.dir`
+# includes `override_dirname`, and an override forgotten on `predict_npe` would send it looking
+# in the wrong directory. The architecture sweep is the one thing that opts back out
+# (`approximator=continuous_approximator`, see `slurm/sweep.sh`).
 defaults:
   - _self_
   - sweeper: basic
   - test_case: num_obs_grid
   - experiment: experiment_1
   - mcmc: rdm
-  - approximator: continuous_approximator
+  - approximator: ensemble_approximator
   - optimizer: adam_cosine_decay
   - simulator: rdm
   - callbacks: basic # use `callbacks=tensorboard` where tensorflow is installed

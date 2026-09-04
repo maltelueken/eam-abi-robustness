@@ -13,6 +13,10 @@
 # `scripts/<stage>.py`; the test cases it loops over come from `conf/test_case/`, so the
 # parameter grids are no longer mirrored in bash.
 #
+# Every stage trains and reads an ensemble of NPEs, because that is `conf/config.yaml`'s default
+# approximator -- nothing has to be passed here for it. The Optuna architecture sweep is the one
+# thing that wants a single network, and it has its own script: `slurm/sweep.sh`.
+#
 #SBATCH --job-name=eam_abi
 #SBATCH --nodes=1
 #SBATCH --ntasks=1

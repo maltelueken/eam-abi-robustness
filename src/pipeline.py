@@ -59,6 +59,24 @@ def load_npe_posterior(filename, param_names):
     )
 
 
+def load_npe_members(filename, param_names):
+    """Load NPE samples per ensemble member, as `(member, dataset, draw, param)`.
+
+    The counterpart of :func:`load_npe_posterior`, which pools the members into the
+    ensemble's combined posterior. Keep them apart when the question is how much the
+    approximation itself varies: `data.stack_posterior_members` writes one chain per member,
+    and a single-network run is the one-member case, so this works for both.
+    """
+    posterior = load_posterior(filename)
+
+    return (
+        posterior["theta"]
+        .sel(param=list(param_names))
+        .transpose("chain", "dataset", "draw", "param")
+        .to_numpy()
+    )
+
+
 def load_paired_posteriors(cfg, artifacts, case, param_names):
     """Load a case's NPE and MCMC posteriors, aligned and restricted to converged datasets.
 

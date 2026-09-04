@@ -1,0 +1,25 @@
+# An ensemble of identically configured NPEs -- the default approximator, so every experiment
+# is trained and evaluated as one. `approximator=continuous_approximator` opts back out; the
+# architecture sweep is the only thing that does (see `slurm/sweep.sh`).
+#
+# The defaults list is the same as `continuous_approximator.yaml`'s, so `model/*.yaml` still
+# picks the adapter and `inference-method`/`summary-method` still pick the architecture -- the
+# whole point being that the ensemble is trained at whatever architecture the sweep selected,
+# with every member built from these same nodes.
+#
+# `approximator` is deliberately absent from `experiment/*.yaml`'s
+# `override_dirname.exclude_keys`: leaving the default alone keeps ensemble runs at the
+# historical `outputs/<experiment>/<model>/<inference-method>/` paths, while a single-network
+# run gets an `approximator=...` path segment of its own rather than landing on top of one.
+defaults:
+- adapter: rdm_simple
+- inference_network: flow_matching
+- summary_network: set_transformer
+
+_target_: ensemble.create_ensemble_approximator
+
+# Each member needs its own networks, so the factory instantiates these nodes once per member
+# instead of receiving one shared object each. See `src/ensemble.py`.
+_recursive_: false
+
+ensemble_size: 5

@@ -13,6 +13,9 @@ import pytest
 from hydra import compose, initialize
 from hydra.core.hydra_config import HydraConfig
 from hydra.utils import instantiate
+from omegaconf import OmegaConf
+
+from config import get_param_names
 
 CONFIG_PATH = "../conf"
 
@@ -152,6 +155,42 @@ def test_approximator_instantiates_for_the_default_config():
     assert instantiate(cfg["approximator"], _convert_="partial") is not None
     assert instantiate(cfg["optimizer"], _convert_="partial") is not None
     assert instantiate(cfg["callbacks"], _convert_="partial")
+
+
+def test_the_experiments_train_an_ensemble_by_default():
+    """Every stage must agree on the approximator without being told.
+
+    `hydra.run.dir` interpolates `override_dirname`, so an `approximator=` override remembered
+    at `train_npe` and forgotten at `predict_npe` would send the latter looking for a model in a
+    directory that does not exist. Making the ensemble the default is what removes that
+    opportunity -- and it also keeps runs at the paths they used before ensembles existed, which
+    the run-dir assertion below pins.
+    """
+    cfg = build([])
+
+    assert cfg["approximator"]["_target_"] == "ensemble.create_ensemble_approximator"
+    assert cfg["hydra"]["run"]["dir"].endswith("flow_matching/")
+
+
+def test_the_architecture_sweep_can_still_select_a_single_network():
+    """`slurm/sweep.sh` tunes one network rather than five: the members share an architecture,
+    so searching it five at a time would cost five times as much to reach the same answer.
+
+    The two must therefore stay interchangeable -- same adapter, so the same parameters, and
+    both instantiable -- or what the sweep selects would not transfer to what the experiments
+    train.
+    """
+    single = build(["sweeper=optuna", "approximator=continuous_approximator"])
+
+    assert single["approximator"]["_target_"] == "bayesflow.approximators.ContinuousApproximator"
+    assert instantiate(single["approximator"], _convert_="partial") is not None
+    assert get_param_names(single) == get_param_names(build([]))
+
+    # The sweep resumes an existing Optuna study by name, and every swept key has to exist on
+    # the config the sweeper is actually applied to.
+    assert single["hydra"]["sweeper"]["study_name"].startswith("train_npe-")
+    for param in single["hydra"]["sweeper"]["params"]:
+        assert OmegaConf.select(single, param) is not None, param
 
 
 @pytest.mark.parametrize(

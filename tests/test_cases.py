@@ -2,7 +2,7 @@
 
 import numpy as np
 import pytest
-from cases import Case, meta_param_grid, num_obs_grid, prior_param_grid, subject_files
+from cases import Case, num_obs_grid, prior_param_grid, subject_files
 
 
 def test_num_obs_grid_keys_match_the_stored_filenames():
@@ -12,19 +12,6 @@ def test_num_obs_grid_keys_match_the_stored_filenames():
     assert cases[0].labels == {"sample_size": 50}
     assert cases[0].sim_kwargs["num_obs"] == 50
     assert cases[0].is_simulated
-
-
-def test_meta_param_grid_is_the_outer_product_in_row_major_order():
-    cases = meta_param_grid("drift_slope_loc", [0.5, 1.0], "threshold_scale", [0.05, 0.1], num_obs=500)
-
-    assert [case.key for case in cases] == [
-        "drift_slope_loc_0.5_threshold_scale_0.05",
-        "drift_slope_loc_0.5_threshold_scale_0.1",
-        "drift_slope_loc_1.0_threshold_scale_0.05",
-        "drift_slope_loc_1.0_threshold_scale_0.1",
-    ]
-    assert cases[0].labels == {"drift_slope_loc": 0.5, "threshold_scale": 0.05}
-    assert cases[0].sim_kwargs["num_obs"] == 500
 
 
 def test_prior_param_grid_sweeps_one_hyperparameter_at_a_fixed_sample_size():

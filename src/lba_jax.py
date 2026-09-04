@@ -307,43 +307,40 @@ def make_lba_simple_logdensity(data_x, drift_slope_loc, threshold_scale):
 
 
 def make_lba_meta_logdensity(
-    data_x, drift_slope_loc_lower, drift_slope_loc_upper, threshold_scale_lower, threshold_scale_upper,
+    data_x, drift_slope_loc_lower, drift_slope_loc_upper, threshold_scale,
 ):
     """Build a BlackJAX-ready log-density function for the hierarchical (meta) LBA.
 
-    `position` passed to the returned function is a length-8 array of *unconstrained*
-    values in the order [drift_slope_loc, threshold_scale, v_intercept, v_slope, s_true,
-    A, B, t0], where `B` is the threshold gap `b - A`.
-    `mcmc.make_meta_to_unconstrained` is the matching forward transform -- it
-    Sigmoid-transforms the two leading hyperparameters and log-transforms `position[2:]`, so it
-    applies unchanged to the LBA's six subject-level parameters.
+    `position` passed to the returned function is a length-7 array of *unconstrained*
+    values in the order [drift_slope_loc, v_intercept, v_slope, s_true, A, B, t0], where `B` is
+    the threshold gap `b - A`: the leading hyperparameter is Uniform on its support and so uses
+    a Sigmoid bijector, the rest are positive and use Exp. See
+    `mcmc.make_bounded_to_unconstrained` for the matching forward transform.
+
+    One randomized hyperparameter, not the two study 2 used to cross. The threshold prior's
+    scale is now fixed and arrives interpolated from the training prior, exactly as it does for
+    the non-hierarchical model.
     """
     data_x = jnp.asarray(data_x)
     rt = data_x[:, 0]
     is_true = data_x[:, 1] == 1
 
     slope_bij = tfb.Sigmoid(low=drift_slope_loc_lower, high=drift_slope_loc_upper)
-    scale_bij = tfb.Sigmoid(low=threshold_scale_lower, high=threshold_scale_upper)
 
     def logdensity_fn(position):
         position = jnp.asarray(position)
-        y_slope, y_scale, y_rest = position[0], position[1], position[2:]
+        y_slope, y_rest = position[0], position[1:]
 
         drift_slope_loc = slope_bij.forward(y_slope)
-        threshold_scale = scale_bij.forward(y_scale)
-        constrained_rest = _EXP.forward(y_rest)
-        v_intercept, v_slope, s_true, sp_max, sp_gap, t0 = constrained_rest
+        v_intercept, v_slope, s_true, sp_max, sp_gap, t0 = _EXP.forward(y_rest)
 
-        jacobian = (
-            slope_bij.forward_log_det_jacobian(y_slope, event_ndims=0)
-            + scale_bij.forward_log_det_jacobian(y_scale, event_ndims=0)
-            + jnp.sum(_EXP.forward_log_det_jacobian(y_rest, event_ndims=0))
+        jacobian = slope_bij.forward_log_det_jacobian(y_slope, event_ndims=0) + jnp.sum(
+            _EXP.forward_log_det_jacobian(y_rest, event_ndims=0),
         )
 
-        log_prior_hyper = tfd.Uniform(drift_slope_loc_lower, drift_slope_loc_upper).log_prob(
+        log_prior = tfd.Uniform(drift_slope_loc_lower, drift_slope_loc_upper).log_prob(
             drift_slope_loc,
-        ) + tfd.Uniform(threshold_scale_lower, threshold_scale_upper).log_prob(threshold_scale)
-        log_prior = log_prior_hyper + _lba_simple_log_prior(
+        ) + _lba_simple_log_prior(
             v_intercept, v_slope, s_true, sp_max, sp_gap, t0, drift_slope_loc, threshold_scale,
         )
         log_lik = _lba_simple_log_likelihood(rt, is_true, v_intercept, v_slope, s_true, sp_max, sp_gap, t0)

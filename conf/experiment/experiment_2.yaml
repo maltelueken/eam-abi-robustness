@@ -2,7 +2,7 @@
 
 defaults:
 - experiment_1
-- override /test_case: meta_param_grid
+- override /test_case: drift_slope_grid
 
 diag_batch_size: 1000
 

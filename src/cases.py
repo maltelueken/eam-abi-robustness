@@ -1,8 +1,8 @@
 """Test-case enumeration -- the one axis on which the three studies actually differ.
 
 Each study evaluates the NPE over a different set of held-out test cases: study 1 sweeps
-the number of observations, study 2 a grid of two meta-parameters, study 4 the empirical
-subject files. Everything downstream (simulating, predicting, fitting MCMC, comparing) is
+the number of observations, study 2 the location of the drift-slope prior, study 4 the
+empirical subject files. Everything downstream (simulating, predicting, fitting MCMC, comparing) is
 identical, so that difference is captured here as a list of `Case` objects rather than by
 duplicating each pipeline script once per study.
 
@@ -55,23 +55,6 @@ def num_obs_grid(values):
     ]
 
 
-def meta_param_grid(name_1, values_1, name_2, values_2, num_obs):
-    """Sweep a grid of two meta-parameters at a fixed number of observations (study 2)."""
-    return [
-        Case(
-            key=f"{name_1}_{value_1}_{name_2}_{value_2}",
-            labels={name_1: value_1, name_2: value_2},
-            sim_kwargs={
-                name_1: np.array(value_1),
-                name_2: np.array(value_2),
-                "num_obs": np.array(num_obs),
-            },
-        )
-        for value_1 in np.asarray(values_1).tolist()
-        for value_2 in np.asarray(values_2).tolist()
-    ]
-
-
 def subject_files(directory, pattern="*.txt"):
     """Enumerate empirical data files (study 4).
 
@@ -90,11 +73,12 @@ def subject_files(directory, pattern="*.txt"):
 
 
 def prior_param_grid(name, values, num_obs):
-    """Sweep one prior hyperparameter at a fixed number of observations (study 3).
+    """Sweep one prior hyperparameter at a fixed number of observations (studies 2 and 3).
 
-    The one-dimensional counterpart of `meta_param_grid`: study 3 shifts a single
-    hyperparameter -- the scale of the prior on the speed-accuracy threshold difference --
-    away from the value the approximator was trained on.
+    Study 2 shifts the location of the prior on the drift slope, study 3 the scale of the prior
+    on the speed-accuracy threshold difference; both move a single hyperparameter away from the
+    value the approximator was trained on, so both use this. Study 2 used to cross two
+    hyperparameters here -- see conf/test_case/drift_slope_grid.yaml for why it no longer does.
     """
     return [
         Case(

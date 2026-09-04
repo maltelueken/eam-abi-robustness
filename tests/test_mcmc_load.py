@@ -11,16 +11,16 @@ import pytest
 from data import save_posterior
 from mcmc import (
     load_mcmc_posterior,
-    make_meta_to_constrained,
-    make_meta_to_unconstrained,
+    make_bounded_to_constrained,
+    make_bounded_to_unconstrained,
     simple_to_constrained,
     simple_to_unconstrained,
 )
 
 SUBJECT_PARAMS = ["v_intercept", "v_slope", "s_true", "b", "t0"]
-META_PARAMS = ["drift_slope_loc", "threshold_scale", *SUBJECT_PARAMS]
+META_PARAMS = ["drift_slope_loc", *SUBJECT_PARAMS]
 
-BOUNDS = (0.5, 2.5, 0.05, 0.25)
+LOWER, UPPER = [0.7], [3.9]
 
 
 def write_posterior(path, num_datasets, param_names, num_chains=4, num_draws=500, scale=0.01, seed=0):
@@ -38,16 +38,15 @@ def test_simple_transform_pair_are_inverses():
 
 
 def test_meta_transform_pair_are_inverses_and_respect_the_bounds():
-    to_unconstrained = make_meta_to_unconstrained(*BOUNDS)
-    to_constrained = make_meta_to_constrained(*BOUNDS)
+    to_unconstrained = make_bounded_to_unconstrained(LOWER, UPPER)
+    to_constrained = make_bounded_to_constrained(LOWER, UPPER)
 
-    x = np.array([1.5, 0.15, 1.0, 2.0, 1.0, 1.5, 0.2])
+    x = np.array([1.5, 1.0, 2.0, 1.0, 1.5, 0.2])
     assert np.allclose(np.asarray(to_constrained(to_unconstrained(x))), x)
 
-    # Whatever the unconstrained value, the hyperparameters land inside their support.
-    extreme = to_constrained(np.array([-40.0, 40.0, 0.0, 0.0, 0.0, 0.0, 0.0]))
-    assert BOUNDS[0] <= float(extreme[0]) <= BOUNDS[1]
-    assert BOUNDS[2] <= float(extreme[1]) <= BOUNDS[3]
+    # Whatever the unconstrained value, the hyperparameter lands inside its support.
+    extreme = to_constrained(np.array([40.0, 0.0, 0.0, 0.0, 0.0, 0.0]))
+    assert LOWER[0] <= float(extreme[0]) <= UPPER[0]
 
 
 def test_it_back_transforms_and_thins_to_the_requested_sample_count(tmp_path):
@@ -70,19 +69,19 @@ def test_it_back_transforms_and_thins_to_the_requested_sample_count(tmp_path):
 
 
 def test_meta_posteriors_are_reduced_to_the_parameters_the_npe_infers(tmp_path):
-    """A hierarchical fit stores seven parameters; the NPE only ever sees five."""
+    """A hierarchical fit stores six parameters; the NPE only ever sees five."""
     path = tmp_path / "meta.nc"
     write_posterior(path, num_datasets=3, param_names=META_PARAMS)
 
     posterior, _ = load_mcmc_posterior(
         str(path),
-        to_constrained=make_meta_to_constrained(*BOUNDS),
+        to_constrained=make_bounded_to_constrained(LOWER, UPPER),
         param_names=SUBJECT_PARAMS,
         psrf_threshold=1.01,
         num_target_samples=100,
     )
 
-    # Five, not seven -- and selected by name, so the two hyperparameters are dropped
+    # Five, not six -- and selected by name, so the hyperparameter is dropped
     # rather than a positional slice silently misaligning the comparison.
     assert posterior.shape == (3, 100, len(SUBJECT_PARAMS))
 

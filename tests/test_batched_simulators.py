@@ -12,6 +12,7 @@ import pytest
 from hydra import compose, initialize
 from hydra.core.hydra_config import HydraConfig
 from hydra.utils import instantiate
+from scipy import stats
 from lba_jax import (
     lba_experiment_sat_jax,
     lba_experiment_sat_jax_batched,
@@ -138,16 +139,22 @@ def test_batched_priors_honour_a_per_draw_hyperparameter():
     """The genuinely new behaviour: hierarchical models pass one hyperparameter value per draw.
 
     Previously each draw was a separate call with a scalar, so a broadcasting mistake had
-    nowhere to hide. Now `threshold_scale` arrives as a `(batch,)` array and must line up
-    element-wise with the draws it produces.
+    nowhere to hide. Now `drift_slope_loc` -- the one hyperparameter studies 2's hierarchical
+    models randomize, and the one its test cases sweep -- arrives as a `(batch,)` array and must
+    line up element-wise with the draws it produces.
     """
     simulator = instantiate(build(["model=rdm_simple"])["simulator"], _convert_="partial")
 
     size = 20_000
-    scale = np.concatenate([np.full(size // 2, 0.05), np.full(size // 2, 0.25)])
+    ends = (0.7, 3.9)  # the ends of the sweep in conf/test_case/drift_slope_grid.yaml
+    loc = np.concatenate([np.full(size // 2, ends[0]), np.full(size // 2, ends[1])])
 
-    draws = np.reshape(simulator.prior_simulator.sample((size,), threshold_scale=scale)["b"], -1)
+    draws = np.reshape(simulator.prior_simulator.sample((size,), drift_slope_loc=loc)["v_slope"], -1)
 
-    # b ~ Gamma(shape=8, scale), so the halves must separate at 8 * 0.05 and 8 * 0.25.
-    assert np.isclose(draws[: size // 2].mean(), 0.4, rtol=0.05)
-    assert np.isclose(draws[size // 2 :].mean(), 2.0, rtol=0.05)
+    # v_slope ~ TruncNormal(loc, 0.5, lower=0), so the halves must separate at that
+    # distribution's means -- not at `loc` itself: at 0.5 the lower bound cuts 16% of the mass
+    # and pulls the realized mean up to 0.644.
+    halves = (draws[: size // 2], draws[size // 2 :])
+    for half, end in zip(halves, ends, strict=True):
+        expected = stats.truncnorm(a=(0.0 - end) / 0.5, b=np.inf, loc=end, scale=0.5).mean()
+        assert np.isclose(half.mean(), expected, rtol=0.05)

@@ -131,7 +131,7 @@ def test_transform_pair_round_trips_on_the_configured_initial_position(model):
     ("experiment", "expected_first_key"),
     [
         ("experiment_1", "sample_size_50"),
-        ("experiment_2", "drift_slope_loc_0.5_threshold_scale_0.05"),
+        ("experiment_2", "drift_slope_loc_0.7"),
         ("experiment_3", "threshold_diff_scale_0.02"),
         ("experiment_5", "accuracy_50_60"),
         ("experiment_6", "rt_150_1000"),
@@ -216,6 +216,62 @@ def test_the_architecture_sweep_can_still_select_a_single_network():
     assert single["hydra"]["sweeper"]["study_name"].startswith("train_npe-")
     for param in single["hydra"]["sweeper"]["params"]:
         assert OmegaConf.select(single, param) is not None, param
+
+
+@pytest.mark.parametrize(
+    "model",
+    [f"{family}_simple_meta{suffix}" for family in ("rdm", "lba") for suffix in ("", "_lower", "_upper")],
+)
+def test_the_hierarchical_models_randomize_the_hyperparameter_the_test_cases_sweep(model):
+    """Study 2's counterpart of the check below, and for the same reason.
+
+    `conf/simulator/meta_simulator/random_prior_meta_continuous_multivariate*.yaml` spells the
+    name out rather than interpolating `meta_param_name`, which lives in the test-case group --
+    so nothing but this test stops the two from drifting apart, and a mismatch is silent:
+    `CustomMetaSimulator.update_existing` would ignore the case's value and every point of the
+    sweep would be drawn from the training prior.
+    """
+    cfg = build(["experiment=experiment_2", f"model={model}"])
+
+    randomized = list(cfg["simulator"]["meta_simulator"]["sample_fn"]["name"])
+    swept = cfg["test_case"]["name"]
+
+    assert randomized == [swept]
+    assert cfg["mcmc_param_names"][0] == swept
+
+
+@pytest.mark.parametrize("family", ["rdm", "lba"])
+def test_study_2_moves_the_drift_slope_prior_and_leaves_the_threshold_prior_alone(family):
+    """Study 2 sweeps one hyperparameter, and only one.
+
+    It used to cross `drift_slope_loc` with the threshold prior's scale. Sweeping a Gamma's scale
+    moves its mean and its sd together (`sd = mean / sqrt(shape)`), so degradation along that axis
+    could not be attributed to either -- and the study-4 posteriors put the empirical thresholds
+    well inside the fixed prior anyway. This pins that the threshold prior is now the same for
+    every case while the drift-slope prior actually moves, which is the premise of the study:
+    without the kwarg forwarding in `CustomSimulator.sample` each case would be drawn from the
+    training prior and merely *labelled* with a different hyperparameter.
+    """
+    cfg = build(["experiment=experiment_2", f"model={family}_simple"])
+    simulator = instantiate(cfg["simulator"], _convert_="partial")
+    cases = instantiate(cfg["test_case"])
+    threshold = "b" if family == "rdm" else "B"
+
+    draws = [simulator.prior_simulator.sample((20_000,), **case.sim_kwargs) for case in (cases[0], cases[-1])]
+
+    # The swept hyperparameter is a truncated-normal location, so the realized mean sits at or
+    # above it; what matters is that the two ends are far apart and ordered.
+    means = [float(np.mean(d["v_slope"])) for d in draws]
+    assert means[0] < cases[0].labels["drift_slope_loc"] + 0.2
+    assert means[1] > cases[-1].labels["drift_slope_loc"] - 0.2
+    assert means[1] - means[0] > 2.0
+
+    # The threshold prior is untouched by the sweep.
+    thresholds = [float(np.mean(d[threshold])) for d in draws]
+    assert np.isclose(thresholds[0], thresholds[1], rtol=0.05)
+    shape = cfg["simulator"]["prior_simulator"]["sample_fn"]["threshold_shape"]
+    scale = cfg["simulator"]["prior_simulator"]["sample_fn"]["threshold_scale"]
+    assert np.isclose(thresholds[0], shape * scale, rtol=0.05)
 
 
 @pytest.mark.parametrize(

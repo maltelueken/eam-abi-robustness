@@ -58,8 +58,9 @@ def make_bounded_to_unconstrained(lower, upper):
     `position` is `[*bounded_params, *positive_params]`, with one entry per element of
     `lower`/`upper` in the bounded block. The hierarchical models' prior hyperparameters are
     Uniform (bounded both sides), so they need a Sigmoid bijector rather than the Exp/log
-    transform the strictly positive subject-level parameters use. Study 2's models have two
-    such hyperparameters, study 3's has one.
+    transform the strictly positive subject-level parameters use. Studies 2 and 3 each have one
+    such hyperparameter; the list form is what let study 2 drop from two to one without a
+    second transform pair.
     """
     bijectors = [tfb.Sigmoid(low=low, high=high) for low, high in zip(list(lower), list(upper), strict=True)]
 
@@ -88,15 +89,6 @@ def make_bounded_to_constrained(lower, upper):
 
     return to_constrained
 
-
-def make_meta_to_unconstrained(param_1_lower, param_1_upper, param_2_lower, param_2_upper):
-    """`make_bounded_to_unconstrained` for the two-hyperparameter hierarchical models of study 2."""
-    return make_bounded_to_unconstrained([param_1_lower, param_2_lower], [param_1_upper, param_2_upper])
-
-
-def make_meta_to_constrained(param_1_lower, param_1_upper, param_2_lower, param_2_upper):
-    """`make_bounded_to_constrained` for the two-hyperparameter hierarchical models of study 2."""
-    return make_bounded_to_constrained([param_1_lower, param_2_lower], [param_1_upper, param_2_upper])
 # ---------------------------------------------------------------------------
 # GPU-parallelized batch fitting: vmap over chains *and* over datasets, in the
 # style of racing-diffusion-conflict/scripts/parameter_recovery.py. All three
@@ -290,9 +282,3 @@ def bounded_init_position(lower, upper, subject_init):
 
     return np.array([*midpoints, *subject_init])
 
-
-def meta_init_position(param_1_lower, param_1_upper, param_2_lower, param_2_upper, subject_init):
-    """`bounded_init_position` for the two-hyperparameter hierarchical models of study 2."""
-    return bounded_init_position(
-        [param_1_lower, param_2_lower], [param_1_upper, param_2_upper], subject_init,
-    )

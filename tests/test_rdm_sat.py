@@ -16,7 +16,6 @@ from mcmc import (
     inference_loop_multiple_chains,
     make_bounded_to_constrained,
     make_bounded_to_unconstrained,
-    make_meta_to_unconstrained,
     simple_to_unconstrained,
     warmup,
 )
@@ -168,12 +167,3 @@ def test_bounded_transform_pair_are_inverses_for_any_number_of_hyperparameters(b
 
     assert np.allclose(np.asarray(round_tripped), position)
 
-
-def test_bounded_transform_generalizes_the_two_hyperparameter_one():
-    # `make_meta_to_unconstrained` is now a wrapper; study 2's models must be unaffected.
-    position = np.array([1.5, 0.15, 1.0, 2.0, 1.0, 1.0, 0.2])
-
-    general = make_bounded_to_unconstrained([0.5, 0.05], [2.5, 0.25])(position)
-    specific = make_meta_to_unconstrained(0.5, 2.5, 0.05, 0.25)(position)
-
-    assert np.allclose(np.asarray(general), np.asarray(specific))

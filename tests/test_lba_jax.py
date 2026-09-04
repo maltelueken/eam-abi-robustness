@@ -15,7 +15,7 @@ from lba_jax import make_lba_simple_logdensity
 from rdm_jax import SplittableKey
 from mcmc import fit_mcmc_gpu_batch
 from mcmc import inference_loop_multiple_chains
-from mcmc import make_meta_to_unconstrained
+from mcmc import make_bounded_to_unconstrained
 from mcmc import simple_to_unconstrained
 from mcmc import warmup
 
@@ -179,12 +179,12 @@ def test_make_lba_simple_logdensity_recovers_parameters_with_blackjax_nuts():
 
 def test_make_lba_meta_logdensity_finite_at_init():
     data_x = np.array([[0.5, 1.0], [0.7, 0.0], [1.2, 1.0]])
-    logdensity_fn = make_lba_meta_logdensity(data_x, 0.5, 2.5, 0.05, 0.25)
-    # The RDM's meta transform is length-agnostic (it log-transforms position[2:]), so the
-    # LBA reuses it unchanged for its eight-element position.
-    to_unconstrained = make_meta_to_unconstrained(0.5, 2.5, 0.05, 0.25)
+    logdensity_fn = make_lba_meta_logdensity(data_x, 0.7, 3.9, 0.15)
+    # The transform is length-agnostic (it log-transforms everything after the bounded
+    # hyperparameters), so the LBA reuses it unchanged for its seven-element position.
+    to_unconstrained = make_bounded_to_unconstrained([0.7], [3.9])
 
-    position = to_unconstrained(jnp.array([1.5, 0.15, 1.0, 1.0, 1.0, 0.5, 1.0, 0.2]))
+    position = to_unconstrained(jnp.array([1.5, 1.0, 1.0, 1.0, 0.5, 1.0, 0.2]))
     value = logdensity_fn(position)
     grad = jax.grad(logdensity_fn)(position)
 

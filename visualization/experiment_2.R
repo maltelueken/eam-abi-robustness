@@ -49,10 +49,12 @@ df_segment_prior <- df_prior |>
   ) |>
   mutate(study = factor(study, levels = models, labels = study_labels))
 
+# `v_slope` runs to 6 rather than 4: the sweep now reaches drift_slope_loc = 4.0, so with a
+# prior scale of 0.5 the drawn slopes reach about 5.5.
 df_range <- data.frame(
   param = rep(c("b", "s_true", "t0", "v_intercept", "v_slope"), each = 2),
-  true = c(0, 6, 0, 3, 0, 1.07, 0, 3, 0, 4),
-  value = c(0, 6, 0, 3, 0, 1.07, 0, 3, 0, 4),
+  true = c(0, 6, 0, 3, 0, 1.07, 0, 3, 0, 6),
+  value = c(0, 6, 0, 3, 0, 1.07, 0, 3, 0, 6),
   method = "MCMC"
 )
 
@@ -87,51 +89,55 @@ df_summary |>
 
 ggsave(file.path(figure_path, "study_2_recovery.png"), width = 10, height = 7)
 
-df_segment_prior <- data.frame(
+# The prior each model was trained on, in `drift_slope_loc` units. The three "-fixed" models pin
+# a single value (conf/simulator/prior_simulator/rdm_{simple,lower,upper}.yaml); the three
+# "-varying" ones are amortized over a range (the bounds in conf/simulator/meta_simulator/
+# random_prior_meta_continuous_multivariate*.yaml). Data coordinates, not factor positions --
+# study 2 sweeps one continuous hyperparameter now, so the x axis is the hyperparameter itself.
+df_trained_range <- data.frame(
   study = models,
-  x = c(2.5, 0.5, 8.5, 0.5, 6.5, 0.5),
-  xend = c(3.5, 1.5, 9.5, 3.5, 9.5, 9.5),
-  y = c(2.5, 0.5, 8.5, 0.5, 6.5, 0.5),
-  yend = c(3.5, 1.5, 9.5, 3.5, 9.5, 9.5)
+  xmin = c(1.5, 0.7, 3.9, 0.7, 3.5, 0.7),
+  xmax = c(1.5, 0.7, 3.9, 1.1, 3.9, 3.9)
 ) |>
-  mutate(
-    study = factor(study, levels = models, labels = study_labels)
-  ) |>
-  group_by(study, x, xend, y, yend) |>
-  expand(param = c("v_slope", "b", "t0", "v_intercept", "s_true"))
+  mutate(study = factor(study, levels = models, labels = study_labels))
+
+df_trained_band <- filter(df_trained_range, xmin < xmax)
+df_trained_point <- filter(df_trained_range, xmin == xmax)
 
 df_summary |>
   mutate(
     study = factor(study, levels = models, labels = study_labels),
-    median_diff = abs(mcmc_median - npe_median),
-    drift_slope_loc = factor(drift_slope_loc, labels = scales::number(unique(drift_slope_loc), accuracy = 0.01)),
-    threshold_scale = factor(threshold_scale, labels = scales::number(unique(threshold_scale), accuracy = 0.001))
+    median_diff = abs(mcmc_median - npe_median)
   ) |>
-  group_by(study, param, threshold_scale, drift_slope_loc) |>
-  summarise(median_diff = mean(median_diff)) |>
-  ggplot(aes(x = threshold_scale, y = drift_slope_loc, fill = median_diff)) +
-  facet_grid2(rows = vars(study), cols = vars(param)) +
-  geom_raster() +
+  group_by(study, param, drift_slope_loc) |>
+  summarise(median_diff = mean(median_diff), .groups = "drop") |>
+  ggplot(aes(x = drift_slope_loc, y = median_diff)) +
+  # Rows are parameters so that `scales = "free_y"` gives each parameter its own range while
+  # keeping the studies (columns) directly comparable within it.
+  facet_grid2(rows = vars(param), cols = vars(study), scales = "free_y") +
   geom_rect(
-    data = df_segment_prior,
-    mapping = aes(xmin = x, xmax = xend, ymin = y, ymax = yend),
-    fill = NA,
-    color = "white",
-    alpha = 0.1,
+    data = df_trained_band,
+    mapping = aes(xmin = xmin, xmax = xmax, ymin = -Inf, ymax = Inf),
+    fill = "grey",
+    alpha = 0.3,
     inherit.aes = FALSE
   ) +
-  scale_fill_viridis_c() +
-  labs(
-    x = "Threshold scale",
-    y = "Drift slope location",
-    fill = "Absolute difference posterior median"
+  geom_vline(
+    data = df_trained_point,
+    mapping = aes(xintercept = xmin),
+    color = "grey40",
+    linetype = "dashed"
   ) +
+  geom_line() +
+  geom_point(size = 1) +
+  labs(
+    x = "Drift slope prior location",
+    y = "Absolute difference posterior median"
+  ) +
+  theme_half_open() +
   theme(
     axis.text = element_text(size = 8),
-    axis.text.x = element_text(size = 8, angle = -45, hjust = 0),
     panel.background = element_blank(),
-    legend.position = "top",
-    legend.justification = "center",
     strip.text.y = element_text(angle = 360, hjust = 0),
     strip.background.y = element_blank()
   )

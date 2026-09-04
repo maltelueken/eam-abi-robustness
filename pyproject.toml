@@ -19,7 +19,7 @@ classifiers = [
 ]
 dependencies = [
   "arviz",
-  "bayesflow==2.0.12",
+  "bayesflow==2.0.14",
   "blackjax",
   # sweeper 1.2.0 relies on hydra recursively instantiating the nested sampler config;
   # hydra-core 1.4 stopped doing that, and its `>=1.1.0.dev7` floor lets resolvers pick

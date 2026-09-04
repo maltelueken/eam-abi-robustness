@@ -1,0 +1,32 @@
+# @package _global_
+
+# The MCMC side of the speed-accuracy RDM. As in conf/mcmc/rdm.yaml, every prior
+# hyperparameter is interpolated from the simulator's prior, so the prior the data were
+# generated under and the prior MCMC fits cannot drift apart -- which matters more here than
+# anywhere else, since study 3 is *about* moving `threshold_diff_scale`: the `_lower`/`_upper`
+# model variants change it in one place and the log-density follows.
+mcmc_param_names: ["v_intercept", "v_slope", "s_true", "b", "b_diff", "t0"]
+
+mcmc_model_fun:
+  _target_: rdm_jax.make_rdm_sat_logdensity
+  _partial_: true
+  drift_slope_loc: ${simulator.prior_simulator.sample_fn.drift_slope_loc}
+  threshold_scale: ${simulator.prior_simulator.sample_fn.threshold_scale}
+  threshold_diff_shape: ${simulator.prior_simulator.sample_fn.threshold_diff_shape}
+  threshold_diff_scale: ${simulator.prior_simulator.sample_fn.threshold_diff_scale}
+
+mcmc_to_unconstrained:
+  _target_: hydra.utils.get_method
+  path: mcmc.simple_to_unconstrained
+
+mcmc_to_constrained:
+  _target_: hydra.utils.get_method
+  path: mcmc.simple_to_constrained
+
+# Order matches the unconstrained position the log-density expects, i.e. mcmc_param_names.
+# `t0` is last, which mcmc.fit_mcmc_gpu relies on when it re-initializes that entry from the
+# smallest observed response time.
+mcmc_sampling_fun:
+  init_position:
+    _target_: numpy.array
+    object: [1, 2, 1, 1, 0.5, 0.2]

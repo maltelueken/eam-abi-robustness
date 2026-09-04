@@ -1,0 +1,29 @@
+# @package _global_
+
+# Study 2: sweep a grid of the two prior hyperparameters at a fixed sample size.
+# The grid lives here rather than in conf/experiment/, so the SLURM scripts and the Python
+# read the same definition instead of mirroring it by hand.
+meta_param_name_1: drift_slope_loc
+meta_param_name_2: threshold_scale
+
+test_case:
+  _target_: cases.meta_param_grid
+  name_1: ${meta_param_name_1}
+  name_2: ${meta_param_name_2}
+  num_obs: ${test_num_obs}
+  values_1:
+    _target_: numpy.round
+    a:
+      _target_: numpy.linspace
+      start: 0.5
+      stop: 2.5
+      num: 5
+    decimals: 3
+  values_2:
+    _target_: numpy.round
+    a:
+      _target_: numpy.linspace
+      start: 0.05
+      stop: 0.25
+      num: 5
+    decimals: 3

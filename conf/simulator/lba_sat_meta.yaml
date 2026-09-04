@@ -1,0 +1,7 @@
+# The meta simulator is shared with the RDM: both families randomize the same named
+# hyperparameter (`threshold_diff_scale`) over the same range.
+defaults:
+  - lba_sat
+  - meta_simulator: random_prior_meta_continuous_sat
+
+_target_: simulation.CustomMetaSimulator

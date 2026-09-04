@@ -1,0 +1,25 @@
+# Study 3's training prior. `threshold_diff_scale` sets the expected size of the
+# speed-accuracy effect (mean threshold difference = threshold_diff_shape * threshold_diff_scale,
+# i.e. 0.6 here against a mean speed threshold of 1.2); it is the hyperparameter the test cases
+# in conf/test_case/threshold_diff_grid.yaml shift away from this trained-on value.
+_target_: bayesflow.simulators.LambdaSimulator
+sample_fn:
+  _target_: priors.rdm_prior_sat
+  _partial_: true
+  drift_intercept_loc: 1
+  drift_intercept_scale: 0.5
+  drift_slope_loc: 1.5
+  drift_slope_scale: 0.5
+  sd_true_shape: 12
+  sd_true_scale: 0.1
+  threshold_shape: 8
+  threshold_scale: 0.15
+  threshold_diff_shape: 6
+  threshold_diff_scale: 0.1
+  t0_loc: 0.3
+  t0_scale: 0.2
+  t0_lower: 0.0
+  rng:
+    _target_: numpy.random.default_rng
+    seed: ${seed}
+is_batched: true # one call draws the whole batch; see the priors module docstring

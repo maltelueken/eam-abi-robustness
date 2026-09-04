@@ -1,0 +1,5 @@
+# @package _global_
+
+defaults:
+- rdm_simple
+- override /simulator/prior_simulator: rdm_lower

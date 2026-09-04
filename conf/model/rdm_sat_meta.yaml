@@ -1,0 +1,6 @@
+# @package _global_
+
+defaults:
+- override /simulator: rdm_sat_meta
+- override /mcmc: rdm_sat_meta
+- override /approximator/adapter: rdm_sat

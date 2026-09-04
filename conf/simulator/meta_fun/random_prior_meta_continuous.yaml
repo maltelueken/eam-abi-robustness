@@ -1,8 +1,0 @@
-_target_: design.random_prior_meta_continuous
-_partial_: true
-min_value: 0.5
-max_value: 4.0
-name: ${meta_param_name}
-rng:
-  _target_: numpy.random.default_rng
-  seed: ${seed}

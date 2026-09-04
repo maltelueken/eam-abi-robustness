@@ -1,33 +1,17 @@
-import logging
-import os
-import pickle
+"""Prior utilities.
+
+Every prior here is a *batched* sampler (`is_batched: true` in
+`conf/simulator/prior_simulator/*.yaml`): one call draws the whole batch, returning an array of
+shape `batch_shape` per parameter. `simulation.CustomSimulator` then lifts those to `(batch, 1)`,
+the same shape BayesFlow's per-element path used to produce.
+
+Hyperparameters may arrive as a scalar from the yaml, as a `(batch,)` array from a hierarchical
+model's meta simulator, or as a 0-d array pinned by a test case; numpy broadcasts all three
+against `size=batch_shape` without special handling.
+"""
 
 import numpy as np
-from scipy import special, stats
-
-logger = logging.getLogger(__name__)
-
-
-def truncated_t_rvs(
-    df: float,
-    loc: float,
-    scale: float,
-    size: int = 1,
-    random_state: int = None,
-) -> np.ndarray:
-    quantile_l = stats.t.cdf(0, df=df, loc=loc, scale=scale)
-
-    if random_state is not None:
-        probs = random_state.uniform(quantile_l, 1.0, size=size)
-    else:
-        probs = np.random.default_rng().uniform(quantile_l, 1.0, size=size)
-
-    return stats.t.ppf(
-        probs,
-        df=df,
-        loc=loc,
-        scale=scale,
-    )
+from scipy import stats
 
 
 def truncated_normal_rvs(
@@ -37,6 +21,7 @@ def truncated_normal_rvs(
     size: int = 1,
     random_state: int = None,
 ) -> np.ndarray:
+    """Sample from a truncated normal distribution with a lower bound."""
     quantile_l = stats.norm.cdf(lower, loc=loc, scale=scale)
 
     if random_state is not None:
@@ -51,62 +36,8 @@ def truncated_normal_rvs(
     )
 
 
-def truncated_normal_moments(loc: float, scale: float, lower: float = 0.0, moment: str = "m"):
-    a = (lower - loc) / scale
-
-    result = stats.truncnorm.stats(a, np.inf, loc=loc, scale=scale, moments=moment)
-
-    if moment == "v":
-        return np.sqrt(result)
-
-    return result
-
-
-def log_truncated_normal_moments(loc: float, scale: float, lower: float = 0.0, moment: str = "m", size=1000000):
-    a = (lower - loc) / scale
-
-    x = np.log(stats.truncnorm.rvs(a, np.inf, loc=loc, scale=scale, size=size))
-
-    if moment == "v":
-        return np.std(x)
-
-    return x.mean()
-
-
-def gamma_moments(shape: float, scale: float, moment: str):
-    result = stats.gamma.stats(a=shape, scale=scale, moments=moment)
-
-    if moment == "v":
-        return np.sqrt(result)
-
-    return result
-
-
-def log_gamma_mean(shape, scale):
-    return special.digamma(shape) + np.log(scale)
-
-
-def log_gamma_sd(shape):
-    return np.sqrt(special.polygamma(1, shape))
-
-
-def log_gamma_moments(shape: float, scale: float, moment: str):
-    if moment == "v":
-        return log_gamma_sd(shape)
-
-    return log_gamma_mean(shape, scale)
-
-
-def probit_beta_moments(shape: float, scale: float, moment: str, size=1000000):
-    x = stats.norm.ppf(stats.beta.rvs(shape, scale, size=size))
-
-    if moment == "v":
-        return np.std(x)
-
-    return x.mean()
-
-
 def rdm_prior_simple(
+    batch_shape,
     drift_intercept_loc,
     drift_intercept_scale,
     drift_slope_loc,
@@ -120,115 +51,178 @@ def rdm_prior_simple(
     t0_lower,
     rng,
 ):
+    """Sample from a custom prior for the racing diffusion model with two accumulators."""
     drift_intercept = truncated_normal_rvs(
-        drift_intercept_loc, drift_intercept_scale, random_state=rng
+        drift_intercept_loc, drift_intercept_scale, size=batch_shape, random_state=rng,
     )
     drift_slope = truncated_normal_rvs(
-        drift_slope_loc, drift_slope_scale, random_state=rng
+        drift_slope_loc, drift_slope_scale, size=batch_shape, random_state=rng,
     )
-    sd_true = rng.gamma(
-        shape=sd_true_shape, scale=sd_true_scale
-    )
-    threshold = rng.gamma(
-        shape=threshold_shape, scale=threshold_scale
-    )
-    t0 = truncated_normal_rvs(t0_loc, t0_scale, lower=t0_lower, random_state=rng)
+    sd_true = rng.gamma(shape=sd_true_shape, scale=sd_true_scale, size=batch_shape)
+    threshold = rng.gamma(shape=threshold_shape, scale=threshold_scale, size=batch_shape)
+    t0 = truncated_normal_rvs(t0_loc, t0_scale, lower=t0_lower, size=batch_shape, random_state=rng)
 
-    return {"v_intercept": drift_intercept, "v_slope": drift_slope, "s_true": sd_true, "b": threshold, "t0": t0}
-
-
-def rdm_prior_multivariate(
-    means,
-    stds,
-    corr_mat,
-    size=1,
-    rng=None,
-):
-    cov_mat = np.diag(stds).dot(corr_mat).dot(np.diag(stds))
-
-    return np.exp(stats.multivariate_normal(means, cov_mat).rvs(random_state=rng, size=size))
+    return {
+        "v_intercept": drift_intercept,
+        "v_slope": drift_slope,
+        "s_true": sd_true,
+        "b": threshold,
+        "t0": t0,
+    }
 
 
-def rdmc_prior_simple(
+def lba_prior_simple(
     batch_shape,
-    drift_c_intercept_loc,
-    drift_c_intercept_scale,
-    drift_c_slope_loc,
-    drift_c_slope_scale,
-    amp_shape,
-    amp_scale,
-    tau_shape,
-    tau_scale,
+    drift_intercept_loc,
+    drift_intercept_scale,
+    drift_slope_loc,
+    drift_slope_scale,
     sd_true_shape,
     sd_true_scale,
+    sp_max_shape,
+    sp_max_scale,
     threshold_shape,
     threshold_scale,
     t0_loc,
     t0_scale,
+    t0_lower,
     rng,
 ):
-    drift_c_intercept = truncated_normal_rvs(drift_c_intercept_loc, drift_c_intercept_scale, size=batch_shape, random_state=rng)
-    drift_c_slope = truncated_normal_rvs(drift_c_slope_loc, drift_c_slope_scale, size=batch_shape, random_state=rng)
-    amp = rng.gamma(shape=amp_shape, scale=amp_scale, size=batch_shape)
-    tau = rng.gamma(shape=tau_shape, scale=tau_scale, size=batch_shape)
-    s_true = rng.gamma(shape=sd_true_shape, scale=sd_true_scale, size=batch_shape)
-    b = rng.gamma(shape=threshold_shape, scale=threshold_scale, size=batch_shape)
-    t0 = truncated_normal_rvs(t0_loc, t0_scale, size=batch_shape, random_state=rng)
-    s_false = 1
+    """Sample from a custom prior for the linear ballistic accumulator with two accumulators.
 
-    scale = 1000
+    Mirrors `rdm_prior_simple`, but with two start-point parameters in place of the RDM's single
+    threshold: the start-point range `A`, and the threshold *gap* `B = b - A` (Heathcote & Love
+    2012). Sampling the gap rather than the threshold makes `b > A` true by construction -- the
+    LBA is degenerate otherwise, since a start point above threshold would mean an instant
+    response -- and decorrelates the pair, which a diagonal MCMC mass matrix handles far better.
+    `threshold_shape`/`threshold_scale` therefore parameterize `B`, not `b`; the hyperparameter
+    names are kept so `experiment_*/fit_mcmc_gpu.py` needs no changes.
 
-    s_true = s_true / np.sqrt(scale)
-    s_false = s_false / np.sqrt(scale)
-    drift_c_intercept = drift_c_intercept / scale
-    drift_c_slope = drift_c_slope / scale
-    tau = tau * scale
+    Returned keys are ordered to match `conf/approximator/adapter/lba_simple.yaml` and the
+    unconstrained position vector built by `lba_jax.make_lba_simple_logdensity`.
+    """
+    drift_intercept = truncated_normal_rvs(
+        drift_intercept_loc, drift_intercept_scale, size=batch_shape, random_state=rng,
+    )
+    drift_slope = truncated_normal_rvs(
+        drift_slope_loc, drift_slope_scale, size=batch_shape, random_state=rng,
+    )
+    sd_true = rng.gamma(shape=sd_true_shape, scale=sd_true_scale, size=batch_shape)
+    sp_max = rng.gamma(shape=sp_max_shape, scale=sp_max_scale, size=batch_shape)
+    sp_gap = rng.gamma(shape=threshold_shape, scale=threshold_scale, size=batch_shape)
+    t0 = truncated_normal_rvs(t0_loc, t0_scale, lower=t0_lower, size=batch_shape, random_state=rng)
 
-    return {"v_c_intercept": drift_c_intercept, "v_c_slope": drift_c_slope, "amp": amp, "tau": tau, "s_true": s_true, "b": b, "t0": t0, "s_false": s_false}
+    return {
+        "v_intercept": drift_intercept,
+        "v_slope": drift_slope,
+        "s_true": sd_true,
+        "A": sp_max,
+        "B": sp_gap,
+        "t0": t0,
+    }
 
 
-def rrdmc_prior_simple(
+def rdm_prior_sat(
     batch_shape,
-    drift_c_intercept_loc,
-    drift_c_intercept_scale,
-    drift_c_slope_loc,
-    drift_c_slope_scale,
-    drift_a_intercept_loc,
-    drift_a_intercept_scale,
-    drift_a_slope_loc,
-    drift_a_slope_scale,
-    initial_shape,
-    initial_scale,
-    decay_shape,
-    decay_scale,
+    drift_intercept_loc,
+    drift_intercept_scale,
+    drift_slope_loc,
+    drift_slope_scale,
     sd_true_shape,
     sd_true_scale,
     threshold_shape,
     threshold_scale,
+    threshold_diff_shape,
+    threshold_diff_scale,
     t0_loc,
     t0_scale,
+    t0_lower,
     rng,
 ):
-    drift_c_intercept = truncated_normal_rvs(drift_c_intercept_loc, drift_c_intercept_scale, size=batch_shape, random_state=rng)
-    drift_c_slope = truncated_normal_rvs(drift_c_slope_loc, drift_c_slope_scale, size=batch_shape, random_state=rng)
-    drift_a_intercept = truncated_normal_rvs(drift_a_intercept_loc, drift_a_intercept_scale, size=batch_shape, random_state=rng)
-    drift_a_slope = truncated_normal_rvs(drift_a_slope_loc, drift_a_slope_scale, size=batch_shape, random_state=rng)
-    A0 = rng.beta(initial_shape, initial_scale, size=batch_shape)
-    k = rng.gamma(shape=decay_shape, scale=decay_scale, size=batch_shape)
-    s_true = rng.gamma(shape=sd_true_shape, scale=sd_true_scale, size=batch_shape)
-    b = rng.gamma(shape=threshold_shape, scale=threshold_scale, size=batch_shape)
-    t0 = truncated_normal_rvs(t0_loc, t0_scale, size=batch_shape, random_state=rng)
+    """Prior for the racing diffusion model with a speed-vs-accuracy manipulation.
 
-    s_false = 1
+    `rdm_prior_simple` plus `b_diff`, the amount by which the threshold is raised under the
+    accuracy instruction. Sampling the *difference* rather than a second threshold keeps
+    `b_accuracy > b_speed` true by construction and leaves every parameter positive, so the
+    same log-transform unconstrains the whole vector (cf. the `A`/`B` parameterization in
+    `lba_prior_simple`).
 
-    scale = 1000
+    `threshold_diff_scale` is the hyperparameter study 3 shifts between training and test:
+    it sets the expected size of the speed-accuracy effect, `threshold_diff_shape *
+    threshold_diff_scale`.
 
-    s_true = s_true / np.sqrt(scale)
-    s_false = s_false / np.sqrt(scale)
-    drift_c_intercept = drift_c_intercept / scale
-    drift_c_slope = drift_c_slope / scale
-    drift_a_intercept = drift_a_intercept / scale
-    drift_a_slope = drift_a_slope / scale
-    k = k / scale
+    Returned keys are ordered to match `conf/approximator/adapter/rdm_sat.yaml` and the
+    unconstrained position vector built by `rdm_jax.make_rdm_sat_logdensity`.
+    """
+    drift_intercept = truncated_normal_rvs(
+        drift_intercept_loc, drift_intercept_scale, size=batch_shape, random_state=rng,
+    )
+    drift_slope = truncated_normal_rvs(
+        drift_slope_loc, drift_slope_scale, size=batch_shape, random_state=rng,
+    )
+    sd_true = rng.gamma(shape=sd_true_shape, scale=sd_true_scale, size=batch_shape)
+    threshold = rng.gamma(shape=threshold_shape, scale=threshold_scale, size=batch_shape)
+    threshold_diff = rng.gamma(shape=threshold_diff_shape, scale=threshold_diff_scale, size=batch_shape)
+    t0 = truncated_normal_rvs(t0_loc, t0_scale, lower=t0_lower, size=batch_shape, random_state=rng)
 
-    return {"v_c_intercept": drift_c_intercept, "v_c_slope": drift_c_slope, "v_a_intercept": drift_a_intercept, "v_a_slope": drift_a_slope, "A0": A0, "k": k, "s_true": s_true, "b": b, "t0": t0, "s_false": s_false}
+    return {
+        "v_intercept": drift_intercept,
+        "v_slope": drift_slope,
+        "s_true": sd_true,
+        "b": threshold,
+        "b_diff": threshold_diff,
+        "t0": t0,
+    }
+
+
+def lba_prior_sat(
+    batch_shape,
+    drift_intercept_loc,
+    drift_intercept_scale,
+    drift_slope_loc,
+    drift_slope_scale,
+    sd_true_shape,
+    sd_true_scale,
+    sp_max_shape,
+    sp_max_scale,
+    threshold_shape,
+    threshold_scale,
+    threshold_diff_shape,
+    threshold_diff_scale,
+    t0_loc,
+    t0_scale,
+    t0_lower,
+    rng,
+):
+    """Prior for the linear ballistic accumulator with a speed-vs-accuracy manipulation.
+
+    `lba_prior_simple` plus `B_diff`, the amount by which the accuracy instruction raises the
+    threshold *gap* -- so the threshold is `A + B` under speed and `A + B + B_diff` under
+    accuracy, and `b > A` still holds structurally in both conditions. The RDM counterpart is
+    `rdm_prior_sat`; `threshold_diff_scale` is the hyperparameter study 3 shifts between
+    training and test in both models.
+
+    Returned keys are ordered to match `conf/approximator/adapter/lba_sat.yaml` and the
+    unconstrained position vector built by `lba_jax.make_lba_sat_logdensity`.
+    """
+    drift_intercept = truncated_normal_rvs(
+        drift_intercept_loc, drift_intercept_scale, size=batch_shape, random_state=rng,
+    )
+    drift_slope = truncated_normal_rvs(
+        drift_slope_loc, drift_slope_scale, size=batch_shape, random_state=rng,
+    )
+    sd_true = rng.gamma(shape=sd_true_shape, scale=sd_true_scale, size=batch_shape)
+    sp_max = rng.gamma(shape=sp_max_shape, scale=sp_max_scale, size=batch_shape)
+    sp_gap = rng.gamma(shape=threshold_shape, scale=threshold_scale, size=batch_shape)
+    sp_gap_diff = rng.gamma(shape=threshold_diff_shape, scale=threshold_diff_scale, size=batch_shape)
+    t0 = truncated_normal_rvs(t0_loc, t0_scale, lower=t0_lower, size=batch_shape, random_state=rng)
+
+    return {
+        "v_intercept": drift_intercept,
+        "v_slope": drift_slope,
+        "s_true": sd_true,
+        "A": sp_max,
+        "B": sp_gap,
+        "B_diff": sp_gap_diff,
+        "t0": t0,
+    }

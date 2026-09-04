@@ -2,4 +2,6 @@
 
 defaults:
 - override /simulator: rdm
+- override /mcmc: rdm
 - override /approximator/adapter: rdm_simple
+

@@ -1,0 +1,28 @@
+# @package _global_
+
+# Everything the MCMC side of the simple LBA needs: the log-density, the parameter vector
+# it is defined over, and the pair of transforms between natural and unconstrained space.
+# The hyperparameters are interpolated from the simulator's prior, so the MCMC prior and
+# the training prior cannot drift apart -- and no script needs to reach into the config to
+# bind them by hand.
+mcmc_param_names: ["v_intercept", "v_slope", "s_true", "A", "B", "t0"]
+
+mcmc_model_fun:
+  _target_: lba_jax.make_lba_simple_logdensity
+  _partial_: true
+  drift_slope_loc: ${simulator.prior_simulator.sample_fn.drift_slope_loc}
+  threshold_scale: ${simulator.prior_simulator.sample_fn.threshold_scale}
+
+mcmc_to_unconstrained:
+  _target_: hydra.utils.get_method
+  path: mcmc.simple_to_unconstrained
+
+mcmc_to_constrained:
+  _target_: hydra.utils.get_method
+  path: mcmc.simple_to_constrained
+
+# Order matches the unconstrained position the log-density expects, i.e. mcmc_param_names.
+mcmc_sampling_fun:
+  init_position:
+    _target_: numpy.array
+    object: [1, 2, 1, 0.5, 1.0, 0.2]

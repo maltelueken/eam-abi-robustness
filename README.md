@@ -1,8 +1,55 @@
-Model training and analysis pipeline for assessing the robustness of amortized Bayesian inference for evidence accumulation models.
+Model training and analysis pipeline for assessing the generalization of amortized Bayesian inference for
+evidence accumulation models.
+
+This code supplements the paper "Generalization in neural posterior estimation: Case studies with the racing
+diffusion model" (LINK).
+
+## Overview
+
+- `conf`: This directory contains Hydra configuration files. See https://hydra.cc/docs/intro/ for details.
+- `scripts`: One Python script per pipeline stage, shared by all four studies. Which study a run
+belongs to is a configuration choice (`experiment=experiment_1|experiment_2|experiment_3|experiment_4`),
+not a different script. See `scripts/README.md`.
+- `multirun`: Contains results from the hyperparameter optimization. See Fig Share (LINK).
+- `outputs`: Contains all other results and simulated data. See Fig Share (LINK).
+- `slurm`: Slurm submission scripts (`submit.sh` plus the job table in `jobs.tsv`).
+- `src`: Python modules with the model implementations and utility functions used in the scripts.
+- `tests`: Unit tests.
+- `visualization`: R code for creating the figures in the paper.
+
+The paper reports four studies: three simulation studies and an empirical one.
+
+| study | what varies between training and test | test cases |
+|---|---|---|
+| `experiment_1` | the number of observations per dataset | a sweep of `num_obs` |
+| `experiment_2` | two prior hyperparameters | a 5 x 5 grid of `drift_slope_loc` x `threshold_scale` |
+| `experiment_3` | the prior on the speed-vs-accuracy threshold difference | a sweep of `threshold_diff_scale` |
+| `experiment_4` | (empirical data) | one case per subject file |
+
+Study 3 simulates a speed-vs-accuracy manipulation: every dataset contains a speed-instructed and an
+accuracy-instructed block of trials, differing only in response threshold. The test cases shift the
+prior on that threshold *difference* away from the prior the approximator was trained on. Its models
+are `conf/model/rdm_sat*.yaml` for the racing diffusion model and `conf/model/lba_sat*.yaml` for the
+linear ballistic accumulator.
+
+## Running the pipeline
+
+```console
+python scripts/train_npe.py         experiment=experiment_1 model=rdm_simple
+python scripts/generate_test_data.py experiment=experiment_1 model=rdm_simple
+python scripts/predict_npe.py       experiment=experiment_1 model=rdm_simple
+python scripts/fit_mcmc_gpu.py      experiment=experiment_1 model=rdm_simple
+python scripts/check_robustness.py  experiment=experiment_1 model=rdm_simple
+```
+
+Simulated data and posterior samples are stored as NetCDF (`.nc`). Artifacts produced by earlier
+versions of the pipeline are HDF5; convert them with `scripts/convert_hdf5_to_netcdf.py`.
 
 ## Installation
 
-To install eam_abi_robustness from GitHub repository, do:
+While this repository contains mainly scripts, it can also be installed as a Python package for easy usage.
+
+To install the package `eam_abi_robustness` from this GitHub repository, do:
 
 ```console
 git clone git@github.com:maltelueken/eam_abi_robustness.git

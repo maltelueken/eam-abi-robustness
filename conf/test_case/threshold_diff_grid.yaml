@@ -1,0 +1,19 @@
+# @package _global_
+
+# Study 3: sweep the scale of the prior on the speed-accuracy threshold difference, at a fixed
+# sample size. The centre of the grid (0.1) is the value conf/simulator/prior_simulator/
+# rdm_sat.yaml trains on, so the sweep runs symmetrically from priors far below the trained-on
+# effect size to priors far above it. The name must match the one randomized in
+# conf/simulator/meta_simulator/random_prior_meta_continuous_sat.yaml.
+test_case:
+  _target_: cases.prior_param_grid
+  name: threshold_diff_scale
+  num_obs: ${test_num_obs}
+  values:
+    _target_: numpy.round
+    a:
+      _target_: numpy.linspace
+      start: 0.02
+      stop: 0.18
+      num: 5
+    decimals: 3

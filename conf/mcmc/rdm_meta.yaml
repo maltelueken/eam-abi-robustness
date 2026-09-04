@@ -1,0 +1,48 @@
+# @package _global_
+
+# The hierarchical RDM samples the two prior hyperparameters alongside the
+# subject-level parameters, so its parameter vector is longer than the NPE's; the check
+# scripts select by name. The bounds come from the meta simulator, so the Sigmoid bijector
+# used to fit matches the Uniform the data were generated under -- and the `_lower`/
+# `_upper` model variants, which narrow those bounds, stay consistent automatically.
+mcmc_bounds:
+  param_1_lower: ${simulator.meta_simulator.sample_fn.min_value[0]}
+  param_1_upper: ${simulator.meta_simulator.sample_fn.max_value[0]}
+  param_2_lower: ${simulator.meta_simulator.sample_fn.min_value[1]}
+  param_2_upper: ${simulator.meta_simulator.sample_fn.max_value[1]}
+
+mcmc_param_names: ["drift_slope_loc", "threshold_scale", "v_intercept", "v_slope", "s_true", "b", "t0"]
+
+mcmc_model_fun:
+  _target_: rdm_jax.make_rdm_meta_logdensity
+  _partial_: true
+  drift_slope_loc_lower: ${mcmc_bounds.param_1_lower}
+  drift_slope_loc_upper: ${mcmc_bounds.param_1_upper}
+  threshold_scale_lower: ${mcmc_bounds.param_2_lower}
+  threshold_scale_upper: ${mcmc_bounds.param_2_upper}
+
+mcmc_to_unconstrained:
+  _target_: mcmc.make_meta_to_unconstrained
+  param_1_lower: ${mcmc_bounds.param_1_lower}
+  param_1_upper: ${mcmc_bounds.param_1_upper}
+  param_2_lower: ${mcmc_bounds.param_2_lower}
+  param_2_upper: ${mcmc_bounds.param_2_upper}
+
+mcmc_to_constrained:
+  _target_: mcmc.make_meta_to_constrained
+  param_1_lower: ${mcmc_bounds.param_1_lower}
+  param_1_upper: ${mcmc_bounds.param_1_upper}
+  param_2_lower: ${mcmc_bounds.param_2_lower}
+  param_2_upper: ${mcmc_bounds.param_2_upper}
+
+# Start the two hyperparameters at the midpoint of their support: a fixed starting value
+# falls outside the narrowed bounds of the `_lower`/`_upper` variants, and the Sigmoid
+# inverse of an out-of-bounds value is NaN.
+mcmc_sampling_fun:
+  init_position:
+    _target_: mcmc.meta_init_position
+    param_1_lower: ${mcmc_bounds.param_1_lower}
+    param_1_upper: ${mcmc_bounds.param_1_upper}
+    param_2_lower: ${mcmc_bounds.param_2_lower}
+    param_2_upper: ${mcmc_bounds.param_2_upper}
+    subject_init: [1, 2, 1, 1, 0.2]

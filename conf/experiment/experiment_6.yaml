@@ -1,0 +1,24 @@
+# @package _global_
+
+# Study 6: hold the prior fixed and manipulate the response times of the generated data.
+# The prior is study 2's full meta prior; each training condition and each test case keeps only
+# simulated datasets whose response times all fall in a window -- `min(rt) >= lower` and
+# `max(rt) <= upper` -- the dataset-level analogue of the response-time filter applied to
+# empirical data.
+#
+# As in study 5 the window is a deterministic function of `x`, so the selection indicator
+# cancels out of `p(theta | x, rt in window) = p(theta | x)`: the MCMC reference needs no
+# truncation term and the four conditions of a family share one set of fits. What the study
+# measures is again amortization coverage -- how an approximator degrades on data it was never
+# shown -- rather than the prior misspecification of studies 2 and 3.
+#
+# Note that this cancellation is what *discarding whole datasets* buys. Trimming the offending
+# trials instead would censor `x`, and the MCMC log-density would need a per-trial
+# `- log P(lower < rt < upper | theta)` to stay the right reference.
+defaults:
+- experiment_1
+- override /test_case: rt_windows
+
+diag_batch_size: 1000
+
+test_num_obs: 500

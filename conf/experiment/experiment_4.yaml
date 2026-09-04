@@ -1,0 +1,9 @@
+# @package _global_
+
+defaults:
+- experiment_1
+- override /test_case: subject_files
+
+test_num_obs: 100
+
+test_num_posterior_predictive_samples: 100

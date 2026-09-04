@@ -111,6 +111,57 @@ prior_stats	experiment_3	lba_sat_upper
 prior_stats	experiment_3	lba_sat_meta
 prior_stats	experiment_3	lba_sat_meta_lower
 prior_stats	experiment_3	lba_sat_meta_upper
+prior_distance	experiment_2	rdm_simple
+prior_distance	experiment_2	rdm_simple_lower
+prior_distance	experiment_2	rdm_simple_upper
+prior_distance	experiment_2	rdm_simple_meta
+prior_distance	experiment_2	rdm_simple_meta_lower
+prior_distance	experiment_2	rdm_simple_meta_upper
+prior_distance	experiment_2	lba_simple
+prior_distance	experiment_2	lba_simple_lower
+prior_distance	experiment_2	lba_simple_upper
+prior_distance	experiment_2	lba_simple_meta
+prior_distance	experiment_2	lba_simple_meta_lower
+prior_distance	experiment_2	lba_simple_meta_upper
+prior_distance	experiment_3	rdm_sat
+prior_distance	experiment_3	rdm_sat_lower
+prior_distance	experiment_3	rdm_sat_upper
+prior_distance	experiment_3	rdm_sat_meta
+prior_distance	experiment_3	rdm_sat_meta_lower
+prior_distance	experiment_3	rdm_sat_meta_upper
+prior_distance	experiment_3	lba_sat
+prior_distance	experiment_3	lba_sat_lower
+prior_distance	experiment_3	lba_sat_upper
+prior_distance	experiment_3	lba_sat_meta
+prior_distance	experiment_3	lba_sat_meta_lower
+prior_distance	experiment_3	lba_sat_meta_upper
+# Study 4 measures the distance from the training simulations to the *empirical* subject
+# data, in the summary network's space -- the amortization gap that study exists to probe.
+# Same four models predict_npe uses, since it borrows study 2's networks.
+prior_distance	experiment_4	rdm_simple
+prior_distance	experiment_4	rdm_simple_meta
+prior_distance	experiment_4	lba_simple
+prior_distance	experiment_4	lba_simple_meta
+# Studies 5 and 6 get the summary-space row only: their band rejects datasets rather than
+# shifting the prior, so there is no density to take a KL against. Affordable despite the
+# rejection rates because only `prior_distance_mmd_draws` datasets are simulated per case --
+# unlike prior_stats, which needs `prior_stats_num_draws` of them and so has no rows here.
+prior_distance	experiment_5	rdm_simple_meta_acc_low
+prior_distance	experiment_5	rdm_simple_meta_acc_medium
+prior_distance	experiment_5	rdm_simple_meta_acc_high
+prior_distance	experiment_5	rdm_simple_meta_acc_full
+prior_distance	experiment_5	lba_simple_meta_acc_low
+prior_distance	experiment_5	lba_simple_meta_acc_medium
+prior_distance	experiment_5	lba_simple_meta_acc_high
+prior_distance	experiment_5	lba_simple_meta_acc_full
+prior_distance	experiment_6	rdm_simple_meta_rt_tight
+prior_distance	experiment_6	rdm_simple_meta_rt_medium
+prior_distance	experiment_6	rdm_simple_meta_rt_wide
+prior_distance	experiment_6	rdm_simple_meta_rt_full
+prior_distance	experiment_6	lba_simple_meta_rt_tight
+prior_distance	experiment_6	lba_simple_meta_rt_medium
+prior_distance	experiment_6	lba_simple_meta_rt_wide
+prior_distance	experiment_6	lba_simple_meta_rt_full
 fit_mcmc_gpu	experiment_1	rdm_simple
 fit_mcmc_gpu	experiment_1	lba_simple
 fit_mcmc_gpu	experiment_2	rdm_simple

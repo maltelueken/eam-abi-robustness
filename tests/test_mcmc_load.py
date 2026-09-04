@@ -44,9 +44,14 @@ def test_meta_transform_pair_are_inverses_and_respect_the_bounds():
     x = np.array([1.5, 1.0, 2.0, 1.0, 1.5, 0.2])
     assert np.allclose(np.asarray(to_constrained(to_unconstrained(x))), x)
 
-    # Whatever the unconstrained value, the hyperparameter lands inside its support.
-    extreme = to_constrained(np.array([40.0, 0.0, 0.0, 0.0, 0.0, 0.0]))
-    assert LOWER[0] <= float(extreme[0]) <= UPPER[0]
+    # Whatever the unconstrained value, the hyperparameter lands inside its support -- to within
+    # the float32 resolution the Sigmoid saturates at. A bound that is not exactly representable
+    # in binary (neither 0.7 nor 3.9 is) can come back an ulp outside itself, which only happens
+    # once the Sigmoid has fully saturated, far outside anything a warmed-up chain visits.
+    tol = 1e-6
+    for y in (-40.0, 40.0):
+        extreme = to_constrained(np.array([y, 0.0, 0.0, 0.0, 0.0, 0.0]))
+        assert LOWER[0] - tol <= float(extreme[0]) <= UPPER[0] + tol
 
 
 def test_it_back_transforms_and_thins_to_the_requested_sample_count(tmp_path):

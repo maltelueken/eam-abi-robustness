@@ -39,3 +39,13 @@ mcmc_sampling_fun:
     lower: ${mcmc_bounds.lower}
     upper: ${mcmc_bounds.upper}
     subject_init: [1, 2, 1, 1, 0.5, 0.2]
+
+# The prior's density, for scripts/prior_distance.py. Separate from `mcmc_model_fun`, which folds
+# the prior into the posterior log-density the sampler needs; the hyperparameters interpolate from
+# the same place, so the measured prior and the fitted prior cannot drift apart either.
+mcmc_log_prior_fun:
+  _target_: rdm_jax.make_rdm_sat_log_prior
+  drift_slope_loc: ${simulator.prior_simulator.sample_fn.drift_slope_loc}
+  threshold_scale: ${simulator.prior_simulator.sample_fn.threshold_scale}
+  threshold_diff_shape: ${simulator.prior_simulator.sample_fn.threshold_diff_shape}
+  threshold_diff_scale: ${simulator.prior_simulator.sample_fn.threshold_diff_scale}

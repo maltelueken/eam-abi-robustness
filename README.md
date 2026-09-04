@@ -49,6 +49,7 @@ python scripts/generate_test_data.py experiment=experiment_1 model=rdm_simple
 python scripts/predict_npe.py       experiment=experiment_1 model=rdm_simple
 python scripts/fit_mcmc_gpu.py      experiment=experiment_1 model=rdm_simple
 python scripts/check_robustness.py  experiment=experiment_1 model=rdm_simple
+python scripts/prior_distance.py    experiment=experiment_2 model=rdm_simple
 ```
 
 Simulated data and posterior samples are stored as NetCDF (`.nc`). Artifacts produced by earlier

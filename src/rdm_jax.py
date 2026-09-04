@@ -548,3 +548,46 @@ def make_rdm_sat_meta_logdensity(
         return log_prior + jacobian + log_lik
 
     return logdensity_fn
+
+
+def _log_prior_factory(term_fn, num_params, fixed):
+    """Turn one of this module's log-prior terms into a callable over a matrix of draws.
+
+    `scripts/prior_distance.py` needs the prior's *density*, not the posterior log-density the
+    samplers are built from, and it needs it at hyperparameter values other than the one a model
+    trains on: a hierarchical model's training prior is the mixture over everything its meta
+    simulator randomizes, which is a quadrature over that hyperparameter. So the returned callable
+    takes the fixed hyperparameters from the config and lets a caller override any of them, the
+    same way a test case's kwargs override the `_partial_` in a prior simulator's yaml.
+
+    `params` is `(..., num_params)` in the order of `mcmc_param_names`, and every term broadcasts,
+    so passing `params[:, None, :]` against a `(grid,)` hyperparameter evaluates the whole
+    quadrature at once.
+    """
+
+    def log_prior(params, **overrides):
+        params = jnp.asarray(params)
+        return term_fn(*(params[..., index] for index in range(num_params)), **{**fixed, **overrides})
+
+    return log_prior
+
+
+def make_rdm_simple_log_prior(drift_slope_loc, threshold_scale):
+    """The simple RDM's prior density over `mcmc_param_names`, as a function of the draws."""
+    return _log_prior_factory(
+        _rdm_simple_log_prior, 5,
+        {"drift_slope_loc": drift_slope_loc, "threshold_scale": threshold_scale},
+    )
+
+
+def make_rdm_sat_log_prior(drift_slope_loc, threshold_scale, threshold_diff_shape, threshold_diff_scale):
+    """The speed-accuracy RDM's prior density over `mcmc_param_names`."""
+    return _log_prior_factory(
+        _rdm_sat_log_prior, 6,
+        {
+            "drift_slope_loc": drift_slope_loc,
+            "threshold_scale": threshold_scale,
+            "threshold_diff_shape": threshold_diff_shape,
+            "threshold_diff_scale": threshold_diff_scale,
+        },
+    )

@@ -35,6 +35,7 @@ The factory returns the `EnsembleApproximator` rather than the workflow that bui
 """
 
 import bayesflow as bf
+import numpy as np
 from hydra.utils import instantiate
 
 # Below two members `EnsembleOnlineDataset` refuses to build, and the spread this module
@@ -101,3 +102,26 @@ def sample_members(approximator, conditions, num_samples):
         )
 
     return {"0": approximator.sample(conditions=conditions, num_samples=num_samples)}
+
+
+def summarize_members(approximator, conditions):
+    """Each member's learned summary statistics for `conditions`, as `{member: (dataset, feature)}`.
+
+    The counterpart of `sample_members` on the other side of the network: where that reads what a
+    member infers, this reads what it *sees*. `scripts/prior_distance.py` compares training and
+    test data here rather than in a hand-picked statistic, because this is the representation the
+    inference network is actually conditioned on -- two datasets that the summary network maps to
+    the same place are indistinguishable to the NPE no matter how far apart their raw parameters
+    were, and two that it separates are a gap no amount of inference-network capacity can close.
+
+    Members are kept apart for the same reason `sample_members` keeps them apart: they are
+    separately initialised summary networks, and the spread across them is the variability
+    attributable to this particular approximator rather than to the method.
+    """
+    if isinstance(approximator, bf.approximators.EnsembleApproximator):
+        return {
+            name: np.asarray(member.summarize(conditions))
+            for name, member in approximator.approximators.items()
+        }
+
+    return {"0": np.asarray(approximator.summarize(conditions))}

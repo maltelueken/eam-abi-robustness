@@ -25,6 +25,11 @@ hydra:
           - summary-method
           - mcmc
           - test_case
+          # Not a group choice: `prior_distance` reads the checkpoint `train_npe` wrote, and
+          # this knob means nothing to `train_npe`. Left in the suffix it would move only the
+          # reader's run directory, and the reader would look for a model nothing had written.
+          - prior_distance_num_draws
+          - prior_distance_mmd_draws
   job_logging:
     handlers:
       file:
@@ -62,6 +67,19 @@ test_num_posterior_samples: 2000
 # scripts/prior_stats.py: the figures take 0.1% and 99.9% quantiles of these draws, which
 # needs far more than test_batch_size samples to be meaningful.
 prior_stats_num_draws: 20000
+
+# scripts/prior_distance.py: two samples of this size per test case. The KL is a Monte Carlo
+# average over these draws, costing memory linear in the count, so it can afford to be large --
+# it is the *dataset* count, and each dataset is `test_num_obs` trials, the same simulation the
+# test data themselves cost.
+prior_distance_num_draws: 20000
+
+# The MMD is not linear: it builds a kernel matrix over every pair of draws, so its cost grows
+# with the square of this and with the summary network's width, and unlike the KL above every one
+# of these draws is a simulated dataset. A two-sample MMD is well resolved at this size, it keeps
+# the narrow-band conditions of studies 5 and 6 affordable despite their rejection rates, and it
+# is the order of the empirical sample study 4 compares against anyway.
+prior_distance_mmd_draws: 100
 
 psrf_threshold: 1.01
 

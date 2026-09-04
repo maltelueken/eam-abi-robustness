@@ -46,6 +46,7 @@ import jax.numpy as jnp
 from jax.scipy import stats as jstats
 from tensorflow_probability.substrates import jax as tfp
 from rdm_jax import _as_scalar
+from rdm_jax import _log_prior_factory
 from rdm_jax import _finalize_race_logp
 from rdm_jax import batched_experiment
 from rdm_jax import sat_conditions
@@ -516,3 +517,24 @@ def make_lba_sat_meta_logdensity(
         return log_prior + jacobian + log_lik
 
     return logdensity_fn
+
+
+def make_lba_simple_log_prior(drift_slope_loc, threshold_scale):
+    """The simple LBA's prior density over `mcmc_param_names`, as a function of the draws."""
+    return _log_prior_factory(
+        _lba_simple_log_prior, 6,
+        {"drift_slope_loc": drift_slope_loc, "threshold_scale": threshold_scale},
+    )
+
+
+def make_lba_sat_log_prior(drift_slope_loc, threshold_scale, threshold_diff_shape, threshold_diff_scale):
+    """The speed-accuracy LBA's prior density over `mcmc_param_names`."""
+    return _log_prior_factory(
+        _lba_sat_log_prior, 7,
+        {
+            "drift_slope_loc": drift_slope_loc,
+            "threshold_scale": threshold_scale,
+            "threshold_diff_shape": threshold_diff_shape,
+            "threshold_diff_scale": threshold_diff_scale,
+        },
+    )

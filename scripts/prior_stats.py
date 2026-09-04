@@ -5,8 +5,15 @@ to produce it was lost, leaving those figures unreproducible from the repository
 
 Draws come from the full simulator rather than the prior alone, so the table reflects what a
 model is actually trained on: study 5's approximators see the prior *restricted* to an accuracy
-band, and the accuracy rows below are what those figures shade. Simulating a dataset per draw
-used to be prohibitive here; since the simulators were vectorized it costs about a second.
+band and study 6's to a response-time window, and the `accuracy` / `rt_min` / `rt_max` rows below
+are what those figures shade. Simulating a dataset per draw used to be prohibitive here; since
+the simulators were vectorized it costs about a second.
+
+A narrow band makes this expensive in a way the rejection sampler cannot absorb: at study 6's
+tightest window roughly one draw in twenty is kept, so `prior_stats_num_draws` accepted datasets
+need more simulation than `max_rounds` rounds allow, and the run aborts rather than quietly
+returning a short table. Those conditions' training windows are constants in the yaml, so the
+figures shade them directly instead.
 """
 
 import logging
@@ -17,7 +24,7 @@ from hydra.utils import instantiate
 from omegaconf import DictConfig
 
 from config import get_param_names
-from pipeline import accuracy, setup
+from pipeline import accuracy, rt_range, setup
 from results import write_long_csv
 
 logger = logging.getLogger(__name__)
@@ -39,11 +46,19 @@ def prior_stats(cfg: DictConfig):
         for index, value in enumerate(np.reshape(prior_dict[param], -1))
     ]
 
-    # One row per draw for the accuracy its parameters produce, so the figures can shade the
-    # range of performance a model was trained on, not only the range of each parameter.
+    # One row per draw for the accuracy and the response-time bounds its parameters produce,
+    # so the figures can shade the range of *data* a model was trained on, not only the range of
+    # each parameter. These are what studies 5 and 6 respectively select on.
+    lowest_rt, highest_rt = rt_range(prior_dict["x"])
+
     records += [
-        {"draw": index, "param": "accuracy", "value": float(value)}
-        for index, value in enumerate(accuracy(prior_dict["x"]))
+        {"draw": index, "param": name, "value": float(value)}
+        for name, values in (
+            ("accuracy", accuracy(prior_dict["x"])),
+            ("rt_min", lowest_rt),
+            ("rt_max", highest_rt),
+        )
+        for index, value in enumerate(values)
     ]
 
     path = artifacts.csv("metrics", "prior_stats")

@@ -129,3 +129,24 @@ def accuracy(data_x, is_converged=None):
     per_dataset = np.mean(np.asarray(data_x)[:, :, 1], axis=1)
 
     return per_dataset if is_converged is None else per_dataset[is_converged]
+
+
+def rt_range(data_x, is_converged=None):
+    """Fastest and slowest response time per dataset.
+
+    Channel 0 of `x` is the response time. Study 6 selects on exactly this pair -- it keeps only
+    datasets whose response times all fall in a window -- so the figures need each dataset's
+    realized bounds next to the window it was drawn from, the way study 5 needs `accuracy`. The
+    windows are nested, so the realized slowest response time is the only continuous axis the
+    test cases leave.
+
+    `is_converged` restricts the result to the datasets whose MCMC chains converged, matching the
+    posteriors `load_paired_posteriors` returns.
+    """
+    rt = np.asarray(data_x)[:, :, 0]
+    lowest, highest = np.min(rt, axis=1), np.max(rt, axis=1)
+
+    if is_converged is None:
+        return lowest, highest
+
+    return lowest[is_converged], highest[is_converged]

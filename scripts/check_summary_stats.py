@@ -6,7 +6,7 @@ import hydra
 from omegaconf import DictConfig
 
 from metrics import posterior_summary, true_values
-from pipeline import accuracy, iter_comparable_cases, load_case_data, load_true_params, setup
+from pipeline import accuracy, iter_comparable_cases, load_case_data, load_true_params, rt_range, setup
 from results import write_long_csv
 
 logger = logging.getLogger(__name__)
@@ -30,11 +30,22 @@ def check_summary_stats(cfg: DictConfig):
         if targets is not None:
             case_records += list(true_values(targets, param_names, case.labels))
 
-        # The accuracy of each dataset, carried alongside its posterior summaries. It is study
-        # 5's x-axis -- the quantity that study manipulates -- and studies 2 and 4 plot the
+        # Properties of each dataset, carried alongside its posterior summaries. Accuracy is
+        # study 5's x-axis -- the quantity that study manipulates -- and studies 2 and 4 plot the
         # mismatch against it too, which no script had emitted since the CSVs went long-format.
-        rates = accuracy(load_case_data(case, artifacts)["x"], is_converged)
-        records += [{**record, "accuracy": float(rates[record["dataset"]])} for record in case_records]
+        # The response-time bounds are the same thing for study 6.
+        data_x = load_case_data(case, artifacts)["x"]
+        rates = accuracy(data_x, is_converged)
+        lowest_rt, highest_rt = rt_range(data_x, is_converged)
+        records += [
+            {
+                **record,
+                "accuracy": float(rates[record["dataset"]]),
+                "rt_min": float(lowest_rt[record["dataset"]]),
+                "rt_max": float(highest_rt[record["dataset"]]),
+            }
+            for record in case_records
+        ]
 
     path = artifacts.csv("metrics", "summary_stats")
     logger.info("Writing %s", path)

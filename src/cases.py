@@ -129,3 +129,29 @@ def accuracy_bins(edges, num_obs):
         )
         for lower, upper in zip(edges[:-1], edges[1:])
     ]
+
+
+def rt_windows(windows, num_obs):
+    """Window the *response times* of the generated data (study 6).
+
+    The study-5 idea with a different statistic: `sim_kwargs` overrides the rejection window
+    the approximator was trained on, so every case draws from the same wide prior and differs
+    only in which datasets are kept -- here, those whose response times all fall in
+    `[lower, upper]`. The windows are nested rather than disjoint, so a wide case's draw
+    contains datasets a narrow one would also have accepted; the figures plot the mismatch
+    against each dataset's realized slowest response time to recover a continuous axis.
+
+    Selection again cancels out of `p(theta | x, all rt in window) = p(theta | x)`, so the
+    untouched MCMC remains the right reference and one set of fits serves every window. That
+    holds because whole datasets are *discarded*: trimming the offending trials instead --
+    what an empirical response-time filter does -- would censor `x`, and the MCMC likelihood
+    would then need a per-trial truncation term to match.
+    """
+    return [
+        Case(
+            key=f"rt_{round(lower * 1000)}_{round(upper * 1000)}",
+            labels={"rt_lower": lower, "rt_upper": upper},
+            sim_kwargs={"rt_lower": lower, "rt_upper": upper, "num_obs": np.array(num_obs)},
+        )
+        for lower, upper in np.asarray(windows).tolist()
+    ]

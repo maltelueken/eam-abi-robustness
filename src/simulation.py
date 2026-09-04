@@ -1,5 +1,7 @@
 """Utilities to use the racing diffusion model as a simulator in BayesFlow."""
 
+from collections import defaultdict
+from dataclasses import dataclass
 from typing import Callable
 
 import bayesflow as bf
@@ -9,132 +11,10 @@ from bayesflow.utils.decorators import allow_batch_size
 from bayesflow.types import Shape
 
 
-class AccuracyBandSimulator(bf.simulators.Simulator):
-    """Base class adding optional rejection sampling on the accuracy of the generated data.
-
-    Study 5 holds the prior fixed and manipulates the *data* instead: a training condition, or a
-    test case, keeps only datasets whose empirical accuracy falls in a band. Channel 1 of `x` is
-    1 when the correct accumulator won, so a dataset's accuracy is `mean(x[:, :, 1])`.
-
-    The loop lives here rather than in a wrapper class because the rest of the pipeline reaches
-    into the simulator: `src/metrics.py` reaches for `.experiment_simulator`, and study 5's
-    band has to be visible to `sample()` itself. A wrapper would hide both.
-
-    With no band configured `sample` is a single call to `_sample_once`, so studies 1-4 are
-    unaffected.
-    """
-
-    accuracy_channel = 1
-    _round_quantum = 256
-
-    def __init__(
-        self,
-        acc_lower: float | None = None,
-        acc_upper: float | None = None,
-        max_rounds: int = 12,
-        max_round_elements: int = 4_000_000,
-        safety: float = 1.25,
-    ):
-        if (acc_lower is None) != (acc_upper is None):
-            msg = "acc_lower and acc_upper must be given together."
-            raise ValueError(msg)
-
-        if acc_lower is not None and not 0.0 <= acc_lower < acc_upper <= 1.0:
-            msg = f"Need 0 <= acc_lower < acc_upper <= 1, got [{acc_lower}, {acc_upper}]."
-            raise ValueError(msg)
-
-        self.acc_lower = acc_lower
-        self.acc_upper = acc_upper
-        self.max_rounds = max_rounds
-        self.max_round_elements = max_round_elements
-        self.safety = safety
-
-        # Acceptance statistics persist across calls. Training makes ~50,000 `sample()` calls
-        # against the same band, so after the first one the rate is known to three digits and
-        # every later call can size a single round correctly instead of feeling its way up
-        # from 256 again. This is the difference between ~36 and ~20 draws per accepted dataset.
-        self._num_drawn = 0
-        self._num_kept = 0
-
-    def _sample_once(self, batch_shape: Shape, **kwargs) -> dict[str, np.ndarray]:
-        """Draw a batch without regard to accuracy. Implemented by the subclasses."""
-        raise NotImplementedError
-
-    @allow_batch_size
-    def sample(self, batch_shape: Shape, acc_lower=None, acc_upper=None, **kwargs) -> dict[str, np.ndarray]:
-        """Draw `batch_shape` datasets, restricted to an accuracy band if one is in force.
-
-        `acc_lower`/`acc_upper` are keyword-only and are consumed here rather than passed on: a
-        test case's band must *replace* the band the approximator was trained on, and anything
-        left in `kwargs` would be written into the saved dataset by `CustomSimulator`'s
-        `design_dict.update(**kwargs)`.
-        """
-        lower = self.acc_lower if acc_lower is None else float(acc_lower)
-        upper = self.acc_upper if acc_upper is None else float(acc_upper)
-
-        if lower is None:
-            return self._sample_once(batch_shape, **kwargs)
-
-        return self._rejection_sample(batch_shape, lower, upper, **kwargs)
-
-    def _rejection_sample(self, batch_shape: Shape, lower: float, upper: float, **kwargs):
-        size = int(np.prod(batch_shape))
-        rounds, num_accepted = [], 0
-        num_obs, round_size = None, self._round_size(size, None)
-
-        for _ in range(self.max_rounds):
-            draw = self._sample_once((round_size,), **kwargs)
-
-            if num_obs is None:
-                # The design simulator draws one num_obs per batch, so a later round would
-                # otherwise disagree with this one and `x` could not be concatenated.
-                num_obs = draw["num_obs"]
-                kwargs = {**kwargs, "num_obs": num_obs}
-
-            accuracy = np.asarray(draw["x"])[..., self.accuracy_channel].mean(axis=-1)
-            keep = in_accuracy_band(accuracy, lower, upper)
-
-            self._num_drawn += round_size
-            self._num_kept += int(keep.sum())
-
-            if keep.any():
-                rounds.append(_take_datasets(draw, keep, round_size))
-                num_accepted += int(keep.sum())
-
-                if num_accepted >= size:
-                    return _concatenate_datasets(rounds, size)
-
-            round_size = self._round_size(size - num_accepted, num_obs)
-
-        msg = (
-            f"Only {num_accepted} of {size} datasets had accuracy in [{lower}, {upper}] after "
-            f"{self.max_rounds} rounds (acceptance rate {self._acceptance_rate():.4%} over "
-            f"{self._num_drawn} draws) at num_obs={int(num_obs)}. Widen the band, raise max_rounds, "
-            f"or check that the prior can reach this accuracy at all."
-        )
-        raise RuntimeError(msg)
-
-    def _acceptance_rate(self):
-        """Jeffreys-smoothed acceptance rate, so it is never zero and starts out pessimistic."""
-        return (self._num_kept + 0.5) / (self._num_drawn + 1.0)
-
-    def _round_size(self, needed, num_obs):
-        """How many datasets to draw for `needed` accepted ones, quantized to a multiple of 256.
-
-        The quantization is not cosmetic: `jax.jit` caches on the vmap axis size, so a freely
-        adaptive round size would trigger a fresh XLA compilation nearly every round and undo
-        the speedup the batched simulators exist for. Multiples of 256 keep the set of compiled
-        shapes to a couple of dozen per trial count, which amortizes over a training run, while
-        overshooting the ideal size by only a few percent (powers of two overshoot by up to 2x,
-        which at a 6% acceptance rate is thousands of wasted simulations per batch).
-        """
-        want = int(np.ceil(needed / self._acceptance_rate() * self.safety))
-        want = int(np.ceil(max(want, 1) / self._round_quantum)) * self._round_quantum
-
-        if num_obs is not None:
-            want = min(want, self.max_round_elements // max(int(num_obs), 1))
-
-        return max(self._round_quantum, want)
+# Channels of `x`, as produced by `rdm_jax`/`lba_jax`: response time, then whether the correct
+# accumulator won. `pipeline.py` reads the same two.
+RT_CHANNEL = 0
+ACCURACY_CHANNEL = 1
 
 
 def in_accuracy_band(accuracy, lower, upper):
@@ -146,6 +26,243 @@ def in_accuracy_band(accuracy, lower, upper):
     below_upper = accuracy <= upper if upper >= 1.0 else accuracy < upper
 
     return (accuracy >= lower) & below_upper
+
+
+def in_rt_window(rt, lower, upper):
+    """Whether *every* response time of a dataset falls in `[lower, upper]`.
+
+    Study 6's selection -- `min(rt) >= lower and max(rt) <= upper` -- is the dataset-level
+    analogue of the response-time filter routinely applied to empirical data, but applied by
+    *discarding* whole datasets rather than by trimming trials. Trimming would censor `x`
+    itself and the MCMC reference would then need a truncated, renormalized likelihood;
+    discarding leaves the likelihood alone (see `cases.rt_windows`).
+
+    Closed at both ends, unlike the accuracy bins: response time is continuous, so an exact tie
+    with an edge has probability zero, and study 6's windows are nested rather than disjoint,
+    so there is nothing to keep apart.
+    """
+    return (np.min(rt, axis=-1) >= lower) & (np.max(rt, axis=-1) <= upper)
+
+
+@dataclass(frozen=True)
+class _Band:
+    """One rejection criterion: what to measure per dataset, and what counts as passing."""
+
+    statistic: Callable
+    predicate: Callable
+    max_upper: float
+
+
+# The bands `DataBandSimulator.sample` understands, keyed by the prefix of their bounds.
+_BANDS = {
+    "acc": _Band(
+        statistic=lambda x: np.mean(x[..., ACCURACY_CHANNEL], axis=-1),
+        predicate=in_accuracy_band,
+        max_upper=1.0,
+    ),
+    "rt": _Band(
+        statistic=lambda x: x[..., RT_CHANNEL],
+        predicate=in_rt_window,
+        max_upper=np.inf,
+    ),
+}
+
+
+def bands_from_bounds(**bounds):
+    """Collect `{name: (lower, upper)}` from `<name>_lower`/`<name>_upper` keyword pairs.
+
+    A name whose pair is absent is simply not in force; a half-given pair is an error rather
+    than a silently unbanded simulator.
+    """
+    bands = {}
+
+    for name, band in _BANDS.items():
+        lower, upper = bounds.get(f"{name}_lower"), bounds.get(f"{name}_upper")
+
+        if (lower is None) != (upper is None):
+            msg = f"{name}_lower and {name}_upper must be given together."
+            raise ValueError(msg)
+
+        if lower is None:
+            continue
+
+        if not 0.0 <= lower < upper <= band.max_upper:
+            msg = f"Need 0 <= {name}_lower < {name}_upper <= {band.max_upper}, got [{lower}, {upper}]."
+            raise ValueError(msg)
+
+        bands[name] = (float(lower), float(upper))
+
+    return bands
+
+
+def _passes_bands(x, bands):
+    """Which datasets of a draw pass every band in force."""
+    x = np.asarray(x)
+    keep = np.ones(np.shape(x)[0], dtype=bool)
+
+    for name, (lower, upper) in bands.items():
+        band = _BANDS[name]
+        keep &= band.predicate(band.statistic(x), lower, upper)
+
+    return keep
+
+
+def _describe(bands):
+    return ", ".join(f"{name} in [{lower}, {upper}]" for name, (lower, upper) in bands.items())
+
+
+class DataBandSimulator(bf.simulators.Simulator):
+    """Base class adding optional rejection sampling on a statistic of the generated data.
+
+    Studies 5 and 6 hold the prior fixed and manipulate the *data* instead: a training
+    condition, or a test case, keeps only the datasets that pass a band. Two exist, each named
+    by the prefix of its bounds:
+
+    * `acc_lower`/`acc_upper` (study 5) -- the dataset's mean accuracy, channel 1 of `x`, must
+      fall in the band.
+    * `rt_lower`/`rt_upper` (study 6) -- *every* response time, channel 0 of `x`, must fall in
+      the window, i.e. `min(rt) >= rt_lower and max(rt) <= rt_upper`.
+
+    Both are functions of `x` alone, which is what makes the untouched MCMC the right
+    reference for either study: the selection indicator cancels out of `p(theta | x, band)`
+    (see `cases.accuracy_bins` and `cases.rt_windows`).
+
+    The loop lives here rather than in a wrapper class because the rest of the pipeline reaches
+    into the simulator: `src/metrics.py` reaches for `.experiment_simulator`, and the band has
+    to be visible to `sample()` itself. A wrapper would hide both.
+
+    With no band configured `sample` is a single call to `_sample_once`, so studies 1-4 are
+    unaffected.
+    """
+
+    _round_quantum = 256
+
+    def __init__(  # noqa: PLR0913
+        self,
+        acc_lower: float | None = None,
+        acc_upper: float | None = None,
+        rt_lower: float | None = None,
+        rt_upper: float | None = None,
+        max_rounds: int = 12,
+        max_round_elements: int = 4_000_000,
+        safety: float = 1.25,
+    ):
+        self.acc_lower, self.acc_upper = acc_lower, acc_upper
+        self.rt_lower, self.rt_upper = rt_lower, rt_upper
+
+        self.bands = bands_from_bounds(
+            acc_lower=acc_lower, acc_upper=acc_upper, rt_lower=rt_lower, rt_upper=rt_upper,
+        )
+
+        self.max_rounds = max_rounds
+        self.max_round_elements = max_round_elements
+        self.safety = safety
+
+        # Acceptance statistics persist across calls, keyed by the band in force. Training makes
+        # ~50,000 `sample()` calls against the same band, so after the first one the rate is
+        # known to three digits and every later call can size a single round correctly instead
+        # of feeling its way up from 256 again -- the difference between ~36 and ~20 draws per
+        # accepted dataset. Keying by band matters once one simulator sees several:
+        # `generate_test_data.py` visits every test case in turn, and study 6's windows differ
+        # in acceptance rate by a factor of 25, so one blended estimate would mis-size the first
+        # round of every case. The trial count is deliberately not part of the key -- it moves
+        # the rate by about 2x, which the within-call adaptation absorbs.
+        self._stats = defaultdict(lambda: [0, 0])
+
+    def _sample_once(self, batch_shape: Shape, **kwargs) -> dict[str, np.ndarray]:
+        """Draw a batch without regard to any band. Implemented by the subclasses."""
+        raise NotImplementedError
+
+    @allow_batch_size
+    def sample(
+        self,
+        batch_shape: Shape,
+        acc_lower=None,
+        acc_upper=None,
+        rt_lower=None,
+        rt_upper=None,
+        **kwargs,
+    ) -> dict[str, np.ndarray]:
+        """Draw `batch_shape` datasets, restricted to whatever bands are in force.
+
+        The bounds are keyword-only and are consumed here rather than passed on: a test case's
+        band must *replace* the band the approximator was trained on -- all of them, not only
+        the one the case names, or one case would mean different things to two models and a
+        family's shared held-out data would be a fiction -- and anything left in `kwargs` would
+        be written into the saved dataset by `CustomSimulator`'s `design_dict.update(**kwargs)`.
+        """
+        requested = bands_from_bounds(
+            acc_lower=acc_lower, acc_upper=acc_upper, rt_lower=rt_lower, rt_upper=rt_upper,
+        )
+
+        bands = requested or self.bands
+
+        if not bands:
+            return self._sample_once(batch_shape, **kwargs)
+
+        return self._rejection_sample(batch_shape, bands, **kwargs)
+
+    def _rejection_sample(self, batch_shape: Shape, bands: dict, **kwargs):
+        size = int(np.prod(batch_shape))
+        stats = self._stats[tuple(sorted(bands.items()))]
+        rounds, num_accepted = [], 0
+        num_obs, round_size = None, self._round_size(size, None, stats)
+
+        for _ in range(self.max_rounds):
+            draw = self._sample_once((round_size,), **kwargs)
+
+            if num_obs is None:
+                # The design simulator draws one num_obs per batch, so a later round would
+                # otherwise disagree with this one and `x` could not be concatenated.
+                num_obs = draw["num_obs"]
+                kwargs = {**kwargs, "num_obs": num_obs}
+
+            keep = _passes_bands(draw["x"], bands)
+
+            stats[0] += round_size
+            stats[1] += int(keep.sum())
+
+            if keep.any():
+                rounds.append(_take_datasets(draw, keep, round_size))
+                num_accepted += int(keep.sum())
+
+                if num_accepted >= size:
+                    return _concatenate_datasets(rounds, size)
+
+            round_size = self._round_size(size - num_accepted, num_obs, stats)
+
+        msg = (
+            f"Only {num_accepted} of {size} datasets passed {_describe(bands)} after "
+            f"{self.max_rounds} rounds (acceptance rate {_acceptance_rate(stats):.4%} over "
+            f"{stats[0]} draws) at num_obs={int(num_obs)}. Widen the band, raise max_rounds, "
+            f"or check that the prior can reach this region at all."
+        )
+        raise RuntimeError(msg)
+
+    def _round_size(self, needed, num_obs, stats):
+        """How many datasets to draw for `needed` accepted ones, quantized to a multiple of 256.
+
+        The quantization is not cosmetic: `jax.jit` caches on the vmap axis size, so a freely
+        adaptive round size would trigger a fresh XLA compilation nearly every round and undo
+        the speedup the batched simulators exist for. Multiples of 256 keep the set of compiled
+        shapes to a couple of dozen per trial count, which amortizes over a training run, while
+        overshooting the ideal size by only a few percent (powers of two overshoot by up to 2x,
+        which at a 6% acceptance rate is thousands of wasted simulations per batch).
+        """
+        want = int(np.ceil(needed / _acceptance_rate(stats) * self.safety))
+        want = int(np.ceil(max(want, 1) / self._round_quantum)) * self._round_quantum
+
+        if num_obs is not None:
+            want = min(want, self.max_round_elements // max(int(num_obs), 1))
+
+        return max(self._round_quantum, want)
+
+
+def _acceptance_rate(stats):
+    """Jeffreys-smoothed acceptance rate, so it is never zero and starts out pessimistic."""
+    num_drawn, num_kept = stats
+
+    return (num_kept + 0.5) / (num_drawn + 1.0)
 
 
 def _is_per_dataset(value, round_size):
@@ -169,7 +286,7 @@ def _concatenate_datasets(rounds, size):
     }
 
 
-class CustomSimulator(AccuracyBandSimulator):
+class CustomSimulator(DataBandSimulator):
     """Custom simulator for the racing diffusion model."""
     def __init__(
         self,
@@ -212,7 +329,7 @@ class CustomSimulator(AccuracyBandSimulator):
         return data
 
 
-class CustomMetaSimulator(AccuracyBandSimulator):
+class CustomMetaSimulator(DataBandSimulator):
     """Custom simulator for the racing diffusion model with a varying prior."""
     def __init__(
         self,

@@ -16,7 +16,14 @@ from hydra.utils import instantiate
 
 CONFIG_PATH = "../conf"
 
-EXPERIMENTS = ["experiment_1", "experiment_2", "experiment_3", "experiment_4", "experiment_5"]
+EXPERIMENTS = [
+    "experiment_1",
+    "experiment_2",
+    "experiment_3",
+    "experiment_4",
+    "experiment_5",
+    "experiment_6",
+]
 
 MODELS = [
     "rdm_simple",
@@ -52,6 +59,9 @@ MODELS = [
     *[f"{family}_simple_meta_acc_{band}"
       for family in ("rdm", "lba")
       for band in ("low", "medium", "high", "full")],
+    *[f"{family}_simple_meta_rt_{window}"
+      for family in ("rdm", "lba")
+      for window in ("tight", "medium", "wide", "full")],
 ]
 
 # The models whose simulator and MCMC configs are only coherent under their own study's
@@ -59,6 +69,7 @@ MODELS = [
 EXPERIMENT_BY_MODEL = {
     **{model: "experiment_3" for model in MODELS if "_sat" in model},
     **{model: "experiment_5" for model in MODELS if "_acc_" in model},
+    **{model: "experiment_6" for model in MODELS if "_rt_" in model},
 }
 
 
@@ -118,10 +129,15 @@ def test_transform_pair_round_trips_on_the_configured_initial_position(model):
         ("experiment_2", "drift_slope_loc_0.5_threshold_scale_0.05"),
         ("experiment_3", "threshold_diff_scale_0.02"),
         ("experiment_5", "accuracy_50_60"),
+        ("experiment_6", "rt_150_1000"),
     ],
 )
 def test_test_case_groups_enumerate_the_expected_cases(experiment, expected_first_key):
-    model = {"experiment_3": "rdm_sat", "experiment_5": "rdm_simple_meta_acc_full"}.get(experiment, "rdm_simple")
+    model = {
+        "experiment_3": "rdm_sat",
+        "experiment_5": "rdm_simple_meta_acc_full",
+        "experiment_6": "rdm_simple_meta_rt_full",
+    }.get(experiment, "rdm_simple")
     cfg = build([f"experiment={experiment}", f"model={model}"])
 
     cases = instantiate(cfg["test_case"])
@@ -184,20 +200,29 @@ def test_the_swept_hyperparameter_actually_shifts_the_prior_it_names():
 
 
 @pytest.mark.parametrize("family", ["rdm", "lba"])
-def test_the_accuracy_band_models_share_one_set_of_held_out_data(family):
-    """Study 5's four training conditions differ only in training, so their test data are identical.
+@pytest.mark.parametrize(
+    ("experiment", "kind", "conditions"),
+    [
+        ("experiment_5", "acc", ("low", "medium", "high", "full")),
+        ("experiment_6", "rt", ("tight", "medium", "wide", "full")),
+    ],
+)
+def test_the_data_band_models_share_one_set_of_held_out_data(family, experiment, kind, conditions):
+    """The four training conditions of studies 5 and 6 differ only in training, so their test
+    data are identical.
 
     `test_data_path` normally carries the model name; these point it at the family instead, so
     one `generate_test_data` and one `fit_mcmc_gpu` run serves all four -- MCMC being by far the
-    most expensive artifact in the pipeline.
+    most expensive artifact in the pipeline. It is sound only because the band is a function of
+    the data alone, which leaves the posterior the MCMC targets unchanged.
     """
     paths = {
-        build(["experiment=experiment_5", f"model={family}_simple_meta_acc_{band}"])["test_data_path"]
-        for band in ("low", "medium", "high", "full")
+        build([f"experiment={experiment}", f"model={family}_simple_meta_{kind}_{condition}"])["test_data_path"]
+        for condition in conditions
     }
 
     assert len(paths) == 1
-    assert paths.pop().endswith(f"experiment_5/{family}_acc")
+    assert paths.pop().endswith(f"{experiment}/{family}_{kind}")
 
 
 def test_the_accuracy_bands_cover_the_test_bins_they_are_read_against():
@@ -220,3 +245,27 @@ def test_the_accuracy_bands_cover_the_test_bins_they_are_read_against():
     assert bands["medium"] in bins
     assert bands["high"] in bins
     assert bands["full"] == (min(l for l, _ in bins), max(u for _, u in bins))
+
+
+def test_the_rt_windows_cover_the_test_windows_they_are_read_against():
+    """Study 6's counterpart of the check above: the four training windows are spelled out in
+    conf/simulator/*_meta_rt_*.yaml and the test windows in conf/test_case/rt_windows.yaml.
+    Nothing ties them together, deliberately -- but every training window should also be a test
+    case, which is what gives each model exactly one case it was trained on to read the other
+    three against."""
+    cases = instantiate(build(["experiment=experiment_6", "model=rdm_simple_meta_rt_full"])["test_case"])
+    tested = {(case.labels["rt_lower"], case.labels["rt_upper"]) for case in cases}
+
+    trained = {
+        window: (
+            build(["experiment=experiment_6", f"model=rdm_simple_meta_rt_{window}"])["simulator"]["rt_lower"],
+            build(["experiment=experiment_6", f"model=rdm_simple_meta_rt_{window}"])["simulator"]["rt_upper"],
+        )
+        for window in ("tight", "medium", "wide", "full")
+    }
+
+    assert set(trained.values()) == tested
+
+    # Nested, so the widest window contains every other one -- what lets the figures fall back
+    # on each dataset's realized slowest response time as a continuous axis.
+    assert trained["full"] == (min(lower for lower, _ in tested), max(upper for _, upper in tested))

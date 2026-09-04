@@ -30,6 +30,14 @@ train_npe	experiment_3	lba_sat_upper
 train_npe	experiment_3	lba_sat_meta
 train_npe	experiment_3	lba_sat_meta_lower
 train_npe	experiment_3	lba_sat_meta_upper
+train_npe	experiment_6	rdm_simple_meta_rt_tight
+train_npe	experiment_6	rdm_simple_meta_rt_medium
+train_npe	experiment_6	rdm_simple_meta_rt_wide
+train_npe	experiment_6	rdm_simple_meta_rt_full
+train_npe	experiment_6	lba_simple_meta_rt_tight
+train_npe	experiment_6	lba_simple_meta_rt_medium
+train_npe	experiment_6	lba_simple_meta_rt_wide
+train_npe	experiment_6	lba_simple_meta_rt_full
 generate_test_data	experiment_1	rdm_simple
 generate_test_data	experiment_2	rdm_simple
 generate_test_data	experiment_2	rdm_simple_meta
@@ -47,6 +55,10 @@ generate_test_data	experiment_3	lba_sat_upper
 generate_test_data	experiment_3	lba_sat_meta
 generate_test_data	experiment_3	lba_sat_meta_lower
 generate_test_data	experiment_3	lba_sat_meta_upper
+# Study 6's four training windows share one set of held-out data and one set of MCMC fits
+# (model_family in conf/model/*_simple_meta_rt_*.yaml), so these run once per family.
+generate_test_data	experiment_6	rdm_simple_meta_rt_full
+generate_test_data	experiment_6	lba_simple_meta_rt_full
 prior_stats	experiment_2	rdm_simple
 prior_stats	experiment_2	rdm_simple_lower
 prior_stats	experiment_2	rdm_simple_upper
@@ -82,6 +94,9 @@ fit_mcmc_gpu	experiment_3	lba_sat_upper
 fit_mcmc_gpu	experiment_3	lba_sat_meta
 fit_mcmc_gpu	experiment_3	lba_sat_meta_lower
 fit_mcmc_gpu	experiment_3	lba_sat_meta_upper
+# Once per family, as above.
+fit_mcmc_gpu	experiment_6	rdm_simple_meta_rt_full
+fit_mcmc_gpu	experiment_6	lba_simple_meta_rt_full
 predict_npe	experiment_1	rdm_simple
 predict_npe	experiment_2	rdm_simple
 predict_npe	experiment_2	rdm_simple_meta
@@ -99,6 +114,14 @@ predict_npe	experiment_3	lba_sat_upper
 predict_npe	experiment_3	lba_sat_meta
 predict_npe	experiment_3	lba_sat_meta_lower
 predict_npe	experiment_3	lba_sat_meta_upper
+predict_npe	experiment_6	rdm_simple_meta_rt_tight
+predict_npe	experiment_6	rdm_simple_meta_rt_medium
+predict_npe	experiment_6	rdm_simple_meta_rt_wide
+predict_npe	experiment_6	rdm_simple_meta_rt_full
+predict_npe	experiment_6	lba_simple_meta_rt_tight
+predict_npe	experiment_6	lba_simple_meta_rt_medium
+predict_npe	experiment_6	lba_simple_meta_rt_wide
+predict_npe	experiment_6	lba_simple_meta_rt_full
 check_metrics	experiment_1	rdm_simple
 check_metrics	experiment_2	rdm_simple
 check_metrics	experiment_2	rdm_simple_meta
@@ -114,6 +137,14 @@ check_metrics	experiment_3	lba_sat_upper
 check_metrics	experiment_3	lba_sat_meta
 check_metrics	experiment_3	lba_sat_meta_lower
 check_metrics	experiment_3	lba_sat_meta_upper
+check_metrics	experiment_6	rdm_simple_meta_rt_tight
+check_metrics	experiment_6	rdm_simple_meta_rt_medium
+check_metrics	experiment_6	rdm_simple_meta_rt_wide
+check_metrics	experiment_6	rdm_simple_meta_rt_full
+check_metrics	experiment_6	lba_simple_meta_rt_tight
+check_metrics	experiment_6	lba_simple_meta_rt_medium
+check_metrics	experiment_6	lba_simple_meta_rt_wide
+check_metrics	experiment_6	lba_simple_meta_rt_full
 check_summary_stats	experiment_1	rdm_simple
 check_summary_stats	experiment_2	rdm_simple
 check_summary_stats	experiment_2	rdm_simple_meta
@@ -130,6 +161,14 @@ check_summary_stats	experiment_3	lba_sat_upper
 check_summary_stats	experiment_3	lba_sat_meta
 check_summary_stats	experiment_3	lba_sat_meta_lower
 check_summary_stats	experiment_3	lba_sat_meta_upper
+check_summary_stats	experiment_6	rdm_simple_meta_rt_tight
+check_summary_stats	experiment_6	rdm_simple_meta_rt_medium
+check_summary_stats	experiment_6	rdm_simple_meta_rt_wide
+check_summary_stats	experiment_6	rdm_simple_meta_rt_full
+check_summary_stats	experiment_6	lba_simple_meta_rt_tight
+check_summary_stats	experiment_6	lba_simple_meta_rt_medium
+check_summary_stats	experiment_6	lba_simple_meta_rt_wide
+check_summary_stats	experiment_6	lba_simple_meta_rt_full
 check_robustness	experiment_1	rdm_simple
 check_robustness	experiment_2	rdm_simple
 check_robustness	experiment_2	rdm_simple_meta
@@ -146,5 +185,13 @@ check_robustness	experiment_3	lba_sat_upper
 check_robustness	experiment_3	lba_sat_meta
 check_robustness	experiment_3	lba_sat_meta_lower
 check_robustness	experiment_3	lba_sat_meta_upper
+check_robustness	experiment_6	rdm_simple_meta_rt_tight
+check_robustness	experiment_6	rdm_simple_meta_rt_medium
+check_robustness	experiment_6	rdm_simple_meta_rt_wide
+check_robustness	experiment_6	rdm_simple_meta_rt_full
+check_robustness	experiment_6	lba_simple_meta_rt_tight
+check_robustness	experiment_6	lba_simple_meta_rt_medium
+check_robustness	experiment_6	lba_simple_meta_rt_wide
+check_robustness	experiment_6	lba_simple_meta_rt_full
 check_posterior_predictive	experiment_4	rdm_simple
 check_posterior_predictive	experiment_4	rdm_simple_meta

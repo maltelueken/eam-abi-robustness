@@ -7,3 +7,9 @@ defaults:
 test_num_obs: 100
 
 test_num_posterior_predictive_samples: 100
+
+# Study 4 is not a training run: it applies the networks study 2 trained on simulations, which is
+# the amortization claim it exists to test -- hence no train_npe row for it in slurm/jobs.tsv.
+# Keyed on the model choice rather than model_family: the family is about which held-out data a
+# run shares (studies 5 and 6), whereas the network is always the one trained for this model.
+npe_path: ${hydra:runtime.cwd}/outputs/experiment_2/${hydra:runtime.choices.model}/${hydra:runtime.choices.inference-method}

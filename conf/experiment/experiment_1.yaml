@@ -46,6 +46,12 @@ batch_size: 64
 # their test cases and MCMC ground truth are identical.
 model_family: ${hydra:runtime.choices.model}
 
+# Which run directory predict_npe loads the trained network from. The directory, not the file:
+# the checkpoint's name stays defined once, in conf/callbacks/*.yaml. A study reads what its own
+# train_npe wrote; conf/experiment/experiment_4.yaml points this at study 2 instead, since the
+# empirical study applies networks trained on simulations rather than training its own.
+npe_path: .
+
 # Shared across inference methods: test data and MCMC ground truth do not depend on the
 # approximator, so every method is compared against the same held-out data.
 test_data_path: ${hydra:runtime.cwd}/outputs/${hydra:runtime.choices.experiment}/${model_family}

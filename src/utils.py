@@ -44,15 +44,22 @@ def get_decay_steps(num_epochs, num_batches):
 
 
 def get_checkpoint_path(cfg):
-    """Return the ModelCheckpoint's filepath from the callbacks config.
+    """Return the path the trained network is loaded from.
 
-    Selected by `_target_` rather than by position: the callback lists differ in length
-    between `conf/callbacks/basic.yaml` and `conf/callbacks/tensorboard.yaml`, so a fixed
-    index picks a different callback depending on which group is active.
+    Two halves. The filename comes from the ModelCheckpoint callback, selected by `_target_`
+    rather than by position: the callback lists differ in length between
+    `conf/callbacks/basic.yaml` and `conf/callbacks/tensorboard.yaml`, so a fixed index picks a
+    different callback depending on which group is active. `npe_path` says which run directory
+    to read it from -- `.` (this run's own, which `train_npe` wrote) for every study but the
+    empirical one, where it points at study 2, since study 4 applies networks trained on
+    simulations rather than training its own.
+
+    Only reads go through here: `train_npe` writes through the callback itself, so a study that
+    borrows another's network cannot overwrite it.
     """
     for callback in cfg["callbacks"]:
         if callback["_target_"].endswith("ModelCheckpoint"):
-            return callback["filepath"]
+            return os.path.join(cfg.get("npe_path", "."), callback["filepath"])
 
     msg = "No ModelCheckpoint callback found in cfg['callbacks']; cannot locate the saved model."
     raise ValueError(msg)

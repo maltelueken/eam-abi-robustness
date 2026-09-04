@@ -7,6 +7,7 @@ instead.
 """
 
 import itertools
+import os
 
 import numpy as np
 import pytest
@@ -16,6 +17,7 @@ from hydra.utils import instantiate
 from omegaconf import OmegaConf
 
 from config import get_param_names
+from utils import get_checkpoint_path
 
 CONFIG_PATH = "../conf"
 
@@ -147,6 +149,29 @@ def test_test_case_groups_enumerate_the_expected_cases(experiment, expected_firs
 
     assert cases
     assert cases[0].key == expected_first_key
+
+
+def test_the_empirical_study_reads_the_networks_study_2_trained():
+    """Study 4 trains nothing -- it applies study 2's networks to the subject files.
+
+    That reuse is the amortization claim the empirical study exists to test, and
+    `hydra.job.chdir` puts every stage in its own `outputs/<experiment>/<model>/...` directory,
+    so without `npe_path` study 4 would look for a checkpoint that no train_npe run ever wrote
+    -- which is why `slurm/jobs.tsv` has no train_npe row for it.
+    """
+    empirical = get_checkpoint_path(build(["experiment=experiment_4", "model=lba_simple"]))
+
+    assert empirical.endswith(
+        os.path.join(
+            "outputs", "experiment_2", "lba_simple", "flow_matching", "checkpoints", "model.keras",
+        ),
+    )
+    assert os.path.isabs(empirical), empirical
+
+    # Every other study reads what its own training run wrote, relative to that run's directory.
+    simulated = get_checkpoint_path(build(["experiment=experiment_1", "model=rdm_simple"]))
+
+    assert os.path.normpath(simulated) == os.path.join("checkpoints", "model.keras")
 
 
 def test_approximator_instantiates_for_the_default_config():

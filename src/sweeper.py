@@ -70,6 +70,48 @@ def select_best_trial(
     return completed[winner], float(scores[winner])
 
 
+def sweep_timing(study: optuna.Study) -> dict:
+    """What the sweep cost, read back out of the study Optuna already timestamped.
+
+    The sweep is the one stage that is not a run of a pipeline script, so it has nowhere to
+    write a `timing.TimingLog`; it does not need one, because Optuna stamps every trial with a
+    start and an end. Cost is reported two ways, and the gap between them is informative:
+    `wall_seconds` spans the first trial's start to the last one's end -- what the SLURM job
+    actually occupied -- while `trial_seconds` sums the trials, leaving out the sweeper's own
+    overhead between them and counting concurrent trials twice if a study ever runs any.
+
+    Failed trials are counted: a trial that died still spent the GPU time it spent, and the
+    sweep had to pay for it. The per-trial durations themselves are in the study's trials
+    dataframe, which `scripts/select_architecture.py` dumps next to this summary.
+
+    Args:
+        study: the study to summarize.
+
+    Returns:
+        A one-row summary, in column order.
+
+    Raises:
+        RuntimeError: if no trial of the study carries both timestamps.
+    """
+    timed = [t for t in study.trials if t.datetime_start is not None and t.datetime_complete is not None]
+
+    if not timed:
+        msg = f"study '{study.study_name}' has no trial with both a start and an end time"
+        raise RuntimeError(msg)
+
+    durations = [(t.datetime_complete - t.datetime_start).total_seconds() for t in timed]
+    span = max(t.datetime_complete for t in timed) - min(t.datetime_start for t in timed)
+
+    return {
+        "study": study.study_name,
+        "num_trials": len(study.trials),
+        "num_timed_trials": len(timed),
+        "wall_seconds": round(span.total_seconds(), 3),
+        "trial_seconds": round(float(np.sum(durations)), 3),
+        "median_trial_seconds": round(float(np.median(durations)), 3),
+    }
+
+
 def render_architecture(family: str, params: dict, provenance: list[str]) -> str:
     """Render the `conf/architecture/<family>.yaml` file that selects `params`.
 

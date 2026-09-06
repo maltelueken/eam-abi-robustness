@@ -83,6 +83,19 @@ def create_ensemble_approximator(
     return workflow.approximator
 
 
+def num_members(approximator):
+    """How many members `approximator` holds -- one for a plain `ContinuousApproximator`.
+
+    The same one-member reading `sample_members` takes, so that a single-network run reports
+    its cost on the same scale as an ensemble's: `scripts/train_npe.py` records this alongside
+    the training time, and the training of an ensemble buys this many networks for it.
+    """
+    if isinstance(approximator, bf.approximators.EnsembleApproximator):
+        return len(approximator.approximators)
+
+    return 1
+
+
 def sample_members(approximator, conditions, num_samples):
     """Draw `num_samples` per ensemble member, as `{member: {param: (dataset, draw, 1)}}`.
 

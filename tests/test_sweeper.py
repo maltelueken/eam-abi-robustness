@@ -7,6 +7,8 @@ also the one place in the pipeline where a silent mistake would not show up in a
 a wrong pick still trains, still converges, and still produces every figure.
 """
 
+import datetime
+
 import numpy as np
 import optuna
 import pytest
@@ -14,6 +16,7 @@ from sweeper import constant_list
 from sweeper import normalize_objectives
 from sweeper import render_architecture
 from sweeper import select_best_trial
+from sweeper import sweep_timing
 
 # The sweep's own directions: minimize RMSE, maximize posterior contraction, minimize
 # calibration error.
@@ -140,3 +143,48 @@ def test_the_rendered_file_is_a_global_package_naming_its_family():
     assert "architecture_family: rdm" in rendered
     assert "summary_dim: 24" in rendered
     assert "inference_mlp_depth: 5" in rendered
+
+
+class _TimedTrial:
+    """A trial with only the two timestamps `sweep_timing` reads."""
+
+    def __init__(self, start_minutes, minutes):
+        epoch = datetime.datetime(2026, 1, 1, tzinfo=datetime.UTC)
+        self.datetime_start = epoch + datetime.timedelta(minutes=start_minutes)
+        self.datetime_complete = None if minutes is None else self.datetime_start + datetime.timedelta(minutes=minutes)
+
+
+class _TimedStudy:
+    """Enough of a study for `sweep_timing`, which reads a name and a list of trials."""
+
+    study_name = "train_npe_rdm"
+
+    def __init__(self, trials):
+        self.trials = trials
+
+
+def test_sweep_timing_separates_the_job_from_the_trials():
+    """The span is what the SLURM job occupied and the sum is what the trials themselves ran
+    for; the gap between them is the sweeper's own overhead, which is why both are reported."""
+    # Two 10-minute trials with a 5-minute gap between them: 25 minutes wall, 20 of trials.
+    timing = sweep_timing(_TimedStudy([_TimedTrial(0, 10), _TimedTrial(15, 10)]))
+
+    assert timing["study"] == "train_npe_rdm"
+    assert timing["num_trials"] == 2
+    assert timing["wall_seconds"] == 25 * 60
+    assert timing["trial_seconds"] == 20 * 60
+    assert timing["median_trial_seconds"] == 10 * 60
+
+
+def test_a_crashed_trial_still_counts_towards_the_cost():
+    """It spent the GPU time it spent -- but a trial still running has no end to measure to."""
+    timing = sweep_timing(_TimedStudy([_TimedTrial(0, 10), _TimedTrial(10, 4), _TimedTrial(20, None)]))
+
+    assert timing["num_trials"] == 3
+    assert timing["num_timed_trials"] == 2
+    assert timing["trial_seconds"] == 14 * 60
+
+
+def test_a_study_with_no_finished_trial_has_no_timing():
+    with pytest.raises(RuntimeError, match="start and an end"):
+        sweep_timing(_TimedStudy([_TimedTrial(0, None)]))

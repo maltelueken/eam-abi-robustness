@@ -21,11 +21,13 @@ import logging
 import pathlib
 import numpy as np
 import optuna
+import pandas as pd
 from hydra import compose
 from hydra import initialize
 from omegaconf import DictConfig
 from sweeper import render_architecture
 from sweeper import select_best_trial
+from sweeper import sweep_timing
 
 logger = logging.getLogger(__name__)
 
@@ -83,6 +85,22 @@ def write_trials_csv(study: optuna.Study, best: optuna.trial.FrozenTrial, path: 
     frame.to_csv(path, index=False)
 
 
+def write_timing_csv(study: optuna.Study, path: pathlib.Path) -> dict:
+    """Write what the sweep cost, and return it.
+
+    The architecture search is the pipeline's largest single expense and the one stage with no
+    run directory of its own to record it in, so its timing is taken from the study here --
+    alongside the per-trial `duration` column the trials dump already carries -- rather than
+    left to be reconstructed from SLURM logs after the fact.
+    """
+    timing = sweep_timing(study)
+
+    path.parent.mkdir(parents=True, exist_ok=True)
+    pd.DataFrame([timing]).to_csv(path, index=False)
+
+    return timing
+
+
 def parse_args() -> argparse.Namespace:
     """Parse the command line."""
     parser = argparse.ArgumentParser(description=__doc__)
@@ -94,7 +112,7 @@ def parse_args() -> argparse.Namespace:
         help="comma-separated weights on (rmse, contraction, calibration error) in the distance",
     )
     parser.add_argument("--dry-run", action="store_true", help="print the config instead of writing it")
-    parser.add_argument("--no-csv", action="store_true", help="skip the trials dump for the figures")
+    parser.add_argument("--no-csv", action="store_true", help="skip the trials and timing dumps")
     parser.add_argument("overrides", nargs="*", help="further Hydra overrides the sweep was given")
 
     # `parse_intermixed_args` rather than `parse_args`: the trailing `nargs="*"` positional is
@@ -141,6 +159,17 @@ def main() -> None:
         csv_path = PROJECT_ROOT / "multirun" / f"trials_{family}.csv"
         write_trials_csv(study, best, csv_path)
         logger.info("wrote %s", csv_path)
+
+        timing_path = PROJECT_ROOT / "multirun" / f"timing_{family}.csv"
+        timing = write_timing_csv(study, timing_path)
+        logger.info(
+            "wrote %s: %d trials in %.1f h wall, %.1f h of trials, median %.2f h per trial",
+            timing_path,
+            timing["num_trials"],
+            timing["wall_seconds"] / 3600,
+            timing["trial_seconds"] / 3600,
+            timing["median_trial_seconds"] / 3600,
+        )
 
 
 if __name__ == "__main__":

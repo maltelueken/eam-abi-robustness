@@ -6,8 +6,9 @@ import hydra
 from omegaconf import DictConfig
 
 from data import save_posterior, stack_posterior_members
-from ensemble import sample_members_by_group
+from ensemble import num_members, sample_members_by_group
 from pipeline import load_case_data, num_obs_groups, setup
+from timing import TimingLog, run_labels
 from utils import load_approximator
 
 logger = logging.getLogger(__name__)
@@ -25,10 +26,18 @@ def predict_npe(cfg: DictConfig):
     Datasets are sampled one trial count at a time (`pipeline.num_obs_groups`): the empirical
     study's subjects each keep their own number of trials, and the summary network takes one
     rectangular batch. A simulated case is a single group, so this is one call as before.
-    """
-    approximator, _ = load_approximator(cfg)
 
+    Each case's sampling is timed into `timing/predict_npe.csv`: this is the amortized side of
+    the cost comparison, measured against the very same test data `fit_mcmc_gpu` is timed on.
+    The first case also pays for the sampling function's XLA compilation, and the checkpoint
+    load is timed on its own so that neither is hidden inside a per-dataset rate.
+    """
     artifacts, cases, param_names = setup(cfg)
+
+    timings = TimingLog(artifacts.csv("timing", "predict_npe"), run_labels())
+
+    with timings.timed("load"):
+        approximator, _ = load_approximator(cfg)
 
     for case in cases:
         logger.info("Loading test data for case %s", case.key)
@@ -42,11 +51,22 @@ def predict_npe(cfg: DictConfig):
             [int(block["num_obs"]) for _, block in blocks],
         )
 
-        posterior_samples = sample_members_by_group(
-            approximator,
-            blocks,
-            num_samples=cfg["test_num_posterior_samples"],
-        )
+        # `num_obs` only where the case has one: study 4's subjects each keep their own trial
+        # count, so the case is several blocks and no single number describes the batch. The
+        # timing still covers the whole case, since that is the unit the MCMC job is timed over.
+        with timings.timed(
+            "sample",
+            case=case.key,
+            num_datasets=sum(len(index) for index, _ in blocks),
+            num_obs=int(blocks[0][1]["num_obs"]) if len(blocks) == 1 else None,
+            num_draws=cfg["test_num_posterior_samples"],
+            num_members=num_members(approximator),
+        ):
+            posterior_samples = sample_members_by_group(
+                approximator,
+                blocks,
+                num_samples=cfg["test_num_posterior_samples"],
+            )
 
         path = artifacts.npe_samples(case)
         artifacts.ensure(path)

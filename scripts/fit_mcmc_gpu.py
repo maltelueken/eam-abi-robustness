@@ -10,6 +10,13 @@ at a time (`pipeline.num_obs_groups`) and the draws are put back in dataset orde
 is a fresh XLA compilation; the empirical files have a handful of distinct counts, with most
 subjects in one group, so that is cheap next to fitting the datasets one at a time. A
 simulated case is a single group and is the one call this script always made.
+
+Each block is timed into `timing/fit_mcmc.csv` -- the cost amortization is measured against,
+so it is recorded on the same data, hardware and chain configuration the paper's fits used.
+`positions.block_until_ready()` is inside the timed block on purpose: JAX dispatches
+asynchronously, and timing around a call that returns before the device has run would report
+the dispatch. The first block of a run also pays for its XLA compilation, once per distinct
+trial count.
 """
 
 import logging
@@ -22,6 +29,7 @@ from omegaconf import DictConfig
 from config import get_mcmc_param_names
 from mcmc import save_mcmc_posterior
 from pipeline import load_case_data, num_obs_groups, restore_dataset_order, select_cases, setup
+from timing import TimingLog, run_labels
 
 logger = logging.getLogger(__name__)
 
@@ -30,6 +38,8 @@ logger = logging.getLogger(__name__)
 def fit_mcmc(cfg: DictConfig):
     """Fit every dataset of the selected case(s) and save the posterior samples."""
     artifacts, cases, _ = setup(cfg)
+
+    timings = TimingLog(artifacts.csv("timing", "fit_mcmc"), run_labels())
 
     make_logdensity_fn = instantiate(cfg["mcmc_model_fun"])
     to_unconstrained = instantiate(cfg["mcmc_to_unconstrained"])
@@ -50,12 +60,21 @@ def fit_mcmc(cfg: DictConfig):
                 data_x.shape[1],
             )
 
-            positions, infos = fit_fun(
-                data=data_x,
-                make_logdensity_fn=make_logdensity_fn,
-                to_unconstrained=to_unconstrained,
-            )
-            positions.block_until_ready()
+            with timings.timed(
+                "fit",
+                case=case.key,
+                num_datasets=data_x.shape[0],
+                num_obs=data_x.shape[1],
+                num_draws=cfg["mcmc_sampling_fun"]["num_steps_sampling"],
+                num_warmup=cfg["mcmc_sampling_fun"]["num_steps_warmup"],
+                num_chains=cfg["mcmc_sampling_fun"]["num_chains"],
+            ):
+                positions, infos = fit_fun(
+                    data=data_x,
+                    make_logdensity_fn=make_logdensity_fn,
+                    to_unconstrained=to_unconstrained,
+                )
+                positions.block_until_ready()
 
             logger.info("Divergence rate: %s", float(np.mean(infos.is_divergent)))
 

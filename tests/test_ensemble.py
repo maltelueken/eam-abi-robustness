@@ -12,7 +12,7 @@ from hydra.core.hydra_config import HydraConfig
 from hydra.utils import instantiate
 
 from data import stack_posterior_members
-from ensemble import create_ensemble_approximator, member_names, sample_members
+from ensemble import create_ensemble_approximator, member_names, num_members, sample_members
 
 CONFIG_PATH = "../conf"
 
@@ -60,6 +60,10 @@ def without_names(config):
         return [without_names(value) for value in config]
 
     return config
+
+
+def test_the_member_count_matches_the_configured_size(approximator):
+    assert num_members(approximator) == ENSEMBLE_SIZE
 
 
 def test_the_ensemble_config_instantiates_one_member_per_requested_size(approximator):
@@ -143,6 +147,12 @@ class _SingleApproximator:
 
     def sample(self, *, conditions, num_samples):
         return {name: np.zeros((len(conditions["x"]), num_samples, 1)) for name in ("a", "b")}
+
+
+def test_the_member_count_is_read_off_the_approximator():
+    """`scripts/train_npe.py` records it next to the training time: an ensemble's fit buys this
+    many networks for those seconds, and a single-network run has to report on the same scale."""
+    assert num_members(_SingleApproximator()) == 1
 
 
 def test_a_single_network_is_reported_as_a_one_member_ensemble():

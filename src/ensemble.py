@@ -104,6 +104,21 @@ def sample_members(approximator, conditions, num_samples):
     return {"0": approximator.sample(conditions=conditions, num_samples=num_samples)}
 
 
+def sample_members_by_group(approximator, blocks, num_samples):
+    """`sample_members` over the blocks of `pipeline.num_obs_groups`, in dataset order.
+
+    An empirical case's subjects no longer share a trial count, so its datasets cannot be
+    stacked into the one tensor `sample` wants. Each block is sampled on its own and the draws
+    are put back in the case's own dataset order, so what `save_posterior` writes is indexed
+    the same way the test data and the MCMC fits are.
+
+    A simulated case is a single block and comes out of here bit-for-bit as it went in.
+    """
+    per_block = [sample_members(approximator, block, num_samples) for _, block in blocks]
+
+    return _merge_blocks(blocks, per_block, nested=True)
+
+
 def summarize_members(approximator, conditions):
     """Each member's learned summary statistics for `conditions`, as `{member: (dataset, feature)}`.
 
@@ -125,3 +140,44 @@ def summarize_members(approximator, conditions):
         }
 
     return {"0": np.asarray(approximator.summarize(conditions))}
+
+
+def summarize_members_by_group(approximator, blocks):
+    """`summarize_members` over the blocks of `pipeline.num_obs_groups`, in dataset order.
+
+    The counterpart of `sample_members_by_group` on the other side of the network, and needed
+    for the same reason: the summary network takes one rectangular batch, and an empirical
+    case's subjects do not all have the same number of trials.
+    """
+    per_block = [summarize_members(approximator, block) for _, block in blocks]
+
+    return _merge_blocks(blocks, per_block)
+
+
+def _merge_blocks(blocks, per_block, nested=False):
+    """Reassemble one `{member: ...}` result per block into a single one in dataset order.
+
+    `nested` says whether a member's value is an array (`summarize_members`) or a
+    `{param: array}` dict (`sample_members`).
+
+    The order restore is duplicated from `pipeline.restore_dataset_order` rather than imported:
+    `pipeline` pulls in `mcmc`, which flips JAX into float64 at import, and this module is what
+    `train_npe` instantiates the approximator through.
+    """
+    order = np.argsort(np.concatenate([index for index, _ in blocks]))
+
+    def merged(arrays):
+        return np.concatenate(list(arrays), axis=0)[order]
+
+    merged_members = {}
+
+    for member in per_block[0]:
+        if nested:
+            merged_members[member] = {
+                param: merged(result[member][param] for result in per_block)
+                for param in per_block[0][member]
+            }
+        else:
+            merged_members[member] = merged(result[member] for result in per_block)
+
+    return merged_members

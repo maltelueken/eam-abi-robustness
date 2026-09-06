@@ -1,8 +1,8 @@
 """Tests for the empirical-data preprocessing.
 
 This is the pipeline's highest-risk untested function: two separate 3xIQR trimming stages,
-truncation to the shortest subject, and a `.sort("pp")` that the convergence masks rely on
-to keep MCMC and NPE samples aligned per subject.
+NaN padding of subjects that ran for different numbers of trials, and a `.sort("pp")` that
+the convergence masks rely on to keep MCMC and NPE samples aligned per subject.
 """
 
 import numpy as np
@@ -39,7 +39,8 @@ def test_it_returns_one_entry_per_subject_with_rt_in_seconds(tmp_path):
 
     data = read_data_from_txt(str(path))
 
-    assert data["x"].shape == (3, data["num_obs"], 2)
+    assert data["x"].shape == (3, 40, 2)
+    assert list(data["num_obs"]) == [40, 40, 40]
     # RT is divided by 1000, so ~800 ms becomes ~0.8 s.
     assert 0.5 < data["x"][:, :, 0].mean() < 1.2
     assert set(np.unique(data["x"][:, :, 1])) <= {0.0, 1.0}
@@ -51,10 +52,10 @@ def test_practice_and_zeroth_trials_are_excluded(tmp_path):
     data = read_data_from_txt(str(path), trim=False)
 
     # 10 usable test trials per subject; the practice row and trl_number == 0 row are gone.
-    assert data["num_obs"] == 10
+    assert list(data["num_obs"]) == [10, 10]
 
 
-def test_all_subjects_are_truncated_to_the_shortest(tmp_path):
+def test_subjects_keep_their_own_number_of_trials(tmp_path):
     rows = []
     for pp, num_trials in [(1, 30), (2, 12), (3, 25)]:
         for trial in range(1, num_trials + 1):
@@ -63,8 +64,25 @@ def test_all_subjects_are_truncated_to_the_shortest(tmp_path):
 
     data = read_data_from_txt(str(tmp_path / "d.txt"), trim=False)
 
-    assert data["num_obs"] == 12
-    assert data["x"].shape[1] == 12
+    # No truncation to the shortest subject: everyone keeps every trial they ran.
+    assert list(data["num_obs"]) == [30, 12, 25]
+    assert data["x"].shape[1] == 30
+
+
+def test_the_padding_is_the_tail_of_each_subject(tmp_path):
+    rows = []
+    for pp, num_trials in [(1, 30), (2, 12)]:
+        for trial in range(1, num_trials + 1):
+            rows.append({"pp": pp, "block": "test", "trl_number": trial, "acc": 1, "RT": 800.0})
+    pl.DataFrame(rows).write_csv(tmp_path / "d.txt", separator=" ")
+
+    data = read_data_from_txt(str(tmp_path / "d.txt"), trim=False)
+
+    # Everything up to a subject's own count is real; everything past it is NaN, so a padded
+    # trial that reached a likelihood or a summary network could not pass for a real one.
+    for index, num_obs in enumerate(data["num_obs"]):
+        assert not np.isnan(data["x"][index, :num_obs]).any()
+        assert np.isnan(data["x"][index, num_obs:]).all()
 
 
 def test_subjects_come_back_in_sorted_order(tmp_path):
@@ -110,3 +128,4 @@ def test_output_feeds_the_approximator_shape_contract(tmp_path, trim):
     assert set(data) == {"x", "num_obs"}
     assert data["x"].ndim == 3
     assert data["x"].shape[2] == 2
+    assert data["num_obs"].shape == (data["x"].shape[0],)

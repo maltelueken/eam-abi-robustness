@@ -7,7 +7,7 @@ import pandas as pd
 from omegaconf import DictConfig
 
 from metrics import calc_posterior_predictive
-from pipeline import iter_comparable_cases, load_case_data, setup
+from pipeline import iter_comparable_cases, load_case_data, num_obs_per_dataset, setup
 from utils import load_approximator
 
 logger = logging.getLogger(__name__)
@@ -29,7 +29,7 @@ def check_posterior_predictive(cfg: DictConfig):
 
         data = load_case_data(case, artifacts)
         data_x = data["x"][is_converged]
-        num_obs = int(data["num_obs"])
+        num_obs = num_obs_per_dataset(data, is_converged)
 
         computed = {}
 

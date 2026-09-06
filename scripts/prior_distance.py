@@ -34,9 +34,12 @@ Which cases get which:
   are framed as amortization coverage rather than prior misspecification.
 * Study 4 gets only the summary-space row too, and it is the interesting one: it compares the
   *empirical* subject data against the simulations the network was trained on, which is the
-  amortization gap that study exists to probe. Its comparison sample is drawn at the subject
-  file's own trial count -- the summary network takes a set, but its embedding still moves with
-  the set size, and a mismatch there would be read as a distance.
+  amortization gap that study exists to probe. Its comparison sample is drawn at the subjects'
+  own trial counts -- the summary network takes a set, but its embedding still moves with the
+  set size, and a mismatch there would be read as a distance. Subjects keep their own number of
+  trials, so those counts are a distribution rather than one number, and the comparison sample
+  reproduces it: `prior_distance_mmd_draws` datasets split across the distinct counts in
+  proportion to how many subjects have them.
 
 Runs after `train_npe`, since it needs the trained summary networks.
 """
@@ -50,8 +53,8 @@ from hydra.utils import instantiate
 from omegaconf import DictConfig
 
 from divergence import kl_from_log_densities, mixture_log_density, standardize
-from ensemble import summarize_members
-from pipeline import load_case_data, setup
+from ensemble import summarize_members, summarize_members_by_group
+from pipeline import load_case_data, num_obs_groups, num_obs_per_dataset, setup
 from results import write_long_csv
 from utils import load_approximator
 
@@ -94,6 +97,39 @@ def _training_summaries(simulator, approximator, num_draws, num_obs):
     trained = simulator.sample(num_draws, num_obs=np.array(num_obs))
 
     return summarize_members(approximator, trained)
+
+
+def _allocate(counts, total):
+    """Split `total` draws over groups in proportion to `counts`, by largest remainder."""
+    exact = np.asarray(counts) / np.sum(counts) * total
+    shares = np.floor(exact).astype(int)
+    shares[np.argsort(shares - exact)[: total - shares.sum()]] += 1
+
+    return shares
+
+
+def _matched_training_summaries(simulator, approximator, num_draws, num_obs):
+    """Embed a training sample whose trial counts follow the empirical ones.
+
+    The empirical subjects do not share a trial count, and the summary network's embedding
+    moves with the size of the set it is given, so a single-length comparison sample would put
+    a distance between the two samples that is only a difference in length. Splitting the draws
+    over the counts in the subjects' own proportions removes that: what is left is the
+    difference the study is after.
+    """
+    values, counts = np.unique(num_obs, return_counts=True)
+    shares = _allocate(counts, num_draws)
+
+    per_value = [
+        _training_summaries(simulator, approximator, int(share), int(value))
+        for value, share in zip(values, shares, strict=True)
+        if share > 0
+    ]
+
+    return {
+        member: np.concatenate([summaries[member] for summaries in per_value])
+        for member in per_value[0]
+    }
 
 
 @hydra.main(version_base=None, config_path="../conf", config_name="config")
@@ -143,18 +179,19 @@ def prior_distance(cfg: DictConfig):
             tested = simulator.sample(num_mmd_draws, **case.sim_kwargs)
             reference_summaries = trained_summaries
         else:
-            # Empirical data: compare them against simulations of the same length, since the
+            # Empirical data: compare them against simulations of the same lengths, since the
             # summary network's embedding moves with the size of the set it is given.
             tested = load_case_data(case, artifacts)
-            reference_summaries = _training_summaries(
-                simulator, approximator, num_mmd_draws, tested["num_obs"],
+            trial_counts = num_obs_per_dataset(tested)
+            reference_summaries = _matched_training_summaries(
+                simulator, approximator, num_mmd_draws, trial_counts,
             )
             logger.info(
-                "Case %s is empirical: %s datasets of %s trials against %s simulated ones",
-                case.key, np.shape(tested["x"])[0], tested["num_obs"], num_mmd_draws,
+                "Case %s is empirical: %s datasets of %s to %s trials against %s simulated ones",
+                case.key, trial_counts.size, trial_counts.min(), trial_counts.max(), num_mmd_draws,
             )
 
-        tested_summaries = summarize_members(approximator, tested)
+        tested_summaries = summarize_members_by_group(approximator, num_obs_groups(tested))
 
         records += [
             {

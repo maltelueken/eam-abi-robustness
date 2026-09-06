@@ -74,13 +74,20 @@ def load_approximator(cfg):
     return approximator, simulator
 
 
-def trim_num_obs(x, min_num_obs):
-    """Trim an array."""
-    return x[:min_num_obs]
-
-
 def read_data_from_txt(filename, trim=True):
-    """Read and preprocess an empirical dataset from a text file."""
+    """Read and preprocess an empirical dataset from a text file.
+
+    Subjects keep every trial that survives the two 3xIQR filters below, so they do *not* all
+    run for the same number of trials -- an earlier version truncated all of them to the
+    shortest subject's count, which threw away up to 13 trials per subject in the files this
+    study uses and made every posterior narrower than the data warrant.
+
+    The ragged result is returned rectangular: `x` is padded with NaN to the longest subject
+    and `num_obs` gives each subject's own trial count, so the padding is always the tail
+    `x[i, num_obs[i]:]`. Nothing downstream feeds the padding to a network or a likelihood --
+    `pipeline.num_obs_groups` slices it off -- and the per-dataset statistics in `pipeline`
+    are NaN-aware.
+    """
     df = pl.read_csv(filename, separator=" ").filter(
         pl.col("block").eq("test") & pl.col("trl_number").gt(0)
     )
@@ -100,10 +107,6 @@ def read_data_from_txt(filename, trim=True):
                 )
             )
         )
-
-    min_trials = (
-        df.group_by("pp").agg(pl.len().alias("n")).select(pl.col("n").min()).item()
-    )
 
     df = (
         df.group_by("pp")
@@ -139,14 +142,16 @@ def read_data_from_txt(filename, trim=True):
         .sort("pp")  # Sort so that order is always the same
     )
 
-    x = df.select(pl.col("RT"), pl.col("acc")).to_numpy()
+    subjects = df.select(pl.col("RT"), pl.col("acc")).to_numpy()
 
-    x = np.array(
-        [
-            np.array([trim_num_obs(e[0], min_trials), trim_num_obs(e[1], min_trials)]).T
-            for e in x
-        ]
-    )
+    num_obs = np.array([len(response_times) for response_times, _ in subjects])
 
-    # Return list with dicts containing data for a single subject as single batch
-    return dict(x=x, num_obs=min_trials)
+    # NaN rather than zero: a padded trial that leaked into a likelihood or a summary network
+    # would be a plausible-looking fast error, whereas a NaN shows up immediately.
+    x = np.full((len(subjects), int(num_obs.max()), 2), np.nan)
+
+    for index, (response_times, correct) in enumerate(subjects):
+        x[index, : num_obs[index], 0] = response_times
+        x[index, : num_obs[index], 1] = correct
+
+    return dict(x=x, num_obs=num_obs)

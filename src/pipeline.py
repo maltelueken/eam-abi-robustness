@@ -46,6 +46,71 @@ def load_case_data(case, artifacts):
     return read_data_from_txt(artifacts.test_data(case))
 
 
+def num_obs_per_dataset(data, is_converged=None):
+    """Trial count per dataset, as an integer array of length `num_datasets`.
+
+    A simulated case stores one scalar `num_obs` for the whole batch, an empirical one stores a
+    count per subject (`utils.read_data_from_txt`); this is the shape both look like from the
+    outside, so callers that only need the number of trials behind a dataset need no branch.
+
+    `is_converged` restricts the result to the datasets whose MCMC chains converged, matching
+    the posteriors `load_paired_posteriors` returns.
+    """
+    counts = np.broadcast_to(
+        np.reshape(np.asarray(data["num_obs"]), -1), (np.shape(data["x"])[0],),
+    ).astype(int)
+
+    return counts if is_converged is None else counts[is_converged]
+
+
+def num_obs_groups(data):
+    """Split a case's data into blocks of datasets that share one trial count.
+
+    Empirical subjects do not all run for the same number of trials, but the summary network
+    and the NUTS driver both want a rectangular batch: `EnsembleApproximator.sample` stacks the
+    datasets into one tensor, and `mcmc.fit_mcmc_gpu_batch` vmaps over them, so neither can be
+    handed a ragged case in one call. Every stage that consumes a case's data therefore walks
+    these blocks and reassembles its output in the original dataset order.
+
+    Returns a list of `(index, block)` pairs, where `index` holds the positions the block's
+    datasets occupy in `data` and `block` is `data` with `x` sliced down to that block's own
+    trial count -- so the NaN padding `read_data_from_txt` adds never leaves this function.
+
+    A simulated case has a scalar `num_obs` and comes back as a single block holding every
+    dataset, unsliced, which is exactly the one call those stages made before.
+    """
+    num_obs = np.asarray(data["num_obs"])
+    num_datasets = np.shape(data["x"])[0]
+
+    if num_obs.ndim == 0:
+        return [(np.arange(num_datasets), data)]
+
+    blocks = []
+
+    for value in np.unique(num_obs):
+        index = np.flatnonzero(num_obs == value)
+        block = {
+            key: np.asarray(val)[index] for key, val in data.items()
+            if np.shape(val)[:1] == (num_datasets,)
+        }
+        block["x"] = block["x"][:, : int(value)]
+        block["num_obs"] = np.asarray(value)
+        blocks.append((index, block))
+
+    return blocks
+
+
+def restore_dataset_order(blocks, arrays):
+    """Concatenate one array per block of `num_obs_groups` back into dataset order.
+
+    Each array's leading axis is the block's datasets, in the order `num_obs_groups` listed
+    them; the result's leading axis is every dataset, in the order the case stores them.
+    """
+    order = np.argsort(np.concatenate([index for index, _ in blocks]))
+
+    return np.concatenate(list(arrays), axis=0)[order]
+
+
 def load_npe_posterior(filename, param_names):
     """Load NPE samples as `(dataset, draw, param)`, selected by parameter name."""
     posterior = load_posterior(filename)
@@ -144,7 +209,7 @@ def accuracy(data_x, is_converged=None):
     `is_converged` restricts the result to the datasets whose MCMC chains converged, matching the
     posteriors `load_paired_posteriors` returns.
     """
-    per_dataset = np.mean(np.asarray(data_x)[:, :, 1], axis=1)
+    per_dataset = np.nanmean(np.asarray(data_x)[:, :, 1], axis=1)
 
     return per_dataset if is_converged is None else per_dataset[is_converged]
 
@@ -162,7 +227,7 @@ def rt_range(data_x, is_converged=None):
     posteriors `load_paired_posteriors` returns.
     """
     rt = np.asarray(data_x)[:, :, 0]
-    lowest, highest = np.min(rt, axis=1), np.max(rt, axis=1)
+    lowest, highest = np.nanmin(rt, axis=1), np.nanmax(rt, axis=1)
 
     if is_converged is None:
         return lowest, highest

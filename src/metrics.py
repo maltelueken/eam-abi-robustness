@@ -17,8 +17,13 @@ def calc_posterior_predictive(data, posterior, num_obs, simulator, num_samples, 
     the pipeline. Going through `experiment_simulator.sample` rather than its `sample_fn` also
     means `filter_kwargs` drops the hierarchical models' extra hyperparameters, which the
     forward model does not take.
+
+    `num_obs` is one count per dataset (a scalar broadcasts, which is what the simulated
+    studies pass): the empirical study's subjects each keep their own number of trials, so a
+    subject's predictions have to be simulated at that subject's length and compared against
+    exactly the trials it has -- `data` is padded past `num_obs[i]` (`pipeline.num_obs_groups`).
     """
-    num_obs = int(num_obs)
+    num_obs = np.broadcast_to(np.reshape(np.asarray(num_obs), -1), (data.shape[0],)).astype(int)
     quantiles = np.arange(1, 10) / 10
 
     idx = []
@@ -31,13 +36,15 @@ def calc_posterior_predictive(data, posterior, num_obs, simulator, num_samples, 
 
     for i in range(data.shape[0]):
         draws = np.asarray(posterior[i, :num_samples])
+        observed = data[i, : num_obs[i]]
 
         # One dataset per draw, chunked per subject: the round stays at num_samples x num_obs,
-        # and the vmap sees a single batch size, so XLA compiles it once.
+        # and the vmap sees a single batch size, so XLA compiles it once per distinct trial
+        # count -- one for every simulated study, a handful for the empirical one.
         sim = simulator.experiment_simulator.sample(
             draws.shape[0],
             **{name: draws[:, k] for k, name in enumerate(param_names)},
-            num_obs=num_obs,
+            num_obs=int(num_obs[i]),
         )
         sim_x = np.asarray(sim["x"])
 
@@ -45,10 +52,10 @@ def calc_posterior_predictive(data, posterior, num_obs, simulator, num_samples, 
             idx.append(i)
             posterior_sample.append(j)
             acc_est.append(sim_x[j, :, 1].mean())
-            acc_true.append(data[i, :, 1].mean())
+            acc_true.append(observed[:, 1].mean())
             quantile.append(quantiles.tolist())
             rt_est.append(np.quantile(sim_x[j, :, 0], q=quantiles).tolist())
-            rt_true.append(np.quantile(data[i, :, 0], q=quantiles).tolist())
+            rt_true.append(np.quantile(observed[:, 0], q=quantiles).tolist())
 
     return pd.DataFrame(
         {

@@ -13,7 +13,15 @@ import bayesflow as bf
 import hydra
 from omegaconf import DictConfig
 
-from pipeline import accuracy, iter_comparable_cases, load_case_data, load_npe_members, rt_range, setup
+from pipeline import (
+    accuracy,
+    iter_comparable_cases,
+    load_case_data,
+    load_npe_members,
+    num_obs_per_dataset,
+    rt_range,
+    setup,
+)
 from results import write_long_csv
 
 logger = logging.getLogger(__name__)
@@ -30,10 +38,12 @@ def check_robustness(cfg: DictConfig):
         logger.info("Computing MMD for case %s", case.key)
 
         # Per-dataset properties of the generated data, carried alongside the mismatch: the
-        # quantity study 5 selects on, and the pair study 6 selects on.
-        data_x = load_case_data(case, artifacts)["x"]
-        rates = accuracy(data_x, is_converged)
-        lowest_rt, highest_rt = rt_range(data_x, is_converged)
+        # quantity study 5 selects on, the pair study 6 selects on, and the trial count, which
+        # is constant except in study 4, where each subject keeps their own.
+        data = load_case_data(case, artifacts)
+        rates = accuracy(data["x"], is_converged)
+        lowest_rt, highest_rt = rt_range(data["x"], is_converged)
+        trial_counts = num_obs_per_dataset(data, is_converged)
 
         # Members separately, not the pooled posterior `iter_comparable_cases` yields: pooling
         # them first would average the ensemble into one approximator and lose the spread.
@@ -46,6 +56,7 @@ def check_robustness(cfg: DictConfig):
                         **case.labels,
                         "member": member,
                         "dataset": index,
+                        "num_obs": int(trial_counts[index]),
                         "accuracy": float(rates[index]),
                         "rt_min": float(lowest_rt[index]),
                         "rt_max": float(highest_rt[index]),

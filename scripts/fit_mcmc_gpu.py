@@ -3,6 +3,13 @@
 `mcmc.fit_mcmc_gpu_batch` vmaps BlackJAX NUTS over chains *and* over every dataset in the
 case at once. The log-density, its parameter vector and the unconstraining transform all
 come from the `mcmc` config group, so this script has no model-specific branching.
+
+`vmap` needs one shape for the whole batch, so a case whose datasets differ in trial count --
+the empirical study's, where every subject keeps their own trials -- is fitted one trial count
+at a time (`pipeline.num_obs_groups`) and the draws are put back in dataset order. Each group
+is a fresh XLA compilation; the empirical files have a handful of distinct counts, with most
+subjects in one group, so that is cheap next to fitting the datasets one at a time. A
+simulated case is a single group and is the one call this script always made.
 """
 
 import logging
@@ -14,7 +21,7 @@ from omegaconf import DictConfig
 
 from config import get_mcmc_param_names
 from mcmc import save_mcmc_posterior
-from pipeline import load_case_data, select_cases, setup
+from pipeline import load_case_data, num_obs_groups, restore_dataset_order, select_cases, setup
 
 logger = logging.getLogger(__name__)
 
@@ -29,23 +36,32 @@ def fit_mcmc(cfg: DictConfig):
     fit_fun = instantiate(cfg["mcmc_sampling_fun"])
 
     for case in select_cases(cases, cfg["case"]):
-        data_x = load_case_data(case, artifacts)["x"]
+        blocks = num_obs_groups(load_case_data(case, artifacts))
 
-        logger.info(
-            "Fitting MCMC for case %s: %s datasets with %s trials each",
-            case.key,
-            data_x.shape[0],
-            data_x.shape[1],
-        )
+        per_block = []
 
-        positions, infos = fit_fun(
-            data=data_x,
-            make_logdensity_fn=make_logdensity_fn,
-            to_unconstrained=to_unconstrained,
-        )
-        positions.block_until_ready()
+        for _, block in blocks:
+            data_x = block["x"]
 
-        logger.info("Divergence rate: %s", float(np.mean(infos.is_divergent)))
+            logger.info(
+                "Fitting MCMC for case %s: %s datasets with %s trials each",
+                case.key,
+                data_x.shape[0],
+                data_x.shape[1],
+            )
+
+            positions, infos = fit_fun(
+                data=data_x,
+                make_logdensity_fn=make_logdensity_fn,
+                to_unconstrained=to_unconstrained,
+            )
+            positions.block_until_ready()
+
+            logger.info("Divergence rate: %s", float(np.mean(infos.is_divergent)))
+
+            per_block.append(np.asarray(positions))
+
+        positions = restore_dataset_order(blocks, per_block)
 
         path = artifacts.mcmc_samples(case)
         artifacts.ensure(path)

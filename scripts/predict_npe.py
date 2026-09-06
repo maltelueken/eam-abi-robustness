@@ -28,7 +28,7 @@ def predict_npe(cfg: DictConfig):
     rectangular batch. A simulated case is a single group, so this is one call as before.
 
     Each case's sampling is timed into `timing/predict_npe.csv`: this is the amortized side of
-    the cost comparison, measured against the very same test data `fit_mcmc_gpu` is timed on.
+    the cost comparison, measured against the very same test data `fit_mcmc_cpu` is timed on.
     The first case also pays for the sampling function's XLA compilation, and the checkpoint
     load is timed on its own so that neither is hidden inside a per-dataset rate.
     """

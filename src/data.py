@@ -11,17 +11,23 @@ Two kinds of artifact live here:
 
 Storing both posterior kinds in the same layout means one reader serves both, and naming
 the ``param`` axis means parameters are selected by name rather than by position -- which
-matters because the hierarchical ("meta") models store two hyperparameters ahead of the
-five subject-level ones that the NPE infers.
+matters because the hierarchical ("meta") models store a prior hyperparameter ahead of the
+subject-level ones that the NPE infers.
+
+The posterior half of this module is a two-line adapter over :mod:`eamax.io`, which owns
+both schemas and, deliberately, does nothing but read and write -- no diagnostic, no
+threshold, no thinning. Those live in :func:`mcmc.load_mcmc_posterior`, where they are
+visible. The dataset half stays here: simulator output is BayesFlow's shape-sensitive dict,
+which is this study's concern rather than `eamax`'s.
 
 ``load_hdf5`` is retained as a read-only shim for the HDF5 archives produced by earlier
 versions of the pipeline; see ``scripts/convert_hdf5_to_netcdf.py``.
 """
 
-import arviz_base as azb
 import h5py
 import numpy as np
 import xarray as xr
+from eamax.io import open_dataset_posterior, save_dataset_posterior
 
 # Dimension names for simulator output. Anything not listed falls back to the positional
 # defaults below, which is enough for the (batch, 1) parameter draws.
@@ -29,8 +35,6 @@ DATASET_DIMS = {
     "x": ("dataset", "obs", "channel"),
 }
 DEFAULT_DATASET_DIMS = ("dataset", "component", "extra")
-
-POSTERIOR_DIMS = ("chain", "draw", "dataset", "param")
 
 
 def _dims_for(key, ndim):
@@ -78,33 +82,25 @@ def load_dataset(filename):
 
 
 def save_posterior(filename, theta, param_names):
-    """Save posterior samples shaped ``(chain, draw, dataset, param)`` to a NetCDF file."""
-    theta = np.asarray(theta)
+    """Save posterior samples already shaped ``(chain, draw, dataset, param)`` to a NetCDF file.
 
-    if theta.ndim != len(POSTERIOR_DIMS):
-        msg = f"Expected posterior samples with dims {POSTERIOR_DIMS}, got an array of rank {theta.ndim}."
-        raise ValueError(msg)
-
-    if theta.shape[-1] != len(param_names):
-        msg = f"Posterior has {theta.shape[-1]} parameters but {len(param_names)} names were given."
-        raise ValueError(msg)
-
-    tree = azb.from_dict(
-        {"posterior": {"theta": theta}},
-        dims={"theta": ["dataset", "param"]},
-        coords={"dataset": np.arange(theta.shape[2]), "param": list(param_names)},
-    )
-
-    tree.to_netcdf(filename)
+    ``layout="arviz"`` because NPE draws arrive in that order already -- they are independent,
+    so a member becomes a chain and there is nothing to transpose.
+    :func:`mcmc.save_mcmc_posterior` writes the sampler's own ``(dataset, draw, chain, param)``
+    through the same function under ``layout="sampler"``.
+    """
+    save_dataset_posterior(filename, theta, param_names, layout="arviz")
 
 
 def load_posterior(filename):
     """Load posterior samples saved by :func:`save_posterior`.
 
     Returns the ``posterior`` group as an :class:`xarray.Dataset`, so that ``theta`` can be
-    selected by parameter name and thinned along ``draw``.
+    selected by parameter name and thinned along ``draw``. :func:`mcmc.load_mcmc_posterior`
+    goes through :func:`eamax.io.load_dataset_posterior` instead, which back-transforms and
+    selects on the way out; this one is for readers that want the labelled array.
     """
-    return xr.open_datatree(filename)["posterior"].to_dataset()
+    return open_dataset_posterior(filename)
 
 
 def stack_posterior_dict(samples, param_names):

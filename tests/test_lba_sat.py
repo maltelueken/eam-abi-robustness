@@ -11,6 +11,7 @@ import jax.numpy as jnp
 import numpy as np
 from lba_jax import (
     _lba_sat_log_likelihood,
+    make_lba_sat_meta_prior_sample,
     _lba_simple_log_likelihood,
     lba_experiment_sat_jax,
     lba_experiment_sat_jax_stateful,
@@ -18,13 +19,9 @@ from lba_jax import (
     make_lba_sat_logdensity,
     make_lba_sat_meta_logdensity,
 )
-from mcmc import (
-    bounded_init_position,
-    inference_loop_multiple_chains,
-    make_bounded_to_unconstrained,
-    simple_to_unconstrained,
-    warmup,
-)
+from eamax.inference.mcmc import inference_loop_multiple_chains
+from eamax.inference.warmup import window_adaptation
+from mcmc import BlockTransform, simple_to_unconstrained
 
 # v_intercept, v_slope, s_true, A, B, B_diff, t0 -- the centre of the prior in
 # conf/simulator/prior_simulator/lba_sat.yaml, with a threshold gap that grows by half again
@@ -112,10 +109,18 @@ def test_logdensity_recovers_the_parameters_with_blackjax_nuts():
     init_position = simple_to_unconstrained(jnp.array([1.0, 1.0, 1.0, 0.5, 1.0, 0.5, 0.2]))
 
     key, warmup_key, sample_key = jax.random.split(key, 3)
-    kernel, last_state, _ = warmup(blackjax.nuts, logdensity_fn, init_position, 500, warmup_key)
+    last_states, parameters = window_adaptation(
+        blackjax.nuts, logdensity_fn, init_position[None, :], 500, warmup_key, num_chains=1,
+    )
 
-    last_states = jax.vmap(lambda _: last_state)(jnp.arange(1))
-    positions, infos = inference_loop_multiple_chains(sample_key, kernel, last_states, 1000, num_chains=1)
+    step = blackjax.nuts.build_kernel()
+
+    def kernel(chain_key, state, params):
+        return step(chain_key, state, logdensity_fn, **params)
+
+    positions, infos = inference_loop_multiple_chains(
+        sample_key, kernel, last_states, 1000, num_chains=1, kernel_params=parameters,
+    )
 
     post_mean = jnp.mean(jnp.exp(positions[300:, 0]), axis=0)
     truth = jnp.array(list(TRUE.values()))
@@ -131,18 +136,23 @@ def test_meta_logdensity_is_finite_at_its_initial_position():
         data_x, drift_slope_loc=1.5, threshold_scale=0.15, threshold_diff_shape=6.0,
         threshold_diff_scale_lower=0.02, threshold_diff_scale_upper=0.18,
     )
-    position = make_bounded_to_unconstrained([0.02], [0.18])(
-        jnp.array([0.1, *TRUE.values()]),
-    )
+    position = BlockTransform([0.02], [0.18]).inverse(jnp.array([0.1, *TRUE.values()]))
 
     assert jnp.isfinite(logdensity_fn(position))
     assert jnp.all(jnp.isfinite(jax.grad(logdensity_fn)(position)))
 
 
-def test_meta_init_position_starts_inside_the_narrowed_bounds():
-    init = bounded_init_position([0.14], [0.18], [1, 2, 1, 0.5, 1.0, 0.5, 0.2])
-    unconstrained = make_bounded_to_unconstrained([0.14], [0.18])(init)
+def test_meta_prior_draws_start_inside_the_narrowed_bounds():
+    # The LBA twin of the RDM's equivalent test; see it for what this guards against.
+    lower, upper = 0.14, 0.18
+    sample = make_lba_sat_meta_prior_sample(
+        drift_slope_loc=1.5, threshold_scale=0.15, threshold_diff_shape=6.0,
+        threshold_diff_scale_lower=lower, threshold_diff_scale_upper=upper,
+    )
 
-    assert np.all(np.isfinite(np.asarray(unconstrained)))
-    assert 0.14 < init[0] < 0.18
-    assert len(init) == 8
+    draws = np.asarray(jax.vmap(sample)(jax.random.split(jax.random.key(0), 200)))
+
+    assert draws.shape == (200, 8)
+    assert np.all(np.isfinite(np.asarray(BlockTransform([lower], [upper]).inverse(draws))))
+    assert np.all((lower < draws[:, 0]) & (draws[:, 0] < upper))
+    assert np.all(draws[:, 1:] > 0.0)

@@ -10,7 +10,7 @@ Four tasks are timed, and they are the four the comparison is made of:
 
 * `train_npe` -- fitting the ensemble, the one-off cost amortization pays up front;
 * `predict_npe` -- drawing a case's posteriors, the cost it buys;
-* `fit_mcmc_gpu` -- the ground-truth fits for the same case, the cost being amortized away;
+* `fit_mcmc_cpu` -- the ground-truth fits for the same case, the cost being amortized away;
 * the architecture sweep, which is a cost of arriving at the method rather than of any one
   run and is read back out of the Optuna study instead (`sweeper.sweep_timing`).
 

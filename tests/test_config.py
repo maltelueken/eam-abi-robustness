@@ -10,6 +10,7 @@ import itertools
 import os
 import pathlib
 
+import jax
 import numpy as np
 import pytest
 from hydra import compose, initialize
@@ -108,24 +109,61 @@ def test_simulator_and_mcmc_instantiate_and_agree_on_parameter_count(model):
     make_logdensity_fn = instantiate(cfg["mcmc_model_fun"])
     assert callable(make_logdensity_fn)
 
-    # The MCMC initial position must have one entry per parameter the log-density expects;
-    # a mismatch here used to surface only once a GPU job had already started.
-    init_position = instantiate(cfg["mcmc_sampling_fun"]["init_position"])
-    assert len(init_position) == len(cfg["mcmc_param_names"]), model
+    # A prior draw must have one entry per parameter the log-density expects; a mismatch here
+    # used to surface only once a cluster job had already started.
+    draw = np.asarray(instantiate(cfg["mcmc_prior_sample_fun"])(jax.random.key(0)))
+    assert draw.shape == (len(cfg["mcmc_param_names"]),), model
 
 
 @pytest.mark.parametrize("model", MODELS)
-def test_transform_pair_round_trips_on_the_configured_initial_position(model):
+def test_transform_round_trips_on_a_prior_draw(model):
+    """A start drawn from the prior must survive the trip into unconstrained space and back.
+
+    The failure this guards against is silent: the hierarchical models' leading hyperparameter
+    is Sigmoid-transformed, so a draw outside `[lower, upper]` unconstrains to NaN and every
+    chain starts from NaN. Drawing that entry from `Uniform(lower, upper)` -- the same bounds
+    the bijector is built from, both interpolated from the meta simulator -- makes it in-support
+    by construction, including for the `_lower`/`_upper` variants that narrow the bounds.
+    """
     cfg = build([f"experiment={EXPERIMENT_BY_MODEL.get(model, 'experiment_2')}", f"model={model}"])
 
-    to_unconstrained = instantiate(cfg["mcmc_to_unconstrained"])
-    to_constrained = instantiate(cfg["mcmc_to_constrained"])
+    transform = instantiate(cfg["mcmc_transform"])
 
-    init_position = np.asarray(instantiate(cfg["mcmc_sampling_fun"]["init_position"]), dtype=float)
+    draw = np.asarray(instantiate(cfg["mcmc_prior_sample_fun"])(jax.random.key(0)), dtype=float)
+    unconstrained = np.asarray(transform.inverse(draw))
 
-    round_tripped = np.asarray(to_constrained(to_unconstrained(init_position)))
+    assert np.all(np.isfinite(unconstrained)), model
+    assert np.allclose(np.asarray(transform.forward(unconstrained)), draw, atol=1e-6), model
 
-    assert np.allclose(round_tripped, init_position, atol=1e-6), model
+
+@pytest.mark.parametrize("model", MODELS)
+def test_the_parameterization_covers_the_subject_level_block_of_the_parameter_vector(model):
+    """`mcmc_spec` describes the vector `mcmc_param_names` names, after any bounded block.
+
+    Three config keys have to agree about one layout: the names written to disk, the
+    parameterization the likelihood and the simulator read, and the transform's split between
+    the Sigmoid-bounded prior hyperparameters and the positive subject-level parameters. They
+    are stated separately, so nothing but a test makes them agree -- and a mismatch is silent:
+    the fit runs, and the columns are labelled with the wrong names.
+
+    `t0` last is checked here rather than assumed anywhere. `mcmc.t0_support` finds it in the
+    spec by name, so nothing breaks if it moves -- but `mcmc_param_names` is what labels the
+    stored `param` axis, and every reader of a saved posterior indexes that by name against a
+    layout this spec produces positionally.
+    """
+    cfg = build([f"experiment={EXPERIMENT_BY_MODEL.get(model, 'experiment_2')}", f"model={model}"])
+
+    spec = instantiate(cfg["mcmc_spec"])
+    transform = instantiate(cfg["mcmc_transform"])
+    param_names = list(cfg["mcmc_param_names"])
+
+    assert transform.num_bounded + spec.num_params == len(param_names), model
+    assert spec.names[-1] == "t0", model
+    assert param_names[-1] == "t0", model
+
+    # Every subject-level parameter is strictly positive, hence on the log link -- which is
+    # what makes the transform's trailing block a plain `exp`.
+    assert set(spec.links) == {"log"}, model
 
 
 @pytest.mark.parametrize(
@@ -442,7 +480,7 @@ def test_the_data_band_models_share_one_set_of_held_out_data(family, experiment,
     data are identical.
 
     `test_data_path` normally carries the model name; these point it at the family instead, so
-    one `generate_test_data` and one `fit_mcmc_gpu` run serves all four -- MCMC being by far the
+    one `generate_test_data` and one `fit_mcmc_cpu` run serves all four -- MCMC being by far the
     most expensive artifact in the pipeline. It is sound only because the band is a function of
     the data alone, which leaves the posterior the MCMC targets unchanged.
     """

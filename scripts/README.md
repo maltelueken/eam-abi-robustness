@@ -10,7 +10,7 @@ studies differ only in configuration, not in code.
 | `generate_test_data.py` | Simulate the held-out test datasets for every case. |
 | `prior_stats.py` | Dump prior draws, for the prior ranges shown in the figures. |
 | `predict_npe.py` | Sample the trained NPE's posterior for every case (one chain per ensemble member). |
-| `fit_mcmc_gpu.py` | Fit ground-truth MCMC posteriors, vmapped over chains and datasets. |
+| `fit_mcmc_cpu.py` | Fit ground-truth MCMC posteriors: one chain per CPU core, datasets vmapped inside each. |
 | `check_metrics.py` | RMSE / contraction / calibration against the simulating parameters. |
 | `check_summary_stats.py` | Posterior median and 95% credible interval per dataset. |
 | `check_robustness.py` | Maximum mean discrepancy between the NPE and MCMC posteriors, per ensemble member. |
@@ -22,7 +22,7 @@ studies differ only in configuration, not in code.
 
 ```console
 python scripts/train_npe.py       experiment=experiment_1 model=rdm_simple
-python scripts/fit_mcmc_gpu.py    experiment=experiment_2 model=rdm_simple_meta
+python scripts/fit_mcmc_cpu.py    experiment=experiment_2 model=rdm_simple_meta
 python scripts/check_robustness.py experiment=experiment_4 model=rdm_simple
 python scripts/generate_test_data.py experiment=experiment_3 model=rdm_sat
 ```
@@ -55,9 +55,27 @@ each objective over the completed trials, flip the maximized one, and take the f
 closest to the ideal point. `--weights` privileges an objective, `--dry-run` prints the config
 instead of writing it.
 
-Any `conf/**/*.yaml` key can be overridden on the command line. `fit_mcmc_gpu.py` accepts
+Any `conf/**/*.yaml` key can be overridden on the command line. `fit_mcmc_cpu.py` accepts
 `case=<key>` to fit a single test case (e.g. `case=sample_size_50`); by default it fits all
 of them in one job.
+
+`fit_mcmc_cpu.py` is the one stage that wants **cores rather than a GPU**. It runs
+`mcmc_sampling_fun.num_chains` chains in parallel, one per JAX device, and splits the host CPU
+into that many devices before JAX starts (`src/cpu_devices.py`). Raising `num_chains` therefore
+means raising `MCMC_NUM_CPU_DEVICES` to match, and asking SLURM for that many CPUs;
+`slurm/submit_all.sh` does all three for you.
+
+Budget for it, twice over. Four chains on four cores cost about the same wall-clock as one
+chain did, so the per-chain warm-up `eamax` insists on is paid for — but the *datasets* of a
+case are still vmapped within a core, and a CPU core is far slower per leapfrog step than the
+GPU this used to run on. Warm-up also got harder, not just more numerous: chains now start from
+draws out of the prior rather than from one hand-placed vector, and a prior draw can land
+somewhere stiff. On a four-dataset toy fit that was 140 s against 89 s for the same budget from
+a fixed start — the price of a diagnostic that can fail.
+
+So check `timing/fit_mcmc.csv` from a small case (`case=<key>`) against `slurm/submit.sh`'s
+`--time` before submitting a whole study, and split a case across jobs with `case=` if a block
+does not fit.
 
 Note that `hydra.run.dir` includes `hydra.job.override_dirname`, so **a stage must be given
 the same overrides as the stage that produced its inputs** — otherwise it will look for the

@@ -3,16 +3,19 @@
 These guard the block that used to be copy-pasted into all ten check_*.py scripts, where
 the R-hat threshold was hardcoded, the thinning stride was a magic 4, and the
 back-transform was always `np.exp` -- which is wrong for the hierarchical models, whose
-two leading hyperparameters go through a Sigmoid bijector instead.
+leading hyperparameter goes through a Sigmoid bijector instead.
+
+`eamax.io` reads and writes and applies no diagnostic of its own, so the convergence filter,
+the pooling and the thinning are composed in `mcmc.load_mcmc_posterior`. That is what these
+test: the composition and its order, not the file format.
 """
 
 import numpy as np
 import pytest
 from data import save_posterior
 from mcmc import (
+    BlockTransform,
     load_mcmc_posterior,
-    make_bounded_to_constrained,
-    make_bounded_to_unconstrained,
     simple_to_constrained,
     simple_to_unconstrained,
 )
@@ -38,8 +41,8 @@ def test_simple_transform_pair_are_inverses():
 
 
 def test_meta_transform_pair_are_inverses_and_respect_the_bounds():
-    to_unconstrained = make_bounded_to_unconstrained(LOWER, UPPER)
-    to_constrained = make_bounded_to_constrained(LOWER, UPPER)
+    transform = BlockTransform(LOWER, UPPER)
+    to_unconstrained, to_constrained = transform.inverse, transform.forward
 
     x = np.array([1.5, 1.0, 2.0, 1.0, 1.5, 0.2])
     assert np.allclose(np.asarray(to_constrained(to_unconstrained(x))), x)
@@ -80,7 +83,7 @@ def test_meta_posteriors_are_reduced_to_the_parameters_the_npe_infers(tmp_path):
 
     posterior, _ = load_mcmc_posterior(
         str(path),
-        to_constrained=make_bounded_to_constrained(LOWER, UPPER),
+        to_constrained=BlockTransform(LOWER, UPPER).forward,
         param_names=SUBJECT_PARAMS,
         psrf_threshold=1.01,
         num_target_samples=100,

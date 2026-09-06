@@ -1,8 +1,15 @@
-"""Fit ground-truth MCMC posteriors on the GPU, one job per test case.
+"""Fit ground-truth MCMC posteriors on the CPU, one job per test case.
 
-`mcmc.fit_mcmc_gpu_batch` vmaps BlackJAX NUTS over chains *and* over every dataset in the
-case at once. The log-density, its parameter vector and the unconstraining transform all
-come from the `mcmc` config group, so this script has no model-specific branching.
+`mcmc.fit_mcmc_cpu_batch` runs BlackJAX NUTS with one chain per CPU core -- `pmap` over the
+chain axis -- and every dataset in the case vmapped inside each core. Every chain adapts its
+own tuning from its own draw out of the prior. The log-density, the prior to start from, the
+parameterization and the transform all come from the `mcmc` config group, so this script has
+no model-specific branching.
+
+The device split has to happen before JAX initialises its backend, and JAX does that on its
+first array operation rather than at import -- so `configure_cpu_devices` runs on the first
+line, ahead of every import that pulls JAX in. That is the whole reason `src/cpu_devices.py`
+exists as a module importing nothing but `os`.
 
 `vmap` needs one shape for the whole batch, so a case whose datasets differ in trial count --
 the empirical study's, where every subject keeps their own trials -- is fitted one trial count
@@ -19,17 +26,28 @@ the dispatch. The first block of a run also pays for its XLA compilation, once p
 trial count.
 """
 
-import logging
+from cpu_devices import configure_cpu_devices
 
-import hydra
-import numpy as np
-from hydra.utils import instantiate
-from omegaconf import DictConfig
+# Before anything imports JAX. See the module docstring.
+configure_cpu_devices()
 
-from config import get_mcmc_param_names
-from mcmc import save_mcmc_posterior
-from pipeline import load_case_data, num_obs_groups, restore_dataset_order, select_cases, setup
-from timing import TimingLog, run_labels
+import logging  # noqa: E402
+
+import hydra  # noqa: E402
+import numpy as np  # noqa: E402
+from hydra.utils import instantiate  # noqa: E402
+from omegaconf import DictConfig  # noqa: E402
+
+from config import get_mcmc_param_names  # noqa: E402
+from mcmc import save_mcmc_posterior  # noqa: E402
+from pipeline import (  # noqa: E402
+    load_case_data,
+    num_obs_groups,
+    restore_dataset_order,
+    select_cases,
+    setup,
+)
+from timing import TimingLog, run_labels  # noqa: E402
 
 logger = logging.getLogger(__name__)
 
@@ -42,7 +60,9 @@ def fit_mcmc(cfg: DictConfig):
     timings = TimingLog(artifacts.csv("timing", "fit_mcmc"), run_labels())
 
     make_logdensity_fn = instantiate(cfg["mcmc_model_fun"])
-    to_unconstrained = instantiate(cfg["mcmc_to_unconstrained"])
+    prior_sample_fn = instantiate(cfg["mcmc_prior_sample_fun"])
+    spec = instantiate(cfg["mcmc_spec"])
+    transform = instantiate(cfg["mcmc_transform"])
     fit_fun = instantiate(cfg["mcmc_sampling_fun"])
 
     for case in select_cases(cases, cfg["case"]):
@@ -72,7 +92,9 @@ def fit_mcmc(cfg: DictConfig):
                 positions, infos = fit_fun(
                     data=data_x,
                     make_logdensity_fn=make_logdensity_fn,
-                    to_unconstrained=to_unconstrained,
+                    prior_sample_fn=prior_sample_fn,
+                    spec=spec,
+                    transform=transform,
                 )
                 positions.block_until_ready()
 

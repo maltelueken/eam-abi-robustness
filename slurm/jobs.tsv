@@ -162,48 +162,48 @@ prior_distance	experiment_6	lba_simple_meta_rt_tight
 prior_distance	experiment_6	lba_simple_meta_rt_medium
 prior_distance	experiment_6	lba_simple_meta_rt_wide
 prior_distance	experiment_6	lba_simple_meta_rt_full
-fit_mcmc_gpu	experiment_1	rdm_simple
-fit_mcmc_gpu	experiment_1	lba_simple
-fit_mcmc_gpu	experiment_2	rdm_simple
-fit_mcmc_gpu	experiment_2	rdm_simple_lower
-fit_mcmc_gpu	experiment_2	rdm_simple_upper
-fit_mcmc_gpu	experiment_2	rdm_simple_meta
-fit_mcmc_gpu	experiment_2	rdm_simple_meta_lower
-fit_mcmc_gpu	experiment_2	rdm_simple_meta_upper
-fit_mcmc_gpu	experiment_2	lba_simple
-fit_mcmc_gpu	experiment_2	lba_simple_lower
-fit_mcmc_gpu	experiment_2	lba_simple_upper
-fit_mcmc_gpu	experiment_2	lba_simple_meta
-fit_mcmc_gpu	experiment_2	lba_simple_meta_lower
-fit_mcmc_gpu	experiment_2	lba_simple_meta_upper
+fit_mcmc_cpu	experiment_1	rdm_simple
+fit_mcmc_cpu	experiment_1	lba_simple
+fit_mcmc_cpu	experiment_2	rdm_simple
+fit_mcmc_cpu	experiment_2	rdm_simple_lower
+fit_mcmc_cpu	experiment_2	rdm_simple_upper
+fit_mcmc_cpu	experiment_2	rdm_simple_meta
+fit_mcmc_cpu	experiment_2	rdm_simple_meta_lower
+fit_mcmc_cpu	experiment_2	rdm_simple_meta_upper
+fit_mcmc_cpu	experiment_2	lba_simple
+fit_mcmc_cpu	experiment_2	lba_simple_lower
+fit_mcmc_cpu	experiment_2	lba_simple_upper
+fit_mcmc_cpu	experiment_2	lba_simple_meta
+fit_mcmc_cpu	experiment_2	lba_simple_meta_lower
+fit_mcmc_cpu	experiment_2	lba_simple_meta_upper
 # The empirical study has no train_npe rows: it applies the networks study 2 trained on simulations,
 # which is the amortization claim it exists to test. `npe_path` in conf/experiment/experiment_4.yaml
 # points predict_npe at study 2's run directory, so nothing has to be copied between them. Its
 # held-out data are the subject files, placed in outputs/experiment_4/<model>/test_data/ by hand, so
 # there is no generate_test_data row either -- and no check_metrics row, since empirical data have no
 # simulating parameters to score against.
-fit_mcmc_gpu	experiment_4	rdm_simple
-fit_mcmc_gpu	experiment_4	rdm_simple_meta
-fit_mcmc_gpu	experiment_4	lba_simple
-fit_mcmc_gpu	experiment_4	lba_simple_meta
-fit_mcmc_gpu	experiment_3	rdm_sat
-fit_mcmc_gpu	experiment_3	rdm_sat_lower
-fit_mcmc_gpu	experiment_3	rdm_sat_upper
-fit_mcmc_gpu	experiment_3	rdm_sat_meta
-fit_mcmc_gpu	experiment_3	rdm_sat_meta_lower
-fit_mcmc_gpu	experiment_3	rdm_sat_meta_upper
-fit_mcmc_gpu	experiment_3	lba_sat
-fit_mcmc_gpu	experiment_3	lba_sat_lower
-fit_mcmc_gpu	experiment_3	lba_sat_upper
-fit_mcmc_gpu	experiment_3	lba_sat_meta
-fit_mcmc_gpu	experiment_3	lba_sat_meta_lower
-fit_mcmc_gpu	experiment_3	lba_sat_meta_upper
+fit_mcmc_cpu	experiment_4	rdm_simple
+fit_mcmc_cpu	experiment_4	rdm_simple_meta
+fit_mcmc_cpu	experiment_4	lba_simple
+fit_mcmc_cpu	experiment_4	lba_simple_meta
+fit_mcmc_cpu	experiment_3	rdm_sat
+fit_mcmc_cpu	experiment_3	rdm_sat_lower
+fit_mcmc_cpu	experiment_3	rdm_sat_upper
+fit_mcmc_cpu	experiment_3	rdm_sat_meta
+fit_mcmc_cpu	experiment_3	rdm_sat_meta_lower
+fit_mcmc_cpu	experiment_3	rdm_sat_meta_upper
+fit_mcmc_cpu	experiment_3	lba_sat
+fit_mcmc_cpu	experiment_3	lba_sat_lower
+fit_mcmc_cpu	experiment_3	lba_sat_upper
+fit_mcmc_cpu	experiment_3	lba_sat_meta
+fit_mcmc_cpu	experiment_3	lba_sat_meta_lower
+fit_mcmc_cpu	experiment_3	lba_sat_meta_upper
 # Once per family, as above.
-fit_mcmc_gpu	experiment_5	rdm_simple_meta_acc_full
-fit_mcmc_gpu	experiment_5	lba_simple_meta_acc_full
+fit_mcmc_cpu	experiment_5	rdm_simple_meta_acc_full
+fit_mcmc_cpu	experiment_5	lba_simple_meta_acc_full
 # Once per family, as above.
-fit_mcmc_gpu	experiment_6	rdm_simple_meta_rt_full
-fit_mcmc_gpu	experiment_6	lba_simple_meta_rt_full
+fit_mcmc_cpu	experiment_6	rdm_simple_meta_rt_full
+fit_mcmc_cpu	experiment_6	lba_simple_meta_rt_full
 predict_npe	experiment_1	rdm_simple
 predict_npe	experiment_1	lba_simple
 predict_npe	experiment_2	rdm_simple

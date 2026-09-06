@@ -1,11 +1,22 @@
 # @package _global_
 
 # Everything the MCMC side of the simple LBA needs: the log-density, the parameter vector
-# it is defined over, and the pair of transforms between natural and unconstrained space.
+# it is defined over, the parameterization that describes it, and the transform between
+# natural and unconstrained space.
 # The hyperparameters are interpolated from the simulator's prior, so the MCMC prior and
 # the training prior cannot drift apart -- and no script needs to reach into the config to
 # bind them by hand.
 mcmc_param_names: ["v_intercept", "v_slope", "s_true", "A", "B", "t0"]
+
+# The parameterization the log-density, the simulator and the sampler all read: which
+# coefficients the vector holds, in what order, and on which link. `eamax.design` owns it, so
+# `mcmc_param_names` above and the spec cannot disagree about the layout, and
+# `mcmc.t0_support` finds `t0` in it *by name* rather than assuming it is last. `noise_scale`
+# is the non-target accumulator's fixed noise, interpolated from the simulator so the model
+# fitted and the model simulated from identify their scale the same way.
+mcmc_spec:
+  _target_: eamax.design.lba_intercept_slope_spec
+  noise_scale: ${simulator.experiment_simulator.sample_fn.s_false}
 
 mcmc_model_fun:
   _target_: lba_jax.make_lba_simple_logdensity
@@ -13,19 +24,23 @@ mcmc_model_fun:
   drift_slope_loc: ${simulator.prior_simulator.sample_fn.drift_slope_loc}
   threshold_scale: ${simulator.prior_simulator.sample_fn.threshold_scale}
 
-mcmc_to_unconstrained:
-  _target_: hydra.utils.get_method
-  path: mcmc.simple_to_unconstrained
+# The prior as something to *draw from*, for the chains' starting values -- built from the same
+# distributions `mcmc_log_prior_fun` scores against (`lba_jax._lba_simple_prior_dists`), so a chain
+# cannot start from one prior and target another. `mcmc.make_init_positions_fn` unconstrains each
+# draw with `mcmc_transform` and rejects it back into the `t0` support, which is why there is no
+# `init_position` here any more: every chain gets its own dispersed, in-support draw, where all
+# four used to be handed the same fixed vector.
+mcmc_prior_sample_fun:
+  _target_: lba_jax.make_lba_simple_prior_sample
+  drift_slope_loc: ${simulator.prior_simulator.sample_fn.drift_slope_loc}
+  threshold_scale: ${simulator.prior_simulator.sample_fn.threshold_scale}
 
-mcmc_to_constrained:
-  _target_: hydra.utils.get_method
-  path: mcmc.simple_to_constrained
-
-# Order matches the unconstrained position the log-density expects, i.e. mcmc_param_names.
-mcmc_sampling_fun:
-  init_position:
-    _target_: numpy.array
-    object: [1, 2, 1, 0.5, 1.0, 0.2]
+# Natural scale <-> the unconstrained space NUTS explores, and the matching log-det-Jacobian,
+# in one object so the three cannot fall out of step. An empty bounded block is the ordinary
+# all-positive case; `conf/mcmc/*_meta.yaml` fills it with the Sigmoid the hierarchical models'
+# prior hyperparameter needs.
+mcmc_transform:
+  _target_: eamax.inference.transforms.BlockTransform
 
 # The prior's density, for scripts/prior_distance.py. Separate from `mcmc_model_fun`, which folds
 # the prior into the posterior log-density the sampler needs; the hyperparameters interpolate from

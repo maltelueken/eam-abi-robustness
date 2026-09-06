@@ -99,10 +99,14 @@ psrf_threshold: 1.01
 # One case may be selected by key (`case=sample_size_50`); null fits every case.
 case: null
 
-# GPU-parallelized MCMC fitting (scripts/fit_mcmc_gpu.py): vmaps BlackJAX NUTS over chains
-# *and* over every dataset in one call. See mcmc.fit_mcmc_gpu_batch.
+# CPU-parallelized MCMC fitting (scripts/fit_mcmc_cpu.py): one chain per core via `pmap`,
+# every dataset of the case vmapped inside each. See mcmc.fit_mcmc_cpu_batch.
+#
+# `num_chains` is also the number of CPU devices the stage asks JAX for, and that count is
+# fixed before JAX starts -- so raising it here means raising `MCMC_NUM_CPU_DEVICES` in the
+# environment too (see src/cpu_devices.py). Four is what `slurm/submit_all.sh` allocates.
 mcmc_sampling_fun:
-  _target_: mcmc.fit_mcmc_gpu_batch
+  _target_: mcmc.fit_mcmc_cpu_batch
   _partial_: true
   _convert_: object
   num_chains: 4

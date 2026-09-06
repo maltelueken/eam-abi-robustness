@@ -68,7 +68,7 @@ def num_obs_groups(data):
 
     Empirical subjects do not all run for the same number of trials, but the summary network
     and the NUTS driver both want a rectangular batch: `EnsembleApproximator.sample` stacks the
-    datasets into one tensor, and `mcmc.fit_mcmc_gpu_batch` vmaps over them, so neither can be
+    datasets into one tensor, and `mcmc.fit_mcmc_cpu_batch` vmaps over them, so neither can be
     handed a ragged case in one call. Every stage that consumes a case's data therefore walks
     these blocks and reassembles its output in the original dataset order.
 
@@ -151,7 +151,7 @@ def load_paired_posteriors(cfg, artifacts, case, param_names):
     logger.info("Loading MCMC samples from %s", artifacts.mcmc_samples(case))
     posterior_mcmc, is_converged = load_mcmc_posterior(
         artifacts.mcmc_samples(case),
-        to_constrained=instantiate(cfg["mcmc_to_constrained"]),
+        to_constrained=instantiate(cfg["mcmc_transform"]).forward,
         param_names=param_names,
         psrf_threshold=cfg["psrf_threshold"],
         num_target_samples=cfg["test_num_posterior_samples"],

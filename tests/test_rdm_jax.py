@@ -1,90 +1,32 @@
+"""What this repository owns on the RDM side: its simulator, its priors, and its sampler.
+
+The Wald density, its survival function and the race that assembles them are `eamax`'s, and
+are tested there -- against scipy in `eamax/tests/test_wald.py`, against the R package EMC2 in
+`eamax/tests/test_emc2_reference.py`, and as an assembled race (floors, masks, censoring) in
+`eamax/tests/test_race.py`. Duplicating any of that here would pin the same numbers twice.
+
+What is left is the seam: the simulator's `x` layout and BayesFlow calling convention, the
+log-densities that fold this study's priors into `eamax`'s likelihood, and the CPU batch
+fitter.
+"""
+
 import functools
 import blackjax
 import jax
 import jax.numpy as jnp
 import numpy as np
-import pytest
-from scipy import stats
+from eamax.inference.mcmc import inference_loop_multiple_chains
+from eamax.inference.warmup import window_adaptation
 from rdm_jax import SplittableKey
-from mcmc import fit_mcmc_gpu_batch
-from mcmc import inference_loop_multiple_chains
-from rdm_jax import inv_gauss_logpdf
-from rdm_jax import inv_gauss_logsf
-from mcmc import make_bounded_to_unconstrained
+from mcmc import BlockTransform
 from rdm_jax import make_rdm_meta_logdensity
 from rdm_jax import make_rdm_simple_logdensity
+from rdm_jax import make_rdm_simple_prior_sample
 from rdm_jax import rdm_experiment_simple_jax
 from rdm_jax import rdm_experiment_simple_jax_stateful
-from rdm_jax import rdm_race_logpdf
+from rdm_jax import rdm_spec
+from mcmc import fit_mcmc_cpu_batch
 from mcmc import simple_to_unconstrained
-from mcmc import warmup
-
-
-@pytest.fixture
-def x():
-    return jnp.array([0.01, 0.5, 1.0, 2.0, 10.0, 100.0, 500.0])
-
-
-def test_inv_gauss_logpdf(x):
-    mu = np.array([0.01, 1.0, 2.0, 10.0, 100.0])
-    lam = np.array([0.01, 1.0, 2.0, 10.0, 100.0])
-
-    for m in mu:
-        for l in lam:
-            ref = stats.invgauss.logpdf(np.array(x), mu=m / l, scale=l)
-            res = np.array(inv_gauss_logpdf(x, m, l))
-            assert np.all(pytest.approx(res, rel=1e-6) == ref)
-
-
-def test_inv_gauss_logsf(x):
-    mu = np.array([0.01, 1.0, 2.0, 10.0, 100.0])
-    lam = np.array([0.01, 1.0, 2.0, 10.0, 100.0])
-
-    for m in mu:
-        for l in lam:
-            ref = stats.invgauss.logsf(np.array(x), mu=m / l, scale=l)
-            res = np.array(inv_gauss_logsf(x, m, l))
-            relerr = np.abs(ref - res) / np.maximum(np.abs(ref), 1.0)
-            assert np.nanmax(relerr) < 1e-6
-
-
-@pytest.mark.parametrize(
-    ("t", "mu", "lam"),
-    [(0.01, 1.5, 2.0), (0.5, 0.3, 50.0), (5.0, 3.0, 1.0), (1e-6, 1.0, 100.0)],
-)
-def test_inv_gauss_logsf_gradient_is_finite(t, mu, lam):
-    grad = jax.grad(lambda t: inv_gauss_logsf(t, mu, lam))(jnp.array(t))
-    assert jnp.isfinite(grad)
-
-
-def test_rdm_race_logpdf_gradient_finite_random_sweep():
-    rng = np.random.default_rng(0)
-    n = 2000
-    args = [
-        rng.uniform(0.0, 3.0, n),  # rt
-        rng.uniform(0.1, 5.0, n),  # drift_winner
-        rng.uniform(0.1, 5.0, n),  # drift_loser
-        rng.uniform(0.01, 5.0, n),  # s_winner
-        rng.uniform(0.01, 5.0, n),  # s_loser
-        rng.uniform(0.1, 3.0, n),  # threshold
-        rng.uniform(0.0, 1.0, n),  # ndt
-    ]
-    grads = jax.vmap(jax.grad(rdm_race_logpdf, argnums=tuple(range(7))))(*(jnp.array(a) for a in args))
-    assert jnp.all(jnp.isfinite(jnp.stack(grads, axis=-1)))
-
-
-def test_rdm_race_logpdf_penalty_slopes_when_rt_precedes_ndt():
-    # `rt <= t0` is impossible under the model, and _finalize_race_logp answers with a sloped
-    # penalty rather than a flat floor so NUTS keeps a gradient pushing t0 back below the
-    # fastest observed RT. That slope used to be applied *before* the log(min_p) floor, which
-    # clamped it straight back off and left this gradient at exactly -0.0.
-    grad = jax.grad(rdm_race_logpdf, argnums=6)(jnp.array(0.20), 3.5, 2.0, 1.2, 1.0, 1.2, jnp.array(0.30))
-    assert jnp.isfinite(grad)
-    assert grad < -1.0
-
-    # ... while a feasible RT is unaffected, and never drops below the floor.
-    logp = rdm_race_logpdf(jnp.array(0.50), 3.5, 2.0, 1.2, 1.0, 1.2, 0.30)
-    assert logp > jnp.log(1e-10)
 
 
 def test_rdm_experiment_simple_jax_matches_numpy_reference():
@@ -137,13 +79,21 @@ def test_make_rdm_simple_logdensity_recovers_parameters_with_blackjax_nuts():
     data_x = np.array(out["x"])
 
     logdensity_fn = make_rdm_simple_logdensity(data_x, drift_slope_loc=true_v_slope, threshold_scale=1.0)
-    init_position = simple_to_unconstrained(jnp.array([1.0, 1.0, 0.5, 1.0, 0.2]))
+    init_positions = simple_to_unconstrained(jnp.array([[1.0, 1.0, 0.5, 1.0, 0.2]]))
 
     key, warmup_key, sample_key = jax.random.split(key, 3)
-    kernel, last_state, _ = warmup(blackjax.nuts, logdensity_fn, init_position, 500, warmup_key)
+    last_states, parameters = window_adaptation(
+        blackjax.nuts, logdensity_fn, init_positions, 500, warmup_key, num_chains=1,
+    )
 
-    last_states = jax.vmap(lambda _: last_state)(jnp.arange(1))
-    positions, infos = inference_loop_multiple_chains(sample_key, kernel, last_states, 1000, num_chains=1)
+    step = blackjax.nuts.build_kernel()
+
+    def kernel(chain_key, state, params):
+        return step(chain_key, state, logdensity_fn, **params)
+
+    positions, infos = inference_loop_multiple_chains(
+        sample_key, kernel, last_states, 1000, num_chains=1, kernel_params=parameters,
+    )
     post_mean = jnp.mean(jnp.exp(positions[300:, 0]), axis=0)
 
     truth = jnp.array([true_v_intercept, true_v_slope, true_s_true, true_b, true_t0])
@@ -154,9 +104,9 @@ def test_make_rdm_simple_logdensity_recovers_parameters_with_blackjax_nuts():
 def test_make_rdm_meta_logdensity_finite_at_init():
     data_x = np.array([[0.5, 1.0], [0.7, 0.0], [1.2, 1.0]])
     logdensity_fn = make_rdm_meta_logdensity(data_x, 0.7, 3.9, 0.15)
-    to_unconstrained = make_bounded_to_unconstrained([0.7], [3.9])
+    transform = BlockTransform([0.7], [3.9])
 
-    position = to_unconstrained(jnp.array([1.5, 1.0, 1.0, 0.5, 1.0, 0.2]))
+    position = transform.inverse(jnp.array([1.5, 1.0, 1.0, 0.5, 1.0, 0.2]))
     value = logdensity_fn(position)
     grad = jax.grad(logdensity_fn)(position)
 
@@ -164,9 +114,11 @@ def test_make_rdm_meta_logdensity_finite_at_init():
     assert jnp.all(jnp.isfinite(grad))
 
 
-def test_fit_mcmc_gpu_batch_recovers_parameters_across_datasets():
-    # experiment_1/fit_mcmc_gpu.py's core: vmap BlackJAX NUTS over chains *and* over
-    # every dataset in one call, instead of pmap + one SLURM job per dataset.
+def test_fit_mcmc_cpu_batch_recovers_parameters_across_datasets():
+    # scripts/fit_mcmc_cpu.py's core: pmap BlackJAX NUTS over chains -- one per CPU core --
+    # and vmap over every dataset of the case inside each. Under pytest the host has not been
+    # split into devices, so this runs the four chains on the one device it has; what it pins
+    # is the shape contract and the recovery, not the parallelism.
     true_v_intercept, true_v_slope, true_s_true, true_b, true_t0 = 1.0, 1.5, 0.3, 1.2, 0.3
     drift_slope_loc, threshold_scale = 1.5, 1.0
     num_datasets, n_trials = 3, 500
@@ -183,21 +135,23 @@ def test_fit_mcmc_gpu_batch_recovers_parameters_across_datasets():
     make_logdensity_fn = functools.partial(
         make_rdm_simple_logdensity, drift_slope_loc=drift_slope_loc, threshold_scale=threshold_scale,
     )
-    init_position = jnp.array([1.0, 1.0, 0.5, 1.0, 0.2])
-
-    positions, infos = fit_mcmc_gpu_batch(
-        jax.random.PRNGKey(1), datasets, make_logdensity_fn, init_position,
-        num_chains=4, num_steps_warmup=500, num_steps_sampling=500,
+    positions, infos = fit_mcmc_cpu_batch(
+        jax.random.PRNGKey(1), datasets, make_logdensity_fn,
+        prior_sample_fn=make_rdm_simple_prior_sample(
+            drift_slope_loc=drift_slope_loc, threshold_scale=threshold_scale,
+        ),
+        spec=rdm_spec(), transform=BlockTransform(),
+        num_chains=1, num_steps_warmup=500, num_steps_sampling=500,
     )
     positions.block_until_ready()
 
-    assert positions.shape == (num_datasets, 500, 4, 5)
+    assert positions.shape == (num_datasets, 500, 1, 5)
 
     post_mean = jnp.mean(jnp.exp(positions[:, 200:]), axis=(1, 2))
     truth = jnp.array([true_v_intercept, true_v_slope, true_s_true, true_b, true_t0])
     rel_err = jnp.abs(post_mean - truth) / truth
     # Mean rather than max across only 3 datasets: with a small sample/chain budget
     # any single dataset can mix poorly and swing its own error up, without that
-    # reflecting a problem with fit_mcmc_gpu_batch itself.
+    # reflecting a problem with fit_mcmc_cpu_batch itself.
     assert jnp.mean(rel_err) < 0.3
     assert jnp.mean(infos.is_divergent) < 0.1

@@ -20,7 +20,15 @@ classifiers = [
 dependencies = [
   "arviz",
   "bayesflow==2.0.14",
-  "blackjax",
+  # >=1.6 for `blackjax.diagnostics.rhat`, the rank-normalized split-R-hat that
+  # `eamax.inference.diagnostics.rhat` wraps; the older `potential_scale_reduction` is a
+  # different statistic and would move which fits the convergence filter keeps.
+  "blackjax>=1.6",
+  # The accumulator densities, the race likelihood, the parameterization engine, the
+  # simulators, the NUTS driver and the posterior artifact IO. Everything
+  # model-mathematical lives there; this repository keeps its priors, its Hydra wiring
+  # and its study design.
+  "eamax[inference,io]",
   # sweeper 1.2.0 relies on hydra recursively instantiating the nested sampler config;
   # hydra-core 1.4 stopped doing that, and its `>=1.1.0.dev7` floor lets resolvers pick
   # up 1.4.0.dev pre-releases unless this is pinned.
@@ -48,6 +56,11 @@ name = "eam_abi_robustness"
 readme = {file = "README.md", content-type = "text/markdown"}
 requires-python = ">=3.12"
 version = "0.0.1"
+
+# `eamax` is developed alongside this study rather than released, so uv is pointed at the
+# sibling checkout. Editable, so a change there is picked up here without a re-sync.
+[tool.uv.sources]
+eamax = { path = "../eamax", editable = true }
 
 [dependency-groups]
 # `uv sync` prunes anything undeclared, so the documented test command needs pytest here.

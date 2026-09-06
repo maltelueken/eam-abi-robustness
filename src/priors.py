@@ -96,7 +96,7 @@ def lba_prior_simple(
     LBA is degenerate otherwise, since a start point above threshold would mean an instant
     response -- and decorrelates the pair, which a diagonal MCMC mass matrix handles far better.
     `threshold_shape`/`threshold_scale` therefore parameterize `B`, not `b`; the hyperparameter
-    names are kept so `experiment_*/fit_mcmc_gpu.py` needs no changes.
+    names are kept so `scripts/fit_mcmc_cpu.py` needs no changes.
 
     Returned keys are ordered to match `conf/approximator/adapter/lba_simple.yaml` and the
     unconstrained position vector built by `lba_jax.make_lba_simple_logdensity`.

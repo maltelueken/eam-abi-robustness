@@ -13,6 +13,16 @@ mcmc_bounds:
 
 mcmc_param_names: ["drift_slope_loc", "v_intercept", "v_slope", "s_true", "A", "B", "t0"]
 
+# The parameterization the log-density, the simulator and the sampler all read: which
+# coefficients the vector holds, in what order, and on which link. `eamax.design` owns it, so
+# `mcmc_param_names` above and the spec cannot disagree about the layout, and
+# `mcmc.t0_support` finds `t0` in it *by name* rather than assuming it is last. `noise_scale`
+# is the non-target accumulator's fixed noise, interpolated from the simulator so the model
+# fitted and the model simulated from identify their scale the same way.
+mcmc_spec:
+  _target_: eamax.design.lba_intercept_slope_spec
+  noise_scale: ${simulator.experiment_simulator.sample_fn.s_false}
+
 mcmc_model_fun:
   _target_: lba_jax.make_lba_meta_logdensity
   _partial_: true
@@ -20,25 +30,27 @@ mcmc_model_fun:
   drift_slope_loc_upper: ${mcmc_bounds.upper[0]}
   threshold_scale: ${simulator.prior_simulator.sample_fn.threshold_scale}
 
-mcmc_to_unconstrained:
-  _target_: mcmc.make_bounded_to_unconstrained
+# The prior as something to *draw from*, for the chains' starting values -- built from the same
+# distributions `mcmc_log_prior_fun` scores against (`lba_jax._lba_simple_prior_dists`), so a chain
+# cannot start from one prior and target another. `mcmc.make_init_positions_fn` unconstrains each
+# draw with `mcmc_transform` and rejects it back into the `t0` support, which is why there is no
+# `init_position` here any more: every chain gets its own dispersed, in-support draw, where all
+# four used to be handed the same fixed vector.
+mcmc_prior_sample_fun:
+  _target_: lba_jax.make_lba_meta_prior_sample
+  drift_slope_loc_lower: ${mcmc_bounds.lower[0]}
+  drift_slope_loc_upper: ${mcmc_bounds.upper[0]}
+  threshold_scale: ${simulator.prior_simulator.sample_fn.threshold_scale}
+
+# Natural scale <-> the unconstrained space NUTS explores, and the matching log-det-Jacobian,
+# in one object so the three cannot fall out of step. The leading hyperparameter is Uniform on
+# its support, so it takes a Sigmoid bijector; the positive subject-level parameters that
+# follow take Exp. The bounds come from `mcmc_bounds`, hence from the meta simulator, so the
+# bijector used to fit matches the Uniform the data were generated under.
+mcmc_transform:
+  _target_: eamax.inference.transforms.BlockTransform
   lower: ${mcmc_bounds.lower}
   upper: ${mcmc_bounds.upper}
-
-mcmc_to_constrained:
-  _target_: mcmc.make_bounded_to_constrained
-  lower: ${mcmc_bounds.lower}
-  upper: ${mcmc_bounds.upper}
-
-# Start the hyperparameter at the midpoint of its support: a fixed starting value falls outside
-# the narrowed bounds of the `_lower`/`_upper` variants, and the Sigmoid inverse of an
-# out-of-bounds value is NaN.
-mcmc_sampling_fun:
-  init_position:
-    _target_: mcmc.bounded_init_position
-    lower: ${mcmc_bounds.lower}
-    upper: ${mcmc_bounds.upper}
-    subject_init: [1, 2, 1, 0.5, 1.0, 0.2]
 
 # The prior's density, for scripts/prior_distance.py. Separate from `mcmc_model_fun`, which folds
 # the prior into the posterior log-density the sampler needs; the hyperparameters interpolate from

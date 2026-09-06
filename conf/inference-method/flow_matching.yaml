@@ -3,12 +3,11 @@
 defaults:
 - override /approximator/inference_network: flow_matching
 
-inference_mlp_depth: 6
-inference_mlp_width: 8
-
+# The values live in `conf/architecture/<family>.yaml`, not here: this group is composed after
+# `model` in `conf/config.yaml`, so anything set here would override the family's selection.
+# What stays is the search space the Optuna sweeper explores over those same keys.
 hydra:
   sweeper:
     params:
       inference_mlp_depth: range(2, 12)
       inference_mlp_width: range(6, 10)
-      

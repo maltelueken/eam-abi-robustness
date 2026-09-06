@@ -4,3 +4,4 @@ defaults:
 - override /simulator: lba
 - override /mcmc: lba
 - override /approximator/adapter: lba_simple
+- override /architecture: lba

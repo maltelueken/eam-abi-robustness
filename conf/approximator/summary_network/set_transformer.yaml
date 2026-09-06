@@ -2,18 +2,18 @@ defaults:
 - base_summary_network
 
 _target_: bayesflow.networks.SetTransformer
-summary_dim: 16
+summary_dim: ${summary_dim}
 embed_dims: 
   _target_: sweeper.constant_list
-  length: ${embed_depth}
+  length: ${summary_embed_depth}
   value:
     _target_: builtins.pow
     base: 2
-    exp: ${embed_width}
+    exp: ${summary_embed_width}
 num_heads: 
   _target_: sweeper.constant_list
-  length: ${embed_depth}
+  length: ${summary_embed_depth}
   value: 4
-num_seeds: 4
+num_seeds: ${summary_num_seeds}
 dropout: 0.00
-expansion_factor: 4.0
+expansion_factor: ${summary_expansion_factor}

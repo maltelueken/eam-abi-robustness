@@ -4,3 +4,4 @@ defaults:
 - override /simulator: lba_sat
 - override /mcmc: lba_sat
 - override /approximator/adapter: lba_sat
+- override /architecture: lba

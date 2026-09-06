@@ -9,6 +9,11 @@
 # includes `override_dirname`, and an override forgotten on `predict_npe` would send it looking
 # in the wrong directory. The architecture sweep is the one thing that opts back out
 # (`approximator=continuous_approximator`, see `slurm/sweep.sh`).
+#
+# `architecture` is chosen by `model`, not on the command line: the RDM and the LBA are swept
+# separately and `scripts/select_architecture.py` writes each family's winner back into
+# `conf/architecture/<family>.yaml`, so every experiment trains at its family's architecture
+# with no flags to remember.
 defaults:
   - _self_
   - sweeper: basic
@@ -18,6 +23,10 @@ defaults:
   - approximator: ensemble_approximator
   - optimizer: adam_cosine_decay
   - simulator: rdm
+  # Composed before `model` so each model can point at its family's architecture, and before
+  # `inference-method`/`summary-method` so those groups contribute only the sweep's search
+  # space -- the values the sweep selected live here, one file per model family.
+  - architecture: rdm
   - callbacks: basic # use `callbacks=tensorboard` where tensorflow is installed
   - model: rdm_simple # Overrides simulator, approximator and mcmc
   - inference-method: flow_matching # Overrides approximator

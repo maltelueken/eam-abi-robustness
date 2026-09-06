@@ -8,6 +8,7 @@ instead.
 
 import itertools
 import os
+import pathlib
 
 import numpy as np
 import pytest
@@ -195,6 +196,63 @@ def test_the_experiments_train_an_ensemble_by_default():
 
     assert cfg["approximator"]["_target_"] == "ensemble.create_ensemble_approximator"
     assert cfg["hydra"]["run"]["dir"].endswith("flow_matching/")
+
+
+@pytest.mark.parametrize("model", MODELS)
+def test_every_model_composes_its_own_familys_architecture(model):
+    """The architecture group is chosen by `model`, and `slurm/sweep.sh` names the sweep's Optuna
+    study and database after the family by taking the model name's prefix in bash.
+
+    Those two have to agree, or a family's sweep would write into `conf/architecture/<family>.yaml`
+    while the models of that family read a different file -- an architecture selected for one
+    forward model and silently never used, which no artifact would show.
+    """
+    cfg = build([f"experiment={EXPERIMENT_BY_MODEL.get(model, 'experiment_2')}", f"model={model}"])
+
+    assert cfg["architecture_family"] == model.split("_")[0]
+
+
+@pytest.mark.parametrize("family", ["rdm", "lba"])
+def test_the_architecture_files_define_exactly_the_swept_keys(family):
+    """`conf/architecture/<family>.yaml` is written by `scripts/select_architecture.py` from the
+    best trial's parameters, so it holds one key per swept parameter and nothing else.
+
+    A key the sweeper searches but the file omits leaves the network node interpolating a value
+    that only exists during a sweep; a key the file holds but the sweeper does not search is one
+    the sweep can never move, and the next selection run would silently drop it.
+    """
+    cfg = build([f"model={family}_simple", "sweeper=optuna", "approximator=continuous_approximator"])
+
+    path = pathlib.Path(__file__).parent.parent / "conf" / "architecture" / f"{family}.yaml"
+    written = set(OmegaConf.load(path)) - {"architecture_family"}
+
+    assert written == set(cfg["hydra"]["sweeper"]["params"])
+
+
+@pytest.mark.parametrize("family", ["rdm", "lba"])
+def test_the_sweep_is_keyed_on_the_family_rather_than_the_model(family):
+    """One sweep per forward model, not one per (experiment, model) pair.
+
+    Every variant of a family differs only in a prior, a design or a data band and trains at the
+    family's architecture, so `rdm_simple` and `rdm_sat` have to land in the same Optuna study --
+    and the two families have to land in different ones, or the second sweep would resume the
+    first and merge two search spaces into one Pareto front.
+    """
+    names = {
+        build([f"model={model}", "sweeper=optuna", "approximator=continuous_approximator"])["hydra"]["sweeper"]
+        for model in (f"{family}_simple", f"{family}_sat", f"{family}_simple_meta")
+    }
+    studies = {sweeper["study_name"] for sweeper in names}
+    storages = {sweeper["storage"] for sweeper in names}
+
+    assert len(studies) == 1
+    assert len(storages) == 1
+    assert family in studies.pop()
+    assert storages.pop().endswith(f"train_npe_trials_{family}.db")
+
+    other = "lba" if family == "rdm" else "rdm"
+    other_sweeper = build([f"model={other}_simple", "sweeper=optuna", "approximator=continuous_approximator"])
+    assert other_sweeper["hydra"]["sweeper"]["study_name"] not in studies
 
 
 def test_the_architecture_sweep_can_still_select_a_single_network():

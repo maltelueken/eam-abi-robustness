@@ -4,3 +4,4 @@ defaults:
 - override /simulator: rdm_meta
 - override /mcmc: rdm_meta
 - override /approximator/adapter: rdm_simple
+- override /architecture: rdm

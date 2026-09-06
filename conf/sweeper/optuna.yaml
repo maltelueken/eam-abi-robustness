@@ -3,10 +3,17 @@
 defaults:
   - override /hydra/sweeper: optuna
 
+# One study, one database, per *model family* -- keyed on `architecture_family` rather than on
+# the experiment and model that happen to host the sweep. The RDM and the LBA are different
+# forward models and get their own search; every other model of a family trains at whatever its
+# family's sweep selected, via `conf/architecture/<family>.yaml`.
+#
+# The network choices stay in the name because they decide the search space: a `flow_matching`
+# trial and a hypothetical other inference network's trial do not describe the same architecture.
 hydra:
   sweeper:
     direction: [minimize, maximize, minimize]
-    study_name: train_npe-${hydra.runtime.choices.experiment}-${hydra.runtime.choices.model}-${hydra.runtime.choices.inference-method}-${hydra.runtime.choices.summary-method}
-    storage: "sqlite:///multirun/train_npe_trials.db"
+    study_name: train_npe-${architecture_family}-${hydra.runtime.choices.inference-method}-${hydra.runtime.choices.summary-method}
+    storage: "sqlite:///multirun/train_npe_trials_${architecture_family}.db"
     n_trials: 20
     n_jobs: 1

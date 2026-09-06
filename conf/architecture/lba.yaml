@@ -1,0 +1,21 @@
+# @package _global_
+#
+# The architecture every LBA model trains at.
+#
+# Written by scripts/select_architecture.py from the family's Optuna sweep; edit by hand
+# only to pin an architecture deliberately, since the next sweep of this family
+# overwrites the file. The keys are exactly the ones the sweeper searches over, and the
+# network nodes under conf/approximator/*_network/ interpolate them.
+#
+# study:     not yet swept -- these are the values the single shared architecture carried
+#            before the sweep was split per family. Run `slurm/sweep.sh experiment_1
+#            lba_simple` to replace them.
+architecture_family: lba
+
+inference_mlp_depth: 6
+inference_mlp_width: 8
+summary_dim: 16
+summary_embed_depth: 2
+summary_embed_width: 6
+summary_expansion_factor: 4
+summary_num_seeds: 4

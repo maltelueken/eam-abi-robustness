@@ -4,3 +4,4 @@ defaults:
 - override /simulator: rdm_sat
 - override /mcmc: rdm_sat
 - override /approximator/adapter: rdm_sat
+- override /architecture: rdm

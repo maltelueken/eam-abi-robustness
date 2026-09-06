@@ -1,11 +1,19 @@
+# The trial counts every study trains on, except study 1's coverage arms below.
+#
+# 100 is in the grid because of study 4: it applies these networks to the empirical subjects,
+# who run 93-100 trials each, and the adapter conditions on sqrt(num_obs) -- so a grid starting
+# at 250 left every empirical dataset ~40% below the smallest set the network had ever seen, and
+# the amortization gap that study reports would have been confounded with exactly the sample-size
+# extrapolation study 1 exists to measure. 500 stays in the grid because studies 2, 3, 5 and 6
+# all test there.
 _target_: bayesflow.simulators.LambdaSimulator
 sample_fn:
   _target_: design.random_num_obs_discrete
   _partial_: true
   values:
+  - 100
   - 250
   - 500
-  - 750
   - 1000
   rng:
     _target_: numpy.random.default_rng

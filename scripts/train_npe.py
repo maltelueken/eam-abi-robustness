@@ -41,15 +41,29 @@ def train_npe(cfg: DictConfig):
     _ = bf.diagnostics.plots.loss(history)
     plt.savefig("loss_history.png")
 
-    diag_sample = simulator.sample(cfg["diag_batch_size"], num_obs=np.array(cfg["eval_num_obs"]))
+    # Scored at every trial count in `diag_num_obs` and averaged, rather than at one. The
+    # architecture the sweep selects here has to serve all six studies, and they read the
+    # networks at 500 (studies 2, 3, 5 and 6), at the empirical subjects' 93-100 (study 4) and
+    # across 50-1200 (study 1); a single num_obs -- it was 1000, the top of the training grid --
+    # scored it at the one count none of them use, while set size is exactly what the summary
+    # network's pooling generalizes over.
+    scores = []
 
-    posterior_samples = approximator.sample(
-        num_samples=cfg["diag_num_posterior_samples"],
-        conditions=diag_sample,
-    )
+    for num_obs in cfg["diag_num_obs"]:
+        diag_sample = simulator.sample(cfg["diag_batch_size"], num_obs=np.array(num_obs))
 
-    # Returned as a tuple so the Optuna sweeper can optimize against these three objectives.
-    return diagnostic_summary(posterior_samples, diag_sample, get_param_names(cfg))
+        posterior_samples = approximator.sample(
+            num_samples=cfg["diag_num_posterior_samples"],
+            conditions=diag_sample,
+        )
+
+        summary = diagnostic_summary(posterior_samples, diag_sample, get_param_names(cfg))
+        logger.info("Diagnostics at num_obs=%s: %s", num_obs, summary)
+        scores.append(summary)
+
+    # Returned as a tuple of floats so the Optuna sweeper can optimize against these three
+    # objectives; plain floats because the sweeper stores what it is handed.
+    return tuple(float(value) for value in np.mean(scores, axis=0))
 
 
 if __name__ == "__main__":

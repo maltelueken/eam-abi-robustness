@@ -37,10 +37,23 @@ hydra:
 
 seed: 2024
 
+# scripts/prior_stats.py only: the trial count its prior draws are simulated at, which sets how
+# wide the rt_min/rt_max rows of its table can reach. The training diagnostics use diag_num_obs.
 eval_num_obs: 1000
 
 diag_batch_size: 100
 diag_num_posterior_samples: 1000
+
+# The trial counts train_npe scores at, and the Optuna objective is the mean over them rather
+# than one value. The architecture has to serve every study, and they test at 500 (studies 2, 3,
+# 5 and 6), at the subjects' 93-100 (study 4) and across 50-1200 (study 1) -- so scoring at a
+# single num_obs, 1000, selected an architecture at the one count none of them use, and the
+# summary network's set-size behaviour is precisely what varies over this axis.
+#
+# Fixed here rather than read off each model's own design simulator: study 1's coverage arms
+# (discrete_lower/upper/full) are then scored on the same axis as the default grid, so their
+# numbers can be read against each other. tests/test_config.py pins it to that grid.
+diag_num_obs: [100, 250, 500, 1000]
 
 epochs: 100
 iterations_per_epoch: 500

@@ -165,8 +165,10 @@ class DataBandSimulator(bf.simulators.Simulator):
         # accepted dataset. Keying by band matters once one simulator sees several:
         # `generate_test_data.py` visits every test case in turn, and study 6's windows differ
         # in acceptance rate by a factor of 25, so one blended estimate would mis-size the first
-        # round of every case. The trial count is deliberately not part of the key -- it moves
-        # the rate by about 2x, which the within-call adaptation absorbs.
+        # round of every case. The trial count is deliberately not part of the key -- across the
+        # training grid it moves the rate by under 3x (study 6's tightest window accepts 8.7% at
+        # 1000 trials and 24% at 100; study 5's bands barely move at all), which the within-call
+        # adaptation absorbs.
         self._stats = defaultdict(lambda: [0, 0])
 
     def _sample_once(self, batch_shape: Shape, **kwargs) -> dict[str, np.ndarray]:

@@ -1,3 +1,6 @@
+# Study 1's narrow-coverage arm: 50, 100, 150, 200, 250. Five points over a 200-trial span, the
+# same shape as random_num_obs_discrete_upper's 1000-1200, so the two extremes differ from each
+# other in where they sit rather than in how densely they cover it.
 _target_: bayesflow.simulators.LambdaSimulator
 sample_fn:
   _target_: design.random_num_obs_discrete
@@ -5,7 +8,7 @@ sample_fn:
   values:
     _target_: numpy.arange
     start: 50
-    stop: 250
+    stop: 300
     step: 50
   rng:
     _target_: numpy.random.default_rng

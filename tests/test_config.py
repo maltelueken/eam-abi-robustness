@@ -218,6 +218,58 @@ def test_the_architecture_sweep_can_still_select_a_single_network():
         assert OmegaConf.select(single, param) is not None, param
 
 
+def test_the_training_diagnostics_are_scored_on_the_grid_the_networks_train_on():
+    """`diag_num_obs` and the default design simulator's `values` are spelled out separately.
+
+    The first is the axis `train_npe` averages its three Optuna objectives over, the second is
+    the set of trial counts the networks actually see. Nothing but this ties them together, and
+    they have drifted once already -- the objective used to be scored at a single
+    `eval_num_obs` of 1000 -- with a silent consequence: the sweep selects an architecture at
+    trial counts that no study reads the networks at.
+    """
+    cfg = build([])
+
+    trained = list(cfg["simulator"]["design_simulator"]["sample_fn"]["values"])
+
+    assert list(cfg["diag_num_obs"]) == trained
+
+
+def test_the_default_training_grid_reaches_the_empirical_studys_trial_counts():
+    """Study 4 trains nothing: it applies study 2's networks to subjects who run 93-100 trials.
+
+    The adapter conditions on `sqrt(num_obs)`, so a grid starting at 250 leaves every empirical
+    dataset far below the smallest set its network was ever given, and the amortization gap that
+    study reports would be confounded with the sample-size extrapolation study 1 exists to
+    measure. The grid therefore has to reach at least study 4's own `test_num_obs`.
+    """
+    trained = list(build([])["simulator"]["design_simulator"]["sample_fn"]["values"])
+    empirical = build(["experiment=experiment_4", "model=rdm_simple"])["test_num_obs"]
+
+    assert min(trained) <= empirical
+
+
+@pytest.mark.parametrize("family", ["rdm", "lba"])
+def test_study_1s_coverage_arms_differ_in_position_rather_than_density(family):
+    """`discrete_lower` and `discrete_upper` are read against each other, so the only thing that
+    should separate them is *where* they sit on the num_obs axis -- not how many trial counts
+    they hold or how wide a span those cover. `discrete_full` is the superset both are read
+    against, so it has to contain them."""
+    arms = {
+        arm: instantiate(
+            build([f"model={family}_simple_discrete_{arm}"])["simulator"]["design_simulator"]["sample_fn"]["values"],
+        )
+        for arm in ("lower", "upper", "full")
+    }
+
+    assert len(arms["lower"]) == len(arms["upper"])
+    assert np.ptp(arms["lower"]) == np.ptp(arms["upper"])
+    assert max(arms["lower"]) < min(arms["upper"])
+
+    assert set(arms["lower"]) <= set(arms["full"])
+    assert set(arms["upper"]) <= set(arms["full"])
+    assert set(build([])["simulator"]["design_simulator"]["sample_fn"]["values"]) <= set(arms["full"])
+
+
 @pytest.mark.parametrize(
     "model",
     [f"{family}_simple_meta{suffix}" for family in ("rdm", "lba") for suffix in ("", "_lower", "_upper")],

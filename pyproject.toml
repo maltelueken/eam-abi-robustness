@@ -57,10 +57,12 @@ readme = {file = "README.md", content-type = "text/markdown"}
 requires-python = ">=3.12"
 version = "0.0.1"
 
-# `eamax` is developed alongside this study rather than released, so uv is pointed at the
-# sibling checkout. Editable, so a change there is picked up here without a re-sync.
+# `eamax` is developed alongside this study but is not on PyPI, so uv is pointed at its
+# GitHub repository, pinned to a tag: the paper's numbers are tied to one version of the
+# likelihood, and a moving branch (or the editable sibling checkout this replaced) would
+# let that version change under a re-sync without anything here recording it.
 [tool.uv.sources]
-eamax = { path = "../eamax", editable = true }
+eamax = { git = "https://github.com/maltelueken/eamax.git", tag = "v0.1.0" }
 
 [dependency-groups]
 # `uv sync` prunes anything undeclared, so the documented test command needs pytest here.

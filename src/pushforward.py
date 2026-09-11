@@ -108,7 +108,7 @@ class CaseOverlay:
     * as a `draw` -- the case's value is pushed through the prior, so the parameters it governs
       are outlined over the training prior. This is every parameter the prior samples;
     * as a `pin` -- a hierarchical model *samples* the hyperparameter the case fixes
-      (`drift_slope_loc` in study 2, `threshold_diff_scale` in study 3 are parameters of those
+      (`drift_slope_loc` in study 2, `threshold_diff_loc` in study 3 are parameters of those
       models, drawn from the meta simulator's Uniform), so the case's prior for it is a point
       mass and a line is the honest way to draw it.
     """

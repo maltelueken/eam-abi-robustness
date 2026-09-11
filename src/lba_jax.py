@@ -57,7 +57,7 @@ from eamax.inference.transforms import BlockTransform
 from eamax.simulate import simulate_race
 from tensorflow_probability.substrates import jax as tfp
 
-from rdm_jax import _log_prior_factory
+from rdm_jax import _gamma_mean_sd, _log_prior_factory
 from rdm_jax import _log_prior_from_dists
 from rdm_jax import _meta_prior_sampler
 from rdm_jax import _prior_sampler
@@ -327,13 +327,14 @@ def lba_experiment_sat_jax_batched(batch_shape, v_intercept, v_slope, s_true, s_
 
 
 def _lba_sat_prior_dists(
-    drift_slope_loc, threshold_scale, threshold_diff_shape, threshold_diff_scale,
+    drift_slope_loc, threshold_scale, threshold_diff_loc, threshold_diff_sd,
 ):
     """`_lba_simple_prior_dists` with the threshold-gap increment spliced in ahead of `t0`.
 
     The order is `mcmc_param_names`' -- `[..., A, B, B_diff, t0]` -- since `t0` stays last.
-    `threshold_diff_shape`/`threshold_diff_scale` parameterize `Gamma(shape, scale)` exactly as
-    `priors.lba_prior_sat` draws it; both are interpolated from the same prior config in
+    `threshold_diff_loc`/`threshold_diff_sd` parameterize the Gamma by its mean and sd exactly
+    as `priors.lba_prior_sat` draws it -- study 3 sweeps the mean at fixed sd, see
+    `priors.gamma_mean_sd_rvs`. Both are interpolated from the same prior config in
     `conf/mcmc/lba_sat.yaml`.
     """
     v_intercept, v_slope, s_true, sp_max, sp_gap, t0 = _lba_simple_prior_dists(
@@ -342,44 +343,44 @@ def _lba_sat_prior_dists(
 
     return (
         v_intercept, v_slope, s_true, sp_max, sp_gap,
-        tfd.Gamma(threshold_diff_shape, 1.0 / threshold_diff_scale),  # B_diff
+        _gamma_mean_sd(threshold_diff_loc, threshold_diff_sd),  # B_diff
         t0,
     )
 
 
 def _lba_sat_log_prior(
     v_intercept, v_slope, s_true, sp_max, sp_gap, sp_gap_diff, t0,
-    drift_slope_loc, threshold_scale, threshold_diff_shape, threshold_diff_scale,
+    drift_slope_loc, threshold_scale, threshold_diff_loc, threshold_diff_sd,
 ):
     """Log prior for the speed-accuracy LBA: the simple model's, plus the threshold difference."""
     return _log_prior_from_dists(
         _lba_sat_prior_dists(
-            drift_slope_loc, threshold_scale, threshold_diff_shape, threshold_diff_scale,
+            drift_slope_loc, threshold_scale, threshold_diff_loc, threshold_diff_sd,
         ),
         (v_intercept, v_slope, s_true, sp_max, sp_gap, sp_gap_diff, t0),
     )
 
 
 def make_lba_sat_prior_sample(
-    drift_slope_loc, threshold_scale, threshold_diff_shape, threshold_diff_scale,
+    drift_slope_loc, threshold_scale, threshold_diff_loc, threshold_diff_sd,
 ):
     """Draw the speed-accuracy LBA's prior on the natural scale, in `mcmc_param_names` order."""
     return _prior_sampler(
         _lba_sat_prior_dists(
-            drift_slope_loc, threshold_scale, threshold_diff_shape, threshold_diff_scale,
+            drift_slope_loc, threshold_scale, threshold_diff_loc, threshold_diff_sd,
         ),
     )
 
 
 def make_lba_sat_meta_prior_sample(
-    drift_slope_loc, threshold_scale, threshold_diff_shape,
-    threshold_diff_scale_lower, threshold_diff_scale_upper,
+    drift_slope_loc, threshold_scale, threshold_diff_sd,
+    threshold_diff_loc_lower, threshold_diff_loc_upper,
 ):
     """Draw the hierarchical speed-accuracy LBA's joint prior; see `rdm_jax.make_rdm_meta_prior_sample`."""
     return _meta_prior_sampler(
-        tfd.Uniform(threshold_diff_scale_lower, threshold_diff_scale_upper),
-        lambda threshold_diff_scale: _lba_sat_prior_dists(
-            drift_slope_loc, threshold_scale, threshold_diff_shape, threshold_diff_scale,
+        tfd.Uniform(threshold_diff_loc_lower, threshold_diff_loc_upper),
+        lambda threshold_diff_loc: _lba_sat_prior_dists(
+            drift_slope_loc, threshold_scale, threshold_diff_loc, threshold_diff_sd,
         ),
     )
 
@@ -395,7 +396,7 @@ def _lba_sat_log_likelihood(
     )
 
 
-def make_lba_sat_logdensity(data_x, drift_slope_loc, threshold_scale, threshold_diff_shape, threshold_diff_scale):
+def make_lba_sat_logdensity(data_x, drift_slope_loc, threshold_scale, threshold_diff_loc, threshold_diff_sd):
     """Build a BlackJAX-ready log-density for the speed-accuracy LBA.
 
     `position` is a length-7 array of *unconstrained* (log-space) values in the order
@@ -411,7 +412,7 @@ def make_lba_sat_logdensity(data_x, drift_slope_loc, threshold_scale, threshold_
 
         log_prior = _lba_sat_log_prior(
             v_intercept, v_slope, s_true, sp_max, sp_gap, sp_gap_diff, t0,
-            drift_slope_loc, threshold_scale, threshold_diff_shape, threshold_diff_scale,
+            drift_slope_loc, threshold_scale, threshold_diff_loc, threshold_diff_sd,
         )
         log_lik = race_log_likelihood(params_fn, _LBA, position, design)
 
@@ -421,30 +422,30 @@ def make_lba_sat_logdensity(data_x, drift_slope_loc, threshold_scale, threshold_
 
 
 def make_lba_sat_meta_logdensity(
-    data_x, drift_slope_loc, threshold_scale, threshold_diff_shape,
-    threshold_diff_scale_lower, threshold_diff_scale_upper,
+    data_x, drift_slope_loc, threshold_scale, threshold_diff_sd,
+    threshold_diff_loc_lower, threshold_diff_loc_upper,
 ):
     """Build a BlackJAX-ready log-density for the hierarchical speed-accuracy LBA.
 
     `position` is a length-8 array of *unconstrained* values in the order
-    [threshold_diff_scale, v_intercept, v_slope, s_true, A, B, B_diff, t0]: the leading
+    [threshold_diff_loc, v_intercept, v_slope, s_true, A, B, B_diff, t0]: the leading
     hyperparameter is Uniform on its support and uses a Sigmoid bijector, the rest use Exp.
     See `eamax.inference.transforms.BlockTransform` for the matching forward transform.
     """
     params_fn = lba_params_fn(sat=True)
     design = trial_design(data_x, has_condition=True)
-    transform = BlockTransform([threshold_diff_scale_lower], [threshold_diff_scale_upper])
+    transform = BlockTransform([threshold_diff_loc_lower], [threshold_diff_loc_upper])
 
     def logdensity_fn(position):
         position = jnp.asarray(position)
-        threshold_diff_scale, *subject = transform.forward(position)
+        threshold_diff_loc, *subject = transform.forward(position)
         v_intercept, v_slope, s_true, sp_max, sp_gap, sp_gap_diff, t0 = subject
 
-        log_prior = tfd.Uniform(threshold_diff_scale_lower, threshold_diff_scale_upper).log_prob(
-            threshold_diff_scale,
+        log_prior = tfd.Uniform(threshold_diff_loc_lower, threshold_diff_loc_upper).log_prob(
+            threshold_diff_loc,
         ) + _lba_sat_log_prior(
             v_intercept, v_slope, s_true, sp_max, sp_gap, sp_gap_diff, t0,
-            drift_slope_loc, threshold_scale, threshold_diff_shape, threshold_diff_scale,
+            drift_slope_loc, threshold_scale, threshold_diff_loc, threshold_diff_sd,
         )
         log_lik = race_log_likelihood(params_fn, _LBA, position[1:], design)
 
@@ -461,14 +462,14 @@ def make_lba_simple_log_prior(drift_slope_loc, threshold_scale):
     )
 
 
-def make_lba_sat_log_prior(drift_slope_loc, threshold_scale, threshold_diff_shape, threshold_diff_scale):
+def make_lba_sat_log_prior(drift_slope_loc, threshold_scale, threshold_diff_loc, threshold_diff_sd):
     """The speed-accuracy LBA's prior density over `mcmc_param_names`."""
     return _log_prior_factory(
         _lba_sat_log_prior, 7,
         {
             "drift_slope_loc": drift_slope_loc,
             "threshold_scale": threshold_scale,
-            "threshold_diff_shape": threshold_diff_shape,
-            "threshold_diff_scale": threshold_diff_scale,
+            "threshold_diff_loc": threshold_diff_loc,
+            "threshold_diff_sd": threshold_diff_sd,
         },
     )

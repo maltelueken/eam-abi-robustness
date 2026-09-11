@@ -307,7 +307,7 @@ class CustomSimulator(DataBandSimulator):
 
     def _sample_once(self, batch_shape: Shape, **kwargs) -> dict[str, np.ndarray]:
         # `kwargs` goes to the prior as well as the design, so a test case can shift a prior
-        # hyperparameter (`drift_slope_loc` in study 2, `threshold_diff_scale` in study 3)
+        # hyperparameter (`drift_slope_loc` in study 2, `threshold_diff_loc` in study 3)
         # away from the value the approximator was trained on --
         # which is the whole point of those studies. `LambdaSimulator.sample` filters kwargs
         # against `sample_fn`'s signature, so unrelated ones (`num_obs`) are dropped here and

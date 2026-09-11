@@ -390,6 +390,17 @@ def _rdm_simple_prior_dists(drift_slope_loc, threshold_scale):
     )
 
 
+def _gamma_mean_sd(loc, sd):
+    """`tfd.Gamma` parameterized by its mean and standard deviation.
+
+    The scoring counterpart of `priors.gamma_mean_sd_rvs`, which is how study 3's threshold
+    difference is drawn: the sweep moves `loc` with `sd` held fixed, so the test prior shifts
+    without also changing width. `tfd.Gamma` takes `(concentration, rate)`, hence
+    `shape = (loc / sd)**2` and `rate = loc / sd**2`.
+    """
+    return tfd.Gamma((loc / sd) ** 2, loc / sd**2)
+
+
 def _log_prior_from_dists(dists, values):
     """Sum the log-densities of independent prior factors, one value per distribution."""
     return sum(dist.log_prob(value) for dist, value in zip(dists, values, strict=True))
@@ -603,59 +614,60 @@ def rdm_experiment_sat_jax_batched(batch_shape, v_intercept, v_slope, s_true, s_
 
 
 def _rdm_sat_prior_dists(
-    drift_slope_loc, threshold_scale, threshold_diff_shape, threshold_diff_scale,
+    drift_slope_loc, threshold_scale, threshold_diff_loc, threshold_diff_sd,
 ):
     """`_rdm_simple_prior_dists` with the threshold difference spliced in ahead of `t0`.
 
     The order is `mcmc_param_names`' -- `[..., b, b_diff, t0]` -- not "the simple model's plus
     one at the end", since `t0` stays last.
 
-    `threshold_diff_shape`/`threshold_diff_scale` parameterize `Gamma(shape, scale)` exactly as
-    `priors.rdm_prior_sat` draws it; both are interpolated from the same prior config in
+    `threshold_diff_loc`/`threshold_diff_sd` parameterize the Gamma by its mean and sd exactly
+    as `priors.rdm_prior_sat` draws it -- study 3 sweeps the mean at fixed sd, see
+    `priors.gamma_mean_sd_rvs`. Both are interpolated from the same prior config in
     `conf/mcmc/rdm_sat.yaml`, so the sampled prior and the fitted prior cannot drift apart.
     """
     v_intercept, v_slope, s_true, b, t0 = _rdm_simple_prior_dists(drift_slope_loc, threshold_scale)
 
     return (
         v_intercept, v_slope, s_true, b,
-        tfd.Gamma(threshold_diff_shape, 1.0 / threshold_diff_scale),  # b_diff
+        _gamma_mean_sd(threshold_diff_loc, threshold_diff_sd),  # b_diff
         t0,
     )
 
 
 def _rdm_sat_log_prior(
     v_intercept, v_slope, s_true, b, b_diff, t0,
-    drift_slope_loc, threshold_scale, threshold_diff_shape, threshold_diff_scale,
+    drift_slope_loc, threshold_scale, threshold_diff_loc, threshold_diff_sd,
 ):
     """Log prior for the speed-accuracy model: the simple model's, plus the threshold difference."""
     return _log_prior_from_dists(
         _rdm_sat_prior_dists(
-            drift_slope_loc, threshold_scale, threshold_diff_shape, threshold_diff_scale,
+            drift_slope_loc, threshold_scale, threshold_diff_loc, threshold_diff_sd,
         ),
         (v_intercept, v_slope, s_true, b, b_diff, t0),
     )
 
 
 def make_rdm_sat_prior_sample(
-    drift_slope_loc, threshold_scale, threshold_diff_shape, threshold_diff_scale,
+    drift_slope_loc, threshold_scale, threshold_diff_loc, threshold_diff_sd,
 ):
     """Draw the speed-accuracy RDM's prior on the natural scale, in `mcmc_param_names` order."""
     return _prior_sampler(
         _rdm_sat_prior_dists(
-            drift_slope_loc, threshold_scale, threshold_diff_shape, threshold_diff_scale,
+            drift_slope_loc, threshold_scale, threshold_diff_loc, threshold_diff_sd,
         ),
     )
 
 
 def make_rdm_sat_meta_prior_sample(
-    drift_slope_loc, threshold_scale, threshold_diff_shape,
-    threshold_diff_scale_lower, threshold_diff_scale_upper,
+    drift_slope_loc, threshold_scale, threshold_diff_sd,
+    threshold_diff_loc_lower, threshold_diff_loc_upper,
 ):
     """Draw the hierarchical speed-accuracy RDM's joint prior; see `make_rdm_meta_prior_sample`."""
     return _meta_prior_sampler(
-        tfd.Uniform(threshold_diff_scale_lower, threshold_diff_scale_upper),
-        lambda threshold_diff_scale: _rdm_sat_prior_dists(
-            drift_slope_loc, threshold_scale, threshold_diff_shape, threshold_diff_scale,
+        tfd.Uniform(threshold_diff_loc_lower, threshold_diff_loc_upper),
+        lambda threshold_diff_loc: _rdm_sat_prior_dists(
+            drift_slope_loc, threshold_scale, threshold_diff_loc, threshold_diff_sd,
         ),
     )
 
@@ -673,7 +685,7 @@ def _rdm_sat_log_likelihood(rt, is_true, is_accuracy, v_intercept, v_slope, s_tr
     )
 
 
-def make_rdm_sat_logdensity(data_x, drift_slope_loc, threshold_scale, threshold_diff_shape, threshold_diff_scale):
+def make_rdm_sat_logdensity(data_x, drift_slope_loc, threshold_scale, threshold_diff_loc, threshold_diff_sd):
     """Build a BlackJAX-ready log-density for the speed-accuracy RDM.
 
     `position` is a length-6 array of *unconstrained* (log-space) values in the order
@@ -690,7 +702,7 @@ def make_rdm_sat_logdensity(data_x, drift_slope_loc, threshold_scale, threshold_
 
         log_prior = _rdm_sat_log_prior(
             v_intercept, v_slope, s_true, b, b_diff, t0,
-            drift_slope_loc, threshold_scale, threshold_diff_shape, threshold_diff_scale,
+            drift_slope_loc, threshold_scale, threshold_diff_loc, threshold_diff_sd,
         )
         log_lik = race_log_likelihood(params_fn, _WALD, position, design)
 
@@ -700,31 +712,31 @@ def make_rdm_sat_logdensity(data_x, drift_slope_loc, threshold_scale, threshold_
 
 
 def make_rdm_sat_meta_logdensity(
-    data_x, drift_slope_loc, threshold_scale, threshold_diff_shape,
-    threshold_diff_scale_lower, threshold_diff_scale_upper,
+    data_x, drift_slope_loc, threshold_scale, threshold_diff_sd,
+    threshold_diff_loc_lower, threshold_diff_loc_upper,
 ):
     """Build a BlackJAX-ready log-density for the hierarchical speed-accuracy RDM.
 
     `position` is a length-7 array of *unconstrained* values in the order
-    [threshold_diff_scale, v_intercept, v_slope, s_true, b, b_diff, t0]: the leading
+    [threshold_diff_loc, v_intercept, v_slope, s_true, b, b_diff, t0]: the leading
     hyperparameter is Uniform on its support and so uses a Sigmoid bijector, the rest are
     positive and use Exp. See `eamax.inference.transforms.BlockTransform` for the matching
     forward transform.
     """
     params_fn = rdm_params_fn(sat=True)
     design = trial_design(data_x, has_condition=True)
-    transform = BlockTransform([threshold_diff_scale_lower], [threshold_diff_scale_upper])
+    transform = BlockTransform([threshold_diff_loc_lower], [threshold_diff_loc_upper])
 
     def logdensity_fn(position):
         position = jnp.asarray(position)
-        threshold_diff_scale, *subject = transform.forward(position)
+        threshold_diff_loc, *subject = transform.forward(position)
         v_intercept, v_slope, s_true, b, b_diff, t0 = subject
 
-        log_prior = tfd.Uniform(threshold_diff_scale_lower, threshold_diff_scale_upper).log_prob(
-            threshold_diff_scale,
+        log_prior = tfd.Uniform(threshold_diff_loc_lower, threshold_diff_loc_upper).log_prob(
+            threshold_diff_loc,
         ) + _rdm_sat_log_prior(
             v_intercept, v_slope, s_true, b, b_diff, t0,
-            drift_slope_loc, threshold_scale, threshold_diff_shape, threshold_diff_scale,
+            drift_slope_loc, threshold_scale, threshold_diff_loc, threshold_diff_sd,
         )
         log_lik = race_log_likelihood(params_fn, _WALD, position[1:], design)
 
@@ -763,14 +775,14 @@ def make_rdm_simple_log_prior(drift_slope_loc, threshold_scale):
     )
 
 
-def make_rdm_sat_log_prior(drift_slope_loc, threshold_scale, threshold_diff_shape, threshold_diff_scale):
+def make_rdm_sat_log_prior(drift_slope_loc, threshold_scale, threshold_diff_loc, threshold_diff_sd):
     """The speed-accuracy RDM's prior density over `mcmc_param_names`."""
     return _log_prior_factory(
         _rdm_sat_log_prior, 6,
         {
             "drift_slope_loc": drift_slope_loc,
             "threshold_scale": threshold_scale,
-            "threshold_diff_shape": threshold_diff_shape,
-            "threshold_diff_scale": threshold_diff_scale,
+            "threshold_diff_loc": threshold_diff_loc,
+            "threshold_diff_sd": threshold_diff_sd,
         },
     )

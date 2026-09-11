@@ -1,6 +1,6 @@
-# Study 3 (LBA), trained at the lower end of the swept range: this approximator only ever
-# sees a small speed-accuracy effect (mean threshold-gap difference 0.12), so all but the
-# smallest test case lies outside its training prior. lba_sat.yaml is the centred version.
+# Study 3 for the LBA, trained at the bottom of the swept range: this approximator only ever
+# sees a small speed-accuracy effect (mean threshold-gap difference 0.4), so every test case
+# above the first lies outside its training prior. lba_sat.yaml is the centred version.
 _target_: bayesflow.simulators.LambdaSimulator
 sample_fn:
   _target_: priors.lba_prior_sat
@@ -15,8 +15,8 @@ sample_fn:
   sp_max_scale: 0.1
   threshold_shape: 8
   threshold_scale: 0.15
-  threshold_diff_shape: 6
-  threshold_diff_scale: 0.02
+  threshold_diff_loc: 0.4
+  threshold_diff_sd: 0.245
   t0_loc: 0.3
   t0_scale: 0.2
   t0_lower: 0.0

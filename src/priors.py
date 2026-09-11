@@ -36,6 +36,31 @@ def truncated_normal_rvs(
     )
 
 
+def gamma_mean_sd_rvs(
+    loc: float,
+    sd: float,
+    size: int = 1,
+    random_state: int = None,
+) -> np.ndarray:
+    """Sample a Gamma parameterized by its *mean* and *standard deviation*.
+
+    Study 3 sweeps how large a speed-accuracy effect the network was trained to expect. Sweeping
+    a Gamma's `scale` at fixed `shape` -- what this used to do -- moves its mean and its sd
+    together (`sd = mean / sqrt(shape)`), which is the confound study 2 dropped its second axis
+    to avoid, and it leaves the upper arm of the sweep barely distinguishable from the training
+    prior: the test prior *widens* as it shifts, so it keeps covering the trained-on one instead
+    of separating from it. Holding `sd` fixed and moving the mean makes the sweep a pure location
+    shift, and doing it inside the Gamma family rather than with a truncated normal keeps the
+    support on (0, inf) -- so `b_diff` stays positive and log-transformable, and no mass is
+    truncated at zero to shrink the realized sd at the bottom of the grid.
+
+    `shape = (loc / sd)**2` drops below 1 -- a J-shaped density piling up at zero -- once
+    `loc < sd`. `conf/test_case/threshold_diff_grid.yaml` keeps its lowest point well clear of
+    that; at the trained-on `loc` of 0.6 with `sd` 0.245 the shape is ~6.
+    """
+    return random_state.gamma(shape=(loc / sd) ** 2, scale=sd**2 / loc, size=size)
+
+
 def rdm_prior_simple(
     batch_shape,
     drift_intercept_loc,
@@ -132,8 +157,8 @@ def rdm_prior_sat(
     sd_true_scale,
     threshold_shape,
     threshold_scale,
-    threshold_diff_shape,
-    threshold_diff_scale,
+    threshold_diff_loc,
+    threshold_diff_sd,
     t0_loc,
     t0_scale,
     t0_lower,
@@ -147,9 +172,9 @@ def rdm_prior_sat(
     same log-transform unconstrains the whole vector (cf. the `A`/`B` parameterization in
     `lba_prior_simple`).
 
-    `threshold_diff_scale` is the hyperparameter study 3 shifts between training and test:
-    it sets the expected size of the speed-accuracy effect, `threshold_diff_shape *
-    threshold_diff_scale`.
+    `threshold_diff_loc` is the hyperparameter study 3 shifts between training and test: it
+    *is* the expected size of the speed-accuracy effect, with `threshold_diff_sd` holding the
+    prior's spread fixed across the sweep (see `gamma_mean_sd_rvs`).
 
     Returned keys are ordered to match `conf/approximator/adapter/rdm_sat.yaml` and the
     unconstrained position vector built by `rdm_jax.make_rdm_sat_logdensity`.
@@ -162,7 +187,7 @@ def rdm_prior_sat(
     )
     sd_true = rng.gamma(shape=sd_true_shape, scale=sd_true_scale, size=batch_shape)
     threshold = rng.gamma(shape=threshold_shape, scale=threshold_scale, size=batch_shape)
-    threshold_diff = rng.gamma(shape=threshold_diff_shape, scale=threshold_diff_scale, size=batch_shape)
+    threshold_diff = gamma_mean_sd_rvs(threshold_diff_loc, threshold_diff_sd, size=batch_shape, random_state=rng)
     t0 = truncated_normal_rvs(t0_loc, t0_scale, lower=t0_lower, size=batch_shape, random_state=rng)
 
     return {
@@ -187,8 +212,8 @@ def lba_prior_sat(
     sp_max_scale,
     threshold_shape,
     threshold_scale,
-    threshold_diff_shape,
-    threshold_diff_scale,
+    threshold_diff_loc,
+    threshold_diff_sd,
     t0_loc,
     t0_scale,
     t0_lower,
@@ -199,8 +224,8 @@ def lba_prior_sat(
     `lba_prior_simple` plus `B_diff`, the amount by which the accuracy instruction raises the
     threshold *gap* -- so the threshold is `A + B` under speed and `A + B + B_diff` under
     accuracy, and `b > A` still holds structurally in both conditions. The RDM counterpart is
-    `rdm_prior_sat`; `threshold_diff_scale` is the hyperparameter study 3 shifts between
-    training and test in both models.
+    `rdm_prior_sat`; `threshold_diff_loc` is the hyperparameter study 3 shifts between training
+    and test in both models.
 
     Returned keys are ordered to match `conf/approximator/adapter/lba_sat.yaml` and the
     unconstrained position vector built by `lba_jax.make_lba_sat_logdensity`.
@@ -214,7 +239,7 @@ def lba_prior_sat(
     sd_true = rng.gamma(shape=sd_true_shape, scale=sd_true_scale, size=batch_shape)
     sp_max = rng.gamma(shape=sp_max_shape, scale=sp_max_scale, size=batch_shape)
     sp_gap = rng.gamma(shape=threshold_shape, scale=threshold_scale, size=batch_shape)
-    sp_gap_diff = rng.gamma(shape=threshold_diff_shape, scale=threshold_diff_scale, size=batch_shape)
+    sp_gap_diff = gamma_mean_sd_rvs(threshold_diff_loc, threshold_diff_sd, size=batch_shape, random_state=rng)
     t0 = truncated_normal_rvs(t0_loc, t0_scale, lower=t0_lower, size=batch_shape, random_state=rng)
 
     return {

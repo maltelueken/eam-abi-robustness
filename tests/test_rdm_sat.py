@@ -97,7 +97,7 @@ def test_likelihood_is_sensitive_to_the_threshold_difference():
     data_x = simulate(jax.random.PRNGKey(3), 2000)
     logdensity_fn = make_rdm_sat_logdensity(
         data_x, drift_slope_loc=TRUE["v_slope"], threshold_scale=1.0,
-        threshold_diff_shape=6.0, threshold_diff_scale=1.0,
+        threshold_diff_loc=0.6, threshold_diff_sd=0.245,
     )
 
     at_truth = logdensity_fn(simple_to_unconstrained(jnp.array(list(TRUE.values()))))
@@ -113,7 +113,7 @@ def test_logdensity_recovers_the_parameters_with_blackjax_nuts():
 
     logdensity_fn = make_rdm_sat_logdensity(
         data_x, drift_slope_loc=TRUE["v_slope"], threshold_scale=1.0,
-        threshold_diff_shape=6.0, threshold_diff_scale=1.0,
+        threshold_diff_loc=0.6, threshold_diff_sd=0.245,
     )
     init_position = simple_to_unconstrained(jnp.array([1.0, 1.0, 0.5, 1.0, 0.5, 0.2]))
 
@@ -142,11 +142,11 @@ def test_meta_logdensity_is_finite_at_its_initial_position():
     data_x = simulate(jax.random.PRNGKey(5), 200)
 
     logdensity_fn = make_rdm_sat_meta_logdensity(
-        data_x, drift_slope_loc=1.5, threshold_scale=0.15, threshold_diff_shape=6.0,
-        threshold_diff_scale_lower=0.02, threshold_diff_scale_upper=0.18,
+        data_x, drift_slope_loc=1.5, threshold_scale=0.15, threshold_diff_sd=0.245,
+        threshold_diff_loc_lower=0.4, threshold_diff_loc_upper=2.0,
     )
-    position = BlockTransform([0.02], [0.18]).inverse(
-        jnp.array([0.1, 1.0, 1.5, 0.3, 1.0, 0.6, 0.2]),
+    position = BlockTransform([0.4], [2.0]).inverse(
+        jnp.array([0.6, 1.0, 1.5, 0.3, 1.0, 0.6, 0.2]),
     )
 
     assert jnp.isfinite(logdensity_fn(position))
@@ -159,10 +159,10 @@ def test_meta_prior_draws_start_inside_the_narrowed_bounds():
     # hyperparameter from `Uniform(lower, upper)` rather than placing it at a fixed value makes
     # that impossible by construction, however far the `_lower`/`_upper` variants narrow the
     # bounds -- which a fixed value could not survive.
-    lower, upper = 0.14, 0.18
+    lower, upper = 1.8, 2.0
     sample = make_rdm_sat_meta_prior_sample(
-        drift_slope_loc=1.5, threshold_scale=0.15, threshold_diff_shape=6.0,
-        threshold_diff_scale_lower=lower, threshold_diff_scale_upper=upper,
+        drift_slope_loc=1.5, threshold_scale=0.15, threshold_diff_sd=0.245,
+        threshold_diff_loc_lower=lower, threshold_diff_loc_upper=upper,
     )
 
     draws = np.asarray(jax.vmap(sample)(jax.random.split(jax.random.key(0), 200)))
@@ -174,7 +174,7 @@ def test_meta_prior_draws_start_inside_the_narrowed_bounds():
     assert np.all(draws[:, 1:] > 0.0)
 
 
-@pytest.mark.parametrize("bounds", [([0.02], [0.18]), ([0.5, 0.05], [2.5, 0.25])])
+@pytest.mark.parametrize("bounds", [([0.4], [2.0]), ([0.5, 0.05], [2.5, 0.25])])
 def test_bounded_transform_pair_are_inverses_for_any_number_of_hyperparameters(bounds):
     lower, upper = bounds
     position = np.array([*(0.5 * (lo + hi) for lo, hi in zip(lower, upper)), 1.0, 2.0, 1.0, 0.2])

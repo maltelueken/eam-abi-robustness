@@ -88,7 +88,7 @@ def test_likelihood_is_sensitive_to_the_threshold_difference():
     data_x = simulate(jax.random.PRNGKey(3), 2000)
     logdensity_fn = make_lba_sat_logdensity(
         data_x, drift_slope_loc=TRUE["v_slope"], threshold_scale=0.15,
-        threshold_diff_shape=6.0, threshold_diff_scale=0.1,
+        threshold_diff_loc=0.6, threshold_diff_sd=0.245,
     )
 
     at_truth = logdensity_fn(simple_to_unconstrained(jnp.array(list(TRUE.values()))))
@@ -104,7 +104,7 @@ def test_logdensity_recovers_the_parameters_with_blackjax_nuts():
 
     logdensity_fn = make_lba_sat_logdensity(
         data_x, drift_slope_loc=TRUE["v_slope"], threshold_scale=0.15,
-        threshold_diff_shape=6.0, threshold_diff_scale=0.1,
+        threshold_diff_loc=0.6, threshold_diff_sd=0.245,
     )
     init_position = simple_to_unconstrained(jnp.array([1.0, 1.0, 1.0, 0.5, 1.0, 0.5, 0.2]))
 
@@ -133,10 +133,10 @@ def test_meta_logdensity_is_finite_at_its_initial_position():
     data_x = simulate(jax.random.PRNGKey(5), 200)
 
     logdensity_fn = make_lba_sat_meta_logdensity(
-        data_x, drift_slope_loc=1.5, threshold_scale=0.15, threshold_diff_shape=6.0,
-        threshold_diff_scale_lower=0.02, threshold_diff_scale_upper=0.18,
+        data_x, drift_slope_loc=1.5, threshold_scale=0.15, threshold_diff_sd=0.245,
+        threshold_diff_loc_lower=0.4, threshold_diff_loc_upper=2.0,
     )
-    position = BlockTransform([0.02], [0.18]).inverse(jnp.array([0.1, *TRUE.values()]))
+    position = BlockTransform([0.4], [2.0]).inverse(jnp.array([0.6, *TRUE.values()]))
 
     assert jnp.isfinite(logdensity_fn(position))
     assert jnp.all(jnp.isfinite(jax.grad(logdensity_fn)(position)))
@@ -144,10 +144,10 @@ def test_meta_logdensity_is_finite_at_its_initial_position():
 
 def test_meta_prior_draws_start_inside_the_narrowed_bounds():
     # The LBA twin of the RDM's equivalent test; see it for what this guards against.
-    lower, upper = 0.14, 0.18
+    lower, upper = 1.8, 2.0
     sample = make_lba_sat_meta_prior_sample(
-        drift_slope_loc=1.5, threshold_scale=0.15, threshold_diff_shape=6.0,
-        threshold_diff_scale_lower=lower, threshold_diff_scale_upper=upper,
+        drift_slope_loc=1.5, threshold_scale=0.15, threshold_diff_sd=0.245,
+        threshold_diff_loc_lower=lower, threshold_diff_loc_upper=upper,
     )
 
     draws = np.asarray(jax.vmap(sample)(jax.random.split(jax.random.key(0), 200)))

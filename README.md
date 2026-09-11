@@ -23,7 +23,7 @@ The paper reports four studies: three simulation studies and an empirical one.
 |---|---|---|
 | `experiment_1` | the number of observations per dataset | a sweep of `num_obs` |
 | `experiment_2` | the location of the prior on the drift slope | a sweep of `drift_slope_loc` |
-| `experiment_3` | the prior on the speed-vs-accuracy threshold difference | a sweep of `threshold_diff_scale` |
+| `experiment_3` | the prior on the speed-vs-accuracy threshold difference | a sweep of `threshold_diff_loc` |
 | `experiment_4` | (empirical data) | one case per subject file |
 
 Study 2 sweeps `drift_slope_loc` over nine points from 0.7 to 3.9 in steps of 0.4, holding every

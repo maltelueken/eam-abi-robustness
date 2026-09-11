@@ -3,7 +3,7 @@
 # The MCMC side of the speed-accuracy LBA. As in conf/mcmc/lba.yaml, every prior hyperparameter
 # is interpolated from the simulator's prior, so the prior the data were generated under and the
 # prior MCMC fits cannot drift apart -- which matters more here than anywhere else, since study 3
-# is *about* moving `threshold_diff_scale`: the `_lower`/`_upper` model variants change it in one
+# is *about* moving `threshold_diff_loc`: the `_lower`/`_upper` model variants change it in one
 # place and the log-density follows.
 mcmc_param_names: ["v_intercept", "v_slope", "s_true", "A", "B", "B_diff", "t0"]
 
@@ -22,8 +22,8 @@ mcmc_model_fun:
   _partial_: true
   drift_slope_loc: ${simulator.prior_simulator.sample_fn.drift_slope_loc}
   threshold_scale: ${simulator.prior_simulator.sample_fn.threshold_scale}
-  threshold_diff_shape: ${simulator.prior_simulator.sample_fn.threshold_diff_shape}
-  threshold_diff_scale: ${simulator.prior_simulator.sample_fn.threshold_diff_scale}
+  threshold_diff_loc: ${simulator.prior_simulator.sample_fn.threshold_diff_loc}
+  threshold_diff_sd: ${simulator.prior_simulator.sample_fn.threshold_diff_sd}
 
 # The prior as something to *draw from*, for the chains' starting values -- built from the same
 # distributions `mcmc_log_prior_fun` scores against (`lba_jax._lba_sat_prior_dists`), so a chain
@@ -35,8 +35,8 @@ mcmc_prior_sample_fun:
   _target_: lba_jax.make_lba_sat_prior_sample
   drift_slope_loc: ${simulator.prior_simulator.sample_fn.drift_slope_loc}
   threshold_scale: ${simulator.prior_simulator.sample_fn.threshold_scale}
-  threshold_diff_shape: ${simulator.prior_simulator.sample_fn.threshold_diff_shape}
-  threshold_diff_scale: ${simulator.prior_simulator.sample_fn.threshold_diff_scale}
+  threshold_diff_loc: ${simulator.prior_simulator.sample_fn.threshold_diff_loc}
+  threshold_diff_sd: ${simulator.prior_simulator.sample_fn.threshold_diff_sd}
 
 # Natural scale <-> the unconstrained space NUTS explores, and the matching log-det-Jacobian,
 # in one object so the three cannot fall out of step. An empty bounded block is the ordinary
@@ -52,5 +52,5 @@ mcmc_log_prior_fun:
   _target_: lba_jax.make_lba_sat_log_prior
   drift_slope_loc: ${simulator.prior_simulator.sample_fn.drift_slope_loc}
   threshold_scale: ${simulator.prior_simulator.sample_fn.threshold_scale}
-  threshold_diff_shape: ${simulator.prior_simulator.sample_fn.threshold_diff_shape}
-  threshold_diff_scale: ${simulator.prior_simulator.sample_fn.threshold_diff_scale}
+  threshold_diff_loc: ${simulator.prior_simulator.sample_fn.threshold_diff_loc}
+  threshold_diff_sd: ${simulator.prior_simulator.sample_fn.threshold_diff_sd}

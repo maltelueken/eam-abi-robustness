@@ -16,8 +16,9 @@ figure_path <- "visualization/figures/"
 
 # Study 3 simulates a speed-vs-accuracy manipulation: every dataset holds a speed-instructed
 # and an accuracy-instructed block of trials, differing only in response threshold. The test
-# cases sweep `threshold_diff_scale`, the scale of the prior on that threshold difference, so
-# each model is evaluated on data drawn from priors it was and was not trained on.
+# cases sweep `threshold_diff_loc`, the mean of the prior on that threshold difference (its sd
+# is held fixed, so a case differs from training by a pure location shift), so each model is
+# evaluated on data drawn from priors it was and was not trained on.
 
 study_labels <- c(
   TeX("A: medium-fixed"),
@@ -43,8 +44,8 @@ models <- c(
 # were trained at a single value, the varying ones over a range.
 df_training_prior <- data.frame(
   study = models,
-  x = c(0.10, 0.02, 0.18, 0.02, 0.14, 0.02),
-  xend = c(0.10, 0.02, 0.18, 0.06, 0.18, 0.18)
+  x = c(0.6, 0.4, 2.0, 0.4, 1.8, 0.4),
+  xend = c(0.6, 0.4, 2.0, 0.6, 2.0, 2.0)
 ) |>
   mutate(study = factor(study, levels = models, labels = study_labels))
 
@@ -107,9 +108,9 @@ df_summary |>
     study = factor(study, levels = models, labels = study_labels),
     median_diff = abs(mcmc_median - npe_median)
   ) |>
-  group_by(study, param, threshold_diff_scale) |>
+  group_by(study, param, threshold_diff_loc) |>
   summarise(median_diff = mean(median_diff)) |>
-  ggplot(aes(x = threshold_diff_scale, y = median_diff, color = study)) +
+  ggplot(aes(x = threshold_diff_loc, y = median_diff, color = study)) +
   facet_grid2(rows = vars(study), cols = vars(param), scales = "free", independent = "y") +
   geom_rect(
     data = df_training_prior,
@@ -128,7 +129,7 @@ df_summary |>
   geom_point(size = 1) +
   scale_color_brewer(palette = "Dark2") +
   labs(
-    x = "Scale of the prior on the threshold difference",
+    x = "Mean of the prior on the threshold difference",
     y = "Absolute difference posterior median"
   ) +
   theme_half_open() +
@@ -146,12 +147,12 @@ ggsave(file.path(figure_path, "study_3_posterior_mismatch_prior.png"), width = 1
 
 df_mmd |>
   mutate(study = factor(study, levels = models, labels = study_labels)) |>
-  ggplot(aes(x = factor(threshold_diff_scale), y = mmd, color = study)) +
+  ggplot(aes(x = factor(threshold_diff_loc), y = mmd, color = study)) +
   facet_wrap(vars(study), nrow = 2) +
   geom_boxplot(outlier.alpha = 0.2) +
   scale_color_brewer(palette = "Dark2") +
   labs(
-    x = "Scale of the prior on the threshold difference",
+    x = "Mean of the prior on the threshold difference",
     y = "Maximum mean discrepancy (NPE vs MCMC)"
   ) +
   theme_half_open() +

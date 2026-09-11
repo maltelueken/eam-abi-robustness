@@ -172,7 +172,7 @@ def test_the_parameterization_covers_the_subject_level_block_of_the_parameter_ve
     [
         ("experiment_1", "sample_size_50"),
         ("experiment_2", "drift_slope_loc_0.7"),
-        ("experiment_3", "threshold_diff_scale_0.02"),
+        ("experiment_3", "threshold_diff_loc_0.4"),
         ("experiment_5", "accuracy_50_60"),
         ("experiment_6", "rt_150_1000"),
     ],
@@ -476,8 +476,9 @@ def test_the_swept_hyperparameter_actually_shifts_the_prior_it_names():
         for case in [cases[0], cases[-1]]
     ]
 
-    shape = cfg["simulator"]["prior_simulator"]["sample_fn"]["threshold_diff_shape"]
-    expected = [shape * case.labels["threshold_diff_scale"] for case in [cases[0], cases[-1]]]
+    # With the prior parameterized by mean and sd, the swept value *is* the expected
+    # `b_diff` -- so the check is against the label itself rather than a shape x scale product.
+    expected = [case.labels["threshold_diff_loc"] for case in [cases[0], cases[-1]]]
 
     assert np.allclose(means, expected, rtol=0.2)
 

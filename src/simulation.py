@@ -12,9 +12,12 @@ from bayesflow.types import Shape
 
 
 # Channels of `x`, as produced by `rdm_jax`/`lba_jax`: response time, then whether the correct
-# accumulator won. `pipeline.py` reads the same two.
+# accumulator won. `pipeline.py` reads the same two. The speed/accuracy models add a third,
+# `is_accuracy` (1 under the accuracy instruction), which only they have -- `rdm_jax.trial_design`
+# reads it at the same index, and `pushforward.py` splits the example datasets on it.
 RT_CHANNEL = 0
 ACCURACY_CHANNEL = 1
+CONDITION_CHANNEL = 2
 
 
 def in_accuracy_band(accuracy, lower, upper):

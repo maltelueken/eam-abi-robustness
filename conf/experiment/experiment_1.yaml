@@ -30,6 +30,12 @@ hydra:
           # reader's run directory, and the reader would look for a model nothing had written.
           - prior_distance_num_draws
           - prior_distance_mmd_draws
+          # Likewise for the pushforward figure: these size a picture of the prior, which every
+          # stage of the run shares, so tuning them must not move the figure out of the run
+          # directory the rest of the artifacts live in.
+          - pushforward_num_draws
+          - pushforward_num_examples
+          - pushforward_num_obs
   job_logging:
     handlers:
       file:
@@ -80,6 +86,20 @@ test_num_posterior_samples: 2000
 # scripts/prior_stats.py: the figures take 0.1% and 99.9% quantiles of these draws, which
 # needs far more than test_batch_size samples to be meaningful.
 prior_stats_num_draws: 20000
+
+# scripts/prior_pushforward.py: the figure of the training prior and the datasets it
+# generates. `pushforward_num_draws` sets the marginals' resolution and is also how many prior
+# draws each shifted test case is outlined from; `pushforward_num_examples` is how many
+# individual datasets are drawn as response-time histograms. Far smaller than
+# `prior_stats_num_draws` because every draw here is a simulated dataset and the banded studies
+# reject most of them -- this has to work for every model, including study 6's tightest window.
+pushforward_num_draws: 2000
+pushforward_num_examples: 6
+
+# The trial count the prior is pushed through. `null` means the count this study tests at
+# (`test_num_obs`), which every study but the first defines; study 1 sweeps that count instead,
+# so it falls back to `eval_num_obs`. Set it explicitly to draw the figure at another size.
+pushforward_num_obs: null
 
 # scripts/prior_distance.py: two samples of this size per test case. The KL is a Monte Carlo
 # average over these draws, costing memory linear in the count, so it can afford to be large --

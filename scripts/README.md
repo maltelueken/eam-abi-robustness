@@ -9,6 +9,7 @@ studies differ only in configuration, not in code.
 | `train_npe.py` | Train the neural posterior estimator and log recovery diagnostics. |
 | `generate_test_data.py` | Simulate the held-out test datasets for every case. |
 | `prior_stats.py` | Dump prior draws, for the prior ranges shown in the figures. |
+| `prior_pushforward.py` | Figure of the training prior, the data it generates, and example datasets. |
 | `predict_npe.py` | Sample the trained NPE's posterior for every case (one chain per ensemble member). |
 | `fit_mcmc_cpu.py` | Fit ground-truth MCMC posteriors: one chain per CPU core, datasets vmapped inside each. |
 | `check_metrics.py` | RMSE / contraction / calibration against the simulating parameters. |
@@ -25,6 +26,18 @@ python scripts/train_npe.py       experiment=experiment_1 model=rdm_simple
 python scripts/fit_mcmc_cpu.py    experiment=experiment_2 model=rdm_simple_meta
 python scripts/check_robustness.py experiment=experiment_4 model=rdm_simple
 python scripts/generate_test_data.py experiment=experiment_3 model=rdm_sat
+```
+
+`prior_pushforward.py` is the one stage that reads nothing the pipeline produced -- no test
+data, no checkpoint -- so it can be run before anything else as a check that a model's prior
+generates plausible data, and kept afterwards as `prior_pushforward.png` in the run directory,
+the record of what its networks were trained on. It draws the *training* simulator, bands
+included, and marks what this study's test cases do to it: the shifted priors of studies 2 and 3
+as outlines over the marginals, the bands of studies 5 and 6 on the accuracy and response-time
+panels. One figure per experiment/model:
+
+```console
+python scripts/prior_pushforward.py experiment=experiment_3 model=rdm_sat_meta
 ```
 
 Every stage defaults to an **ensemble** of NPEs (`ensemble_size=5`); nothing has to be passed for

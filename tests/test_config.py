@@ -19,6 +19,7 @@ from hydra.utils import instantiate
 from omegaconf import OmegaConf
 
 from config import get_param_names
+from pushforward import pushforward_num_obs
 from utils import get_checkpoint_path
 
 CONFIG_PATH = "../conf"
@@ -328,6 +329,20 @@ def test_the_training_diagnostics_are_scored_on_the_grid_the_networks_train_on()
     trained = list(cfg["simulator"]["design_simulator"]["sample_fn"]["values"])
 
     assert list(cfg["diag_num_obs"]) == trained
+
+
+@pytest.mark.parametrize("experiment", EXPERIMENTS)
+def test_the_pushforward_figure_has_a_trial_count_for_every_study(experiment):
+    """`scripts/prior_pushforward.py` pushes the prior through one trial count per study.
+
+    Study 1 sweeps that count and so defines no `test_num_obs`; the rest do. The resolution
+    falls back rather than failing, and this pins that it resolves to something simulable for
+    every study -- a missing key here would surface as a figure job dying at the last stage.
+    """
+    cfg = build([f"experiment={experiment}", "model=rdm_simple"])
+
+    assert int(pushforward_num_obs(cfg)) > 0
+    assert cfg["pushforward_num_draws"] > cfg["pushforward_num_examples"] > 0
 
 
 def test_the_default_training_grid_reaches_the_empirical_studys_trial_counts():

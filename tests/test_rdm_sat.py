@@ -159,7 +159,7 @@ def test_meta_prior_draws_start_inside_the_narrowed_bounds():
     # hyperparameter from `Uniform(lower, upper)` rather than placing it at a fixed value makes
     # that impossible by construction, however far the `_lower`/`_upper` variants narrow the
     # bounds -- which a fixed value could not survive.
-    lower, upper = 1.8, 2.0
+    lower, upper = 1.5, 2.0
     sample = make_rdm_sat_meta_prior_sample(
         drift_slope_loc=1.5, threshold_scale=0.15, threshold_diff_sd=0.245,
         threshold_diff_loc_lower=lower, threshold_diff_loc_upper=upper,

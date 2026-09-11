@@ -1,11 +1,11 @@
-# Study 3's training prior for the LBA. `threshold_diff_loc` is the expected size of the
-# speed-accuracy effect -- the mean of the prior on the threshold-gap difference, 0.6 here
-# against a mean gap of 1.2 -- and it is the hyperparameter the test cases in
-# conf/test_case/threshold_diff_grid.yaml shift away from this trained-on value;
-# `threshold_diff_sd` holds its spread fixed across the sweep. See
-# conf/simulator/prior_simulator/rdm_sat.yaml for why the prior is parameterized this way.
-# Deliberately the same numbers as that file, so the two model families are compared over the
-# same sweep.
+# Study 3's medium-fixed arm for the LBA, and the lba_sat family's base prior.
+# `threshold_diff_loc` is the expected size of the speed-accuracy effect -- the mean of the
+# prior on the threshold-gap difference, 1.2 here against a mean gap of 1.2, and the centre grid
+# point of conf/test_case/threshold_diff_grid.yaml -- and it is the hyperparameter the test
+# cases shift away from this trained-on value; `threshold_diff_sd` holds its spread fixed across
+# the sweep. See conf/simulator/prior_simulator/rdm_sat.yaml for why the prior is parameterized
+# this way and why this value sits at the grid centre. Deliberately the same numbers as that
+# file, so the two model families are compared over the same sweep.
 _target_: bayesflow.simulators.LambdaSimulator
 sample_fn:
   _target_: priors.lba_prior_sat
@@ -20,7 +20,7 @@ sample_fn:
   sp_max_scale: 0.1
   threshold_shape: 8
   threshold_scale: 0.15
-  threshold_diff_loc: 0.6
+  threshold_diff_loc: 1.2
   threshold_diff_sd: 0.245
   t0_loc: 0.3
   t0_scale: 0.2

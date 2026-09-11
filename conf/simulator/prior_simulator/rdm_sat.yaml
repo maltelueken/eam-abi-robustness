@@ -1,15 +1,20 @@
-# Study 3's training prior. `threshold_diff_loc` is the expected size of the speed-accuracy
-# effect -- the mean of the prior on the threshold difference, 0.6 here against a mean speed
-# threshold of 1.2 -- and it is the hyperparameter the test cases in
-# conf/test_case/threshold_diff_grid.yaml shift away from this trained-on value.
+# Study 3's medium-fixed arm and the sat family's base prior. `threshold_diff_loc` is the
+# expected size of the speed-accuracy effect -- the mean of the prior on the threshold
+# difference, 1.2 here, which is the *centre* grid point of
+# conf/test_case/threshold_diff_grid.yaml -- and it is the hyperparameter the test cases shift
+# away from this trained-on value.
 #
 # `threshold_diff_sd` holds the prior's *spread* fixed at 0.245 across that sweep, so a case
-# differs from training by a pure location shift. The prior used to be a Gamma whose `scale` was
-# swept at fixed shape, which moves mean and sd together (`sd = mean / sqrt(shape)`) -- the same
-# confound study 2 dropped its second axis to avoid, and the reason the upper arm of the sweep
-# used to be indistinguishable from this prior: a test prior that widens as it shifts keeps
-# covering the trained-on one. See `priors.gamma_mean_sd_rvs`. At (0.6, 0.245) the Gamma is
-# shape 5.998, scale 0.100 -- the Gamma(6, 0.1) this trained on before, to three decimals.
+# differs from training by a pure location shift. The prior used to be a Gamma whose `scale`
+# was swept at fixed shape, which moves mean and sd together (`sd = mean / sqrt(shape)`) -- the
+# same confound study 2 dropped its second axis to avoid, and the reason the upper arm of the
+# sweep used to be indistinguishable from this prior: a test prior that widens as it shifts
+# keeps covering the trained-on one. See `priors.gamma_mean_sd_rvs`. At (1.2, 0.245) the Gamma
+# is shape 23.99, scale 0.050.
+#
+# This sat base moved from 0.6 to the grid centre when study 3 gained its seventh arm; study 2
+# needed a separate rdm_medium.yaml for the same move, because studies 1, 4, 5 and 6 all train
+# on rdm_simple.yaml and it could not follow.
 _target_: bayesflow.simulators.LambdaSimulator
 sample_fn:
   _target_: priors.rdm_prior_sat
@@ -22,7 +27,7 @@ sample_fn:
   sd_true_scale: 0.1
   threshold_shape: 8
   threshold_scale: 0.15
-  threshold_diff_loc: 0.6
+  threshold_diff_loc: 1.2
   threshold_diff_sd: 0.245
   t0_loc: 0.3
   t0_scale: 0.2

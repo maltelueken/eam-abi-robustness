@@ -36,18 +36,22 @@ EXPERIMENTS = [
 MODELS = [
     "rdm_simple",
     "rdm_simple_lower",
+    "rdm_simple_medium",
     "rdm_simple_upper",
     "rdm_simple_meta",
     "rdm_simple_meta_lower",
+    "rdm_simple_meta_medium",
     "rdm_simple_meta_upper",
     "rdm_simple_discrete_lower",
     "rdm_simple_discrete_upper",
     "rdm_simple_discrete_full",
     "lba_simple",
     "lba_simple_lower",
+    "lba_simple_medium",
     "lba_simple_upper",
     "lba_simple_meta",
     "lba_simple_meta_lower",
+    "lba_simple_meta_medium",
     "lba_simple_meta_upper",
     "lba_simple_discrete_lower",
     "lba_simple_discrete_upper",
@@ -57,12 +61,14 @@ MODELS = [
     "rdm_sat_upper",
     "rdm_sat_meta",
     "rdm_sat_meta_lower",
+    "rdm_sat_meta_medium",
     "rdm_sat_meta_upper",
     "lba_sat",
     "lba_sat_lower",
     "lba_sat_upper",
     "lba_sat_meta",
     "lba_sat_meta_lower",
+    "lba_sat_meta_medium",
     "lba_sat_meta_upper",
     *[f"{family}_simple_meta_acc_{band}"
       for family in ("rdm", "lba")
@@ -383,7 +389,7 @@ def test_study_1s_coverage_arms_differ_in_position_rather_than_density(family):
 
 @pytest.mark.parametrize(
     "model",
-    [f"{family}_simple_meta{suffix}" for family in ("rdm", "lba") for suffix in ("", "_lower", "_upper")],
+    [f"{family}_simple_meta{suffix}" for family in ("rdm", "lba") for suffix in ("", "_lower", "_medium", "_upper")],
 )
 def test_the_hierarchical_models_randomize_the_hyperparameter_the_test_cases_sweep(model):
     """Study 2's counterpart of the check below, and for the same reason.
@@ -439,7 +445,7 @@ def test_study_2_moves_the_drift_slope_prior_and_leaves_the_threshold_prior_alon
 
 @pytest.mark.parametrize(
     "model",
-    [f"{family}_sat_meta{suffix}" for family in ("rdm", "lba") for suffix in ("", "_lower", "_upper")],
+    [f"{family}_sat_meta{suffix}" for family in ("rdm", "lba") for suffix in ("", "_lower", "_medium", "_upper")],
 )
 def test_the_hierarchical_sat_models_randomize_the_hyperparameter_the_test_cases_sweep(model):
     """The name is spelled out in three files; a mismatch would be silent.

@@ -1,12 +1,13 @@
-# Study 3's hierarchical variant, amortized over only the last two points of the swept grid,
-# so the rest of it falls outside the range of priors it was trained on. Matches how study 2's
-# random_prior_meta_continuous_multivariate_upper.yaml is cut.
+# Study 3's hierarchical variant, amortized over the top third of the swept grid -- its last
+# three points -- so the rest of it falls outside the range of priors it was trained on. A third
+# rather than the one grid step it used to be; see ..._sat_lower.yaml. Study 2's
+# ..._multivariate_upper.yaml is cut the same way.
 # See random_prior_meta_continuous_sat.yaml for the full-range version.
 _target_: bayesflow.simulators.LambdaSimulator
 sample_fn:
   _target_: design.random_prior_meta_continuous_multivariate
   _partial_: true
-  min_value: [1.8]
+  min_value: [1.6]
   max_value: [2.0]
   name:
   - threshold_diff_loc

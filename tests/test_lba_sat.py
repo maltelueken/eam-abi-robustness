@@ -144,7 +144,7 @@ def test_meta_logdensity_is_finite_at_its_initial_position():
 
 def test_meta_prior_draws_start_inside_the_narrowed_bounds():
     # The LBA twin of the RDM's equivalent test; see it for what this guards against.
-    lower, upper = 1.8, 2.0
+    lower, upper = 1.5, 2.0
     sample = make_lba_sat_meta_prior_sample(
         drift_slope_loc=1.5, threshold_scale=0.15, threshold_diff_sd=0.245,
         threshold_diff_loc_lower=lower, threshold_diff_loc_upper=upper,

@@ -1,0 +1,6 @@
+# @package _global_
+
+# Study 2's medium-varying arm: amortized over the middle third of the swept grid.
+defaults:
+- rdm_simple_meta
+- override /simulator/meta_simulator: random_prior_meta_continuous_multivariate_medium

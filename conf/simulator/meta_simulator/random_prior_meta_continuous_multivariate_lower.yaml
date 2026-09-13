@@ -7,10 +7,11 @@
 # the sweep falls outside the range of priors it was trained on. A third rather than the one
 # grid step it used to be: at that width the marginal prior was all but identical to
 # `rdm_lower.yaml`'s (0.86 overlap), leaving the fixed-vs-varying contrast with almost nothing
-# to separate. It is now 0.72, in line with the medium and upper arms.
+# to separate. It is now 0.72, in line with the upper arm.
 #
 # `rdm_simple.yaml`'s 1.5 falls inside this range, which is exactly why study 2's medium-fixed
-# arm is `rdm_medium.yaml` at 2.3 rather than `rdm_simple.yaml`.
+# arm is `rdm_medium.yaml` at 2.3 rather than `rdm_simple.yaml` -- and why `rdm_simple.yaml` is
+# not one of this study's conditions at all any more, only the checkpoint study 4 borrows.
 _target_: bayesflow.simulators.LambdaSimulator
 sample_fn:
   _target_: design.random_prior_meta_continuous_multivariate

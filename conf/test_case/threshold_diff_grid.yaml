@@ -13,9 +13,12 @@
 # shape, which moved the prior's mean and sd together -- see
 # conf/simulator/prior_simulator/rdm_sat.yaml.
 #
-# The grid's thirds are what the six narrow model arms are cut on: points 1-3, 4-6 and 7-9 are
-# the `_meta_lower` / `_meta_medium` / `_meta_upper` training ranges, and points 1, 5 and 9 are
-# the three fixed-prior models.
+# The grid's thirds are what the varying arms are cut on: points 1-3 and 7-9 are the
+# `_meta_lower` / `_meta_upper` training ranges, `_meta` spans all nine, and points 1, 5 and 9
+# are the three fixed-prior models (`_sat_lower`, `_sat_medium`, `_sat_upper`). There is no
+# middle-third varying arm: it overlapped the medium-fixed prior at 0.95 on the marginal, so
+# that pair isolated prior spread at a fixed centre while the low and high pairs, at ~0.70,
+# moved position and spread together.
 #
 # The name must match the one randomized in
 # conf/simulator/meta_simulator/random_prior_meta_continuous_sat.yaml.

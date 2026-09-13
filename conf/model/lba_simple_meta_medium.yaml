@@ -1,6 +1,0 @@
-# @package _global_
-
-# The LBA twin of rdm_simple_meta_medium.
-defaults:
-- lba_simple_meta
-- override /simulator/meta_simulator: random_prior_meta_continuous_multivariate_medium

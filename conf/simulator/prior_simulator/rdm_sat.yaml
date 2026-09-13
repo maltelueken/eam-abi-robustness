@@ -1,4 +1,5 @@
-# Study 3's medium-fixed arm and the sat family's base prior. `threshold_diff_loc` is the
+# The sat family's base prior, and -- through `conf/model/rdm_sat_medium.yaml`, which
+# overrides nothing -- study 3's medium-fixed arm. `threshold_diff_loc` is the
 # expected size of the speed-accuracy effect -- the mean of the prior on the threshold
 # difference, 1.2 here, which is the *centre* grid point of
 # conf/test_case/threshold_diff_grid.yaml -- and it is the hyperparameter the test cases shift
@@ -12,9 +13,10 @@
 # keeps covering the trained-on one. See `priors.gamma_mean_sd_rvs`. At (1.2, 0.245) the Gamma
 # is shape 23.99, scale 0.050.
 #
-# This sat base moved from 0.6 to the grid centre when study 3 gained its seventh arm; study 2
-# needed a separate rdm_medium.yaml for the same move, because studies 1, 4, 5 and 6 all train
-# on rdm_simple.yaml and it could not follow.
+# This sat base moved from 0.6 to the grid centre when study 3 was cut into fixed and varying
+# arms; study 2 needed a separate rdm_medium.yaml for the same move, because studies 1, 4, 5
+# and 6 all train on rdm_simple.yaml and it could not follow. The arm carries its own model
+# name rather than the bare base one, so the two studies' conditions read alike.
 _target_: bayesflow.simulators.LambdaSimulator
 sample_fn:
   _target_: priors.rdm_prior_sat

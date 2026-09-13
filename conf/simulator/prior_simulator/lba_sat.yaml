@@ -1,4 +1,5 @@
-# Study 3's medium-fixed arm for the LBA, and the lba_sat family's base prior.
+# The lba_sat family's base prior, and -- through `conf/model/lba_sat_medium.yaml`, which
+# overrides nothing -- study 3's medium-fixed arm for the LBA.
 # `threshold_diff_loc` is the expected size of the speed-accuracy effect -- the mean of the
 # prior on the threshold-gap difference, 1.2 here against a mean gap of 1.2, and the centre grid
 # point of conf/test_case/threshold_diff_grid.yaml -- and it is the hyperparameter the test

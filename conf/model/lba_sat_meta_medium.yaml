@@ -1,6 +1,0 @@
-# @package _global_
-
-# The LBA twin of rdm_sat_meta_medium.
-defaults:
-- lba_sat_meta
-- override /simulator/meta_simulator: random_prior_meta_continuous_sat_medium

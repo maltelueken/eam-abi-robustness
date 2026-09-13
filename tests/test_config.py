@@ -40,7 +40,6 @@ MODELS = [
     "rdm_simple_upper",
     "rdm_simple_meta",
     "rdm_simple_meta_lower",
-    "rdm_simple_meta_medium",
     "rdm_simple_meta_upper",
     "rdm_simple_discrete_lower",
     "rdm_simple_discrete_upper",
@@ -53,7 +52,6 @@ MODELS = [
     "lba_simple_upper",
     "lba_simple_meta",
     "lba_simple_meta_lower",
-    "lba_simple_meta_medium",
     "lba_simple_meta_upper",
     "lba_simple_discrete_lower",
     "lba_simple_discrete_upper",
@@ -61,18 +59,18 @@ MODELS = [
     "lba_simple_discrete_fixed",
     "lba_simple_discrete_full_no_num_obs",
     "rdm_sat",
+    "rdm_sat_medium",
     "rdm_sat_lower",
     "rdm_sat_upper",
     "rdm_sat_meta",
     "rdm_sat_meta_lower",
-    "rdm_sat_meta_medium",
     "rdm_sat_meta_upper",
     "lba_sat",
+    "lba_sat_medium",
     "lba_sat_lower",
     "lba_sat_upper",
     "lba_sat_meta",
     "lba_sat_meta_lower",
-    "lba_sat_meta_medium",
     "lba_sat_meta_upper",
     *[f"{family}_simple_meta_acc_{band}"
       for family in ("rdm", "lba")
@@ -476,8 +474,38 @@ def test_study_1s_unconditioned_arm_differs_from_discrete_full_in_nothing_but_th
 
 
 @pytest.mark.parametrize(
+    ("experiment", "model", "hyperparameter"),
+    [
+        ("experiment_2", "{family}_simple_medium", "drift_slope_loc"),
+        ("experiment_3", "{family}_sat_medium", "threshold_diff_loc"),
+    ],
+)
+@pytest.mark.parametrize("family", ["rdm", "lba"])
+def test_the_medium_fixed_arms_sit_on_their_sweeps_centre_point(experiment, model, hyperparameter, family):
+    """Studies 2 and 3 each keep one cell where the test prior and the training prior agree, and
+    it is the medium-fixed arm -- so that arm has to sit on the *centre* of its own grid.
+
+    Nothing structural enforces it, and the two studies get there differently: study 2 needs a
+    prior file of its own at 2.3 because its base `_simple` is pinned to 1.5 for study 4's sake,
+    while study 3's `_sat_medium` inherits a base that was moved to the centre instead. Either
+    could drift without this, and silently: the sweep would still run, still produce every
+    figure, and simply no longer contain the reference cell the rest of it is read against.
+
+    The medium-*varying* partner these once stood opposite is gone -- at 0.95 marginal overlap
+    the pair isolated prior spread rather than position, unlike the low and high pairs at ~0.70.
+    """
+    cfg = build([f"experiment={experiment}", f"model={model.format(family=family)}"])
+
+    grid = np.asarray(instantiate(cfg["test_case"]["values"]))
+    trained_at = cfg["simulator"]["prior_simulator"]["sample_fn"][hyperparameter]
+
+    assert len(grid) % 2 == 1, "an even grid has no centre point"
+    assert np.isclose(trained_at, grid[len(grid) // 2]), (model, trained_at, grid.tolist())
+
+
+@pytest.mark.parametrize(
     "model",
-    [f"{family}_simple_meta{suffix}" for family in ("rdm", "lba") for suffix in ("", "_lower", "_medium", "_upper")],
+    [f"{family}_simple_meta{suffix}" for family in ("rdm", "lba") for suffix in ("", "_lower", "_upper")],
 )
 def test_the_hierarchical_models_randomize_the_hyperparameter_the_test_cases_sweep(model):
     """Study 2's counterpart of the check below, and for the same reason.
@@ -533,7 +561,7 @@ def test_study_2_moves_the_drift_slope_prior_and_leaves_the_threshold_prior_alon
 
 @pytest.mark.parametrize(
     "model",
-    [f"{family}_sat_meta{suffix}" for family in ("rdm", "lba") for suffix in ("", "_lower", "_medium", "_upper")],
+    [f"{family}_sat_meta{suffix}" for family in ("rdm", "lba") for suffix in ("", "_lower", "_upper")],
 )
 def test_the_hierarchical_sat_models_randomize_the_hyperparameter_the_test_cases_sweep(model):
     """The name is spelled out in three files; a mismatch would be silent.

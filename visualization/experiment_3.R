@@ -20,22 +20,24 @@ figure_path <- "visualization/figures/"
 # is held fixed, so a case differs from training by a pure location shift), so each model is
 # evaluated on data drawn from priors it was and was not trained on.
 
+# Six conditions, matching study 2's. There is no medium-varying arm: it overlapped the
+# medium-fixed prior at 0.95 on the marginal, against ~0.70 for the low and high pairs, so that
+# pair isolated prior *spread* at a fixed centre while the other two moved position and spread
+# together. The medium-fixed point stays, as the cell where test and training prior agree.
 study_labels <- c(
   TeX("A: medium-fixed"),
   TeX("B: low-fixed"),
   TeX("C: high-fixed"),
   TeX("D: low-varying"),
-  TeX("E: medium-varying"),
-  TeX("F: high-varying"),
-  TeX("G: full-varying")
+  TeX("E: high-varying"),
+  TeX("F: full-varying")
 )
 
 models <- c(
-  "rdm_sat",
+  "rdm_sat_medium",
   "rdm_sat_lower",
   "rdm_sat_upper",
   "rdm_sat_meta_lower",
-  "rdm_sat_meta_medium",
   "rdm_sat_meta_upper",
   "rdm_sat_meta"
 )
@@ -46,8 +48,8 @@ models <- c(
 # were trained at a single value, the varying ones over a range.
 df_training_prior <- data.frame(
   study = models,
-  x = c(1.2, 0.4, 2.0, 0.4, 1.0, 1.6, 0.4),
-  xend = c(1.2, 0.4, 2.0, 0.8, 1.4, 2.0, 2.0)
+  x = c(1.2, 0.4, 2.0, 0.4, 1.6, 0.4),
+  xend = c(1.2, 0.4, 2.0, 0.8, 2.0, 2.0)
 ) |>
   mutate(study = factor(study, levels = models, labels = study_labels))
 

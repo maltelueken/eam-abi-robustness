@@ -21,21 +21,25 @@ study_labels <- c(
   TeX("B: low-fixed"),
   TeX("C: high-fixed"),
   TeX("D: low-varying"),
-  TeX("E: medium-varying"),
-  TeX("F: high-varying"),
-  TeX("G: full-varying")
+  TeX("E: high-varying"),
+  TeX("F: full-varying")
 )
 
 # `rdm_simple_medium` (2.3) is the medium-fixed arm, not `rdm_simple` (1.5): 1.5 is the third of
 # nine grid points, inside the bottom third, so it could not stand opposite the low-varying arm.
 # `rdm_simple` still trains under experiment_2 -- study 4 borrows that checkpoint -- it is just
-# not one of this study's seven conditions.
+# not one of this study's six conditions.
+#
+# There is no medium-varying arm: it overlapped the medium-fixed prior at 0.95 on the marginal,
+# against ~0.70 for the low and high pairs, so that pair isolated prior *spread* at a fixed
+# centre while the other two moved position and spread together -- three pairs that could not be
+# read as one comparison. The medium-fixed point stays, as the cell where test prior and
+# training prior agree.
 models <- c(
   "rdm_simple_medium",
   "rdm_simple_lower",
   "rdm_simple_upper",
   "rdm_simple_meta_lower",
-  "rdm_simple_meta_medium",
   "rdm_simple_meta_upper",
   "rdm_simple_meta"
 )
@@ -102,8 +106,8 @@ ggsave(file.path(figure_path, "study_2_recovery.png"), width = 10, height = 7)
 # study 2 sweeps one continuous hyperparameter now, so the x axis is the hyperparameter itself.
 df_trained_range <- data.frame(
   study = models,
-  xmin = c(2.3, 0.7, 3.9, 0.7, 1.9, 3.1, 0.7),
-  xmax = c(2.3, 0.7, 3.9, 1.5, 2.7, 3.9, 3.9)
+  xmin = c(2.3, 0.7, 3.9, 0.7, 3.1, 0.7),
+  xmax = c(2.3, 0.7, 3.9, 1.5, 3.9, 3.9)
 ) |>
   mutate(study = factor(study, levels = models, labels = study_labels))
 
@@ -151,9 +155,9 @@ df_summary |>
 ggsave(file.path(figure_path, "study_2_posterior_mismatch_prior.png"), width = 10, height = 7)
 
 df_range <- data.frame(
-  param = rep(rep(c("b", "s_true", "t0", "v_intercept", "v_slope"), each = 2), 7),
+  param = rep(rep(c("b", "s_true", "t0", "v_intercept", "v_slope"), each = 2), length(models)),
   acc = 0,
-  median_diff = rep(c(0, 3, 0, 1.25, 0, 0.8, 0, 1.5, 0, 1.5), 7),
+  median_diff = rep(c(0, 3, 0, 1.25, 0, 0.8, 0, 1.5, 0, 1.5), length(models)),
   study = factor(rep(models, each=10), levels = models, labels = study_labels)
 )
 

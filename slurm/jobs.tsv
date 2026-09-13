@@ -5,6 +5,11 @@ train_npe	experiment_1	rdm_simple
 train_npe	experiment_1	rdm_simple_discrete_lower
 train_npe	experiment_1	rdm_simple_discrete_upper
 train_npe	experiment_1	rdm_simple_discrete_full
+# Two further study-1 arms, both about what training says about the trial count rather than
+# where the training grid sits: `discrete_fixed` trains at a single count (500), and
+# `discrete_full_no_num_obs` trains on the whole test sweep but is not handed sqrt(num_obs).
+train_npe	experiment_1	rdm_simple_discrete_fixed
+train_npe	experiment_1	rdm_simple_discrete_full_no_num_obs
 train_npe	experiment_2	rdm_simple
 train_npe	experiment_2	rdm_simple_lower
 train_npe	experiment_2	rdm_simple_medium
@@ -17,6 +22,9 @@ train_npe	experiment_1	lba_simple
 train_npe	experiment_1	lba_simple_discrete_lower
 train_npe	experiment_1	lba_simple_discrete_upper
 train_npe	experiment_1	lba_simple_discrete_full
+# The same two arms, as above.
+train_npe	experiment_1	lba_simple_discrete_fixed
+train_npe	experiment_1	lba_simple_discrete_full_no_num_obs
 train_npe	experiment_2	lba_simple
 train_npe	experiment_2	lba_simple_lower
 train_npe	experiment_2	lba_simple_medium
@@ -55,6 +63,7 @@ train_npe	experiment_6	lba_simple_meta_rt_tight
 train_npe	experiment_6	lba_simple_meta_rt_medium
 train_npe	experiment_6	lba_simple_meta_rt_wide
 train_npe	experiment_6	lba_simple_meta_rt_full
+# Once per family: study 1's arms share the base model's held-out data and MCMC fits.
 generate_test_data	experiment_1	rdm_simple
 generate_test_data	experiment_2	rdm_simple
 # Study 2's narrowed variants need their own held-out data and their own MCMC fits: conf/mcmc/rdm.yaml
@@ -186,6 +195,7 @@ prior_distance	experiment_6	lba_simple_meta_rt_tight
 prior_distance	experiment_6	lba_simple_meta_rt_medium
 prior_distance	experiment_6	lba_simple_meta_rt_wide
 prior_distance	experiment_6	lba_simple_meta_rt_full
+# Once per family, as above: study 1's arms read these fits rather than their own.
 fit_mcmc_cpu	experiment_1	rdm_simple
 fit_mcmc_cpu	experiment_1	lba_simple
 fit_mcmc_cpu	experiment_2	rdm_simple
@@ -235,7 +245,21 @@ fit_mcmc_cpu	experiment_5	lba_simple_meta_acc_full
 fit_mcmc_cpu	experiment_6	rdm_simple_meta_rt_full
 fit_mcmc_cpu	experiment_6	lba_simple_meta_rt_full
 predict_npe	experiment_1	rdm_simple
+# Study 1's five arms differ from the base model only in what training said about the trial
+# count, so they read its held-out data and its MCMC fits (`model_family` in
+# conf/model/*_simple_discrete_*.yaml) and keep their own NPE samples and result CSVs.
+predict_npe	experiment_1	rdm_simple_discrete_lower
+predict_npe	experiment_1	rdm_simple_discrete_upper
+predict_npe	experiment_1	rdm_simple_discrete_full
+predict_npe	experiment_1	rdm_simple_discrete_fixed
+predict_npe	experiment_1	rdm_simple_discrete_full_no_num_obs
 predict_npe	experiment_1	lba_simple
+# The same five arms, as above.
+predict_npe	experiment_1	lba_simple_discrete_lower
+predict_npe	experiment_1	lba_simple_discrete_upper
+predict_npe	experiment_1	lba_simple_discrete_full
+predict_npe	experiment_1	lba_simple_discrete_fixed
+predict_npe	experiment_1	lba_simple_discrete_full_no_num_obs
 predict_npe	experiment_2	rdm_simple
 predict_npe	experiment_2	rdm_simple_lower
 predict_npe	experiment_2	rdm_simple_medium
@@ -287,7 +311,21 @@ predict_npe	experiment_6	lba_simple_meta_rt_medium
 predict_npe	experiment_6	lba_simple_meta_rt_wide
 predict_npe	experiment_6	lba_simple_meta_rt_full
 check_metrics	experiment_1	rdm_simple
+# Study 1's five arms differ from the base model only in what training said about the trial
+# count, so they read its held-out data and its MCMC fits (`model_family` in
+# conf/model/*_simple_discrete_*.yaml) and keep their own NPE samples and result CSVs.
+check_metrics	experiment_1	rdm_simple_discrete_lower
+check_metrics	experiment_1	rdm_simple_discrete_upper
+check_metrics	experiment_1	rdm_simple_discrete_full
+check_metrics	experiment_1	rdm_simple_discrete_fixed
+check_metrics	experiment_1	rdm_simple_discrete_full_no_num_obs
 check_metrics	experiment_1	lba_simple
+# The same five arms, as above.
+check_metrics	experiment_1	lba_simple_discrete_lower
+check_metrics	experiment_1	lba_simple_discrete_upper
+check_metrics	experiment_1	lba_simple_discrete_full
+check_metrics	experiment_1	lba_simple_discrete_fixed
+check_metrics	experiment_1	lba_simple_discrete_full_no_num_obs
 check_metrics	experiment_2	rdm_simple
 check_metrics	experiment_2	rdm_simple_lower
 check_metrics	experiment_2	rdm_simple_medium
@@ -335,7 +373,21 @@ check_metrics	experiment_6	lba_simple_meta_rt_medium
 check_metrics	experiment_6	lba_simple_meta_rt_wide
 check_metrics	experiment_6	lba_simple_meta_rt_full
 check_summary_stats	experiment_1	rdm_simple
+# Study 1's five arms differ from the base model only in what training said about the trial
+# count, so they read its held-out data and its MCMC fits (`model_family` in
+# conf/model/*_simple_discrete_*.yaml) and keep their own NPE samples and result CSVs.
+check_summary_stats	experiment_1	rdm_simple_discrete_lower
+check_summary_stats	experiment_1	rdm_simple_discrete_upper
+check_summary_stats	experiment_1	rdm_simple_discrete_full
+check_summary_stats	experiment_1	rdm_simple_discrete_fixed
+check_summary_stats	experiment_1	rdm_simple_discrete_full_no_num_obs
 check_summary_stats	experiment_1	lba_simple
+# The same five arms, as above.
+check_summary_stats	experiment_1	lba_simple_discrete_lower
+check_summary_stats	experiment_1	lba_simple_discrete_upper
+check_summary_stats	experiment_1	lba_simple_discrete_full
+check_summary_stats	experiment_1	lba_simple_discrete_fixed
+check_summary_stats	experiment_1	lba_simple_discrete_full_no_num_obs
 check_summary_stats	experiment_2	rdm_simple
 check_summary_stats	experiment_2	rdm_simple_lower
 check_summary_stats	experiment_2	rdm_simple_medium
@@ -387,7 +439,21 @@ check_summary_stats	experiment_6	lba_simple_meta_rt_medium
 check_summary_stats	experiment_6	lba_simple_meta_rt_wide
 check_summary_stats	experiment_6	lba_simple_meta_rt_full
 check_robustness	experiment_1	rdm_simple
+# Study 1's five arms differ from the base model only in what training said about the trial
+# count, so they read its held-out data and its MCMC fits (`model_family` in
+# conf/model/*_simple_discrete_*.yaml) and keep their own NPE samples and result CSVs.
+check_robustness	experiment_1	rdm_simple_discrete_lower
+check_robustness	experiment_1	rdm_simple_discrete_upper
+check_robustness	experiment_1	rdm_simple_discrete_full
+check_robustness	experiment_1	rdm_simple_discrete_fixed
+check_robustness	experiment_1	rdm_simple_discrete_full_no_num_obs
 check_robustness	experiment_1	lba_simple
+# The same five arms, as above.
+check_robustness	experiment_1	lba_simple_discrete_lower
+check_robustness	experiment_1	lba_simple_discrete_upper
+check_robustness	experiment_1	lba_simple_discrete_full
+check_robustness	experiment_1	lba_simple_discrete_fixed
+check_robustness	experiment_1	lba_simple_discrete_full_no_num_obs
 check_robustness	experiment_2	rdm_simple
 check_robustness	experiment_2	rdm_simple_lower
 check_robustness	experiment_2	rdm_simple_medium

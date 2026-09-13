@@ -383,25 +383,35 @@ class CustomMetaSimulator(DataBandSimulator):
 def create_data_adapter(
     inference_variables, inference_conditions=None, summary_variables=None
 ):
-    """Create an adapter for the racing diffusion model simulator."""
-    adapter = (
-        bf.Adapter()
-        .to_array()
-        .convert_dtype("float64", "float32")
-        .broadcast("num_obs", to="x", exclude=(-2, -1), squeeze=-1)
-        .broadcast(
+    """Create an adapter for the racing diffusion model simulator.
+
+    `inference_conditions` is `["num_obs"]` everywhere but study 1's unconditioned arm, where
+    it is omitted: the inference network is then handed nothing but the summary network's
+    embedding of `x`, and whatever it knows about the size of the set it is looking at has to
+    come out of that pooling. Leaving the key out drops `sqrt(num_obs)`, the `inference_conditions`
+    tensor and the broadcast that shapes it -- BayesFlow reads the key with `.get`, so an
+    adapter that never produces it trains and samples unconditioned rather than failing.
+    """
+    adapter = bf.Adapter().to_array().convert_dtype("float64", "float32")
+
+    if inference_conditions:
+        adapter = adapter.broadcast(
+            "num_obs", to="x", exclude=(-2, -1), squeeze=-1
+        ).broadcast(
             inference_conditions, to="num_obs"
         )  # Make sure that all inference conditions have same shape
-        .as_set(summary_variables)
+
+    adapter = (
+        adapter.as_set(summary_variables)
         .log(inference_variables)
-        .sqrt("num_obs")
         .concatenate(inference_variables, into="inference_variables")
         .concatenate(summary_variables, into="summary_variables")
-        .rename("num_obs", "inference_conditions")
     )
 
-    adapter = adapter.keep(
-        ["inference_variables", "inference_conditions", "summary_variables"]
-    )
+    keep = ["inference_variables", "summary_variables"]
 
-    return adapter
+    if inference_conditions:
+        adapter = adapter.sqrt("num_obs").rename("num_obs", "inference_conditions")
+        keep.insert(1, "inference_conditions")
+
+    return adapter.keep(keep)

@@ -45,6 +45,8 @@ MODELS = [
     "rdm_simple_discrete_lower",
     "rdm_simple_discrete_upper",
     "rdm_simple_discrete_full",
+    "rdm_simple_discrete_fixed",
+    "rdm_simple_discrete_full_no_num_obs",
     "lba_simple",
     "lba_simple_lower",
     "lba_simple_medium",
@@ -56,6 +58,8 @@ MODELS = [
     "lba_simple_discrete_lower",
     "lba_simple_discrete_upper",
     "lba_simple_discrete_full",
+    "lba_simple_discrete_fixed",
+    "lba_simple_discrete_full_no_num_obs",
     "rdm_sat",
     "rdm_sat_lower",
     "rdm_sat_upper",
@@ -385,6 +389,90 @@ def test_study_1s_coverage_arms_differ_in_position_rather_than_density(family):
     assert set(arms["lower"]) <= set(arms["full"])
     assert set(arms["upper"]) <= set(arms["full"])
     assert set(build([])["simulator"]["design_simulator"]["sample_fn"]["values"]) <= set(arms["full"])
+
+
+@pytest.mark.parametrize("family", ["rdm", "lba"])
+def test_study_1s_arms_read_the_base_models_test_data_and_mcmc_fits(family):
+    """Every study-1 arm differs from `<family>_simple` only in what training said about the
+    trial count: same prior, same likelihood, same MCMC target, and a test case pins `num_obs`
+    through `sim_kwargs` -- so all of them would simulate bit-identical held-out data and fit
+    identical reference posteriors. `model_family` points them at the base model's directory
+    instead, the way studies 5 and 6 share one set across a family's training bands, which is
+    what lets `slurm/jobs.tsv` carry one `generate_test_data` and one `fit_mcmc_cpu` row per
+    family rather than six.
+
+    Only the *shared* artifacts move. NPE samples and result CSVs are addressed from the run
+    directory, which is keyed on the model, so the arms cannot overwrite each other's.
+    """
+
+    def shared(model):
+        """Read the interpolated values out while this config is the live one.
+
+        `model_family` is `${hydra:runtime.choices.model}` by default, resolved lazily against
+        the global `HydraConfig` singleton -- so a config held across a later `build` reports
+        that later run's model, not its own.
+        """
+        cfg = build([f"model={model}"])
+        return cfg["test_data_path"], [
+            OmegaConf.to_yaml(cfg[key])
+            for key in ("mcmc_model_fun", "mcmc_log_prior_fun", "mcmc_param_names")
+        ]
+
+    base_path, base_mcmc = shared(f"{family}_simple")
+
+    for arm in ("discrete_lower", "discrete_upper", "discrete_full", "discrete_fixed",
+                "discrete_full_no_num_obs"):
+        arm_path, arm_mcmc = shared(f"{family}_simple_{arm}")
+
+        assert arm_path == base_path, arm
+
+        # ... and the reason that is sound: the log-density, its prior and the vector they are
+        # defined over are the arm's only claim on the base model's fits.
+        assert arm_mcmc == base_mcmc, arm
+
+
+@pytest.mark.parametrize("family", ["rdm", "lba"])
+def test_study_1s_no_coverage_arm_trains_at_a_single_trial_count(family):
+    """`discrete_fixed` is the bottom of study 1's coverage axis: it removes the grid rather
+    than moving it, so `sqrt(num_obs)` is a constant input and nothing in training tells the
+    network what a set size means.
+
+    The count has to be one the rest of the pipeline already reads the networks at -- 500, where
+    studies 2, 3, 5 and 6 test -- or this arm would differ from `discrete_full` in *where* it
+    sits as well as in how much of the axis it covers, and the two would stop being a clean pair.
+    """
+    trained = list(
+        instantiate(
+            build([f"model={family}_simple_discrete_fixed"])["simulator"]["design_simulator"]["sample_fn"]["values"],
+        ),
+    )
+
+    assert trained == [500]
+    assert set(trained) <= set(build([])["simulator"]["design_simulator"]["sample_fn"]["values"])
+
+
+@pytest.mark.parametrize("family", ["rdm", "lba"])
+def test_study_1s_unconditioned_arm_differs_from_discrete_full_in_nothing_but_the_condition(family):
+    """`discrete_full_no_num_obs` separates *covering* a trial count in training from being
+    *told* it at inference time, which only holds if the training grid is identical to
+    `discrete_full`'s and the adapter differs in exactly one thing: no `inference_conditions`.
+
+    `simulation.create_data_adapter` drops `sqrt(num_obs)`, the broadcast that shapes it and the
+    tensor itself when the key is absent, and BayesFlow reads the key with `.get` -- so the
+    omission trains and samples unconditioned instead of failing, and nothing but this test would
+    notice a stray condition creeping back in.
+    """
+    covered = build([f"model={family}_simple_discrete_full"])
+    unconditioned = build([f"model={family}_simple_discrete_full_no_num_obs"])
+
+    assert (
+        unconditioned["simulator"]["design_simulator"]
+        == covered["simulator"]["design_simulator"]
+    )
+    assert get_param_names(unconditioned) == get_param_names(covered)
+
+    assert "num_obs" in covered["approximator"]["adapter"]["inference_conditions"]
+    assert not unconditioned["approximator"]["adapter"].get("inference_conditions")
 
 
 @pytest.mark.parametrize(

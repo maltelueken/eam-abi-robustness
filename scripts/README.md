@@ -52,9 +52,19 @@ a data band and share their family's architecture:
 
 ```console
 python scripts/train_npe.py --multirun sweeper=optuna approximator=continuous_approximator \
-    experiment=experiment_1 model=rdm_simple
-python scripts/select_architecture.py rdm_simple
+    experiment=experiment_2 model=rdm_simple_meta
+python scripts/select_architecture.py rdm_simple_meta
 ```
+
+The sweep is hosted on the family's **full-varying** arm (`<family>_simple_meta` under
+experiment_2), not on its plainest fixed-prior model. One architecture serves every arm, and the
+fixed-prior task is a strict sub-problem of the varying one, so selecting on a fixed arm risks
+under-capacity on the varying ones — degradation that would be read as study 2's result rather
+than as an artifact. experiment_2 also scores the objectives on `diag_batch_size: 1000` rather
+than experiment_1's 100. Nothing is scored outside the swept model's own training distribution:
+the meta simulator draws `drift_slope_loc` per batch element, so a diagnostic batch already
+averages over the whole trained range, and `diag_num_obs` stays inside the design simulator's
+grid. See the header of `slurm/sweep_all.sh`.
 
 `conf/sweeper/optuna.yaml` keys the Optuna study and its database on `architecture_family`, so
 every RDM model lands in `multirun/train_npe_trials_rdm.db` and every LBA model in the `_lba`

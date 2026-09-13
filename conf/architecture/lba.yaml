@@ -8,8 +8,8 @@
 # network nodes under conf/approximator/*_network/ interpolate them.
 #
 # study:     not yet swept -- these are the values the single shared architecture carried
-#            before the sweep was split per family. Run `slurm/sweep.sh experiment_1
-#            lba_simple` to replace them.
+#            before the sweep was split per family. Run `slurm/sweep.sh experiment_2
+#            lba_simple_meta` to replace them.
 architecture_family: lba
 
 inference_mlp_depth: 6

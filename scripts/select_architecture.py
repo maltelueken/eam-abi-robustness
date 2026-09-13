@@ -104,8 +104,8 @@ def write_timing_csv(study: optuna.Study, path: pathlib.Path) -> dict:
 def parse_args() -> argparse.Namespace:
     """Parse the command line."""
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("model", help="a model of the family whose sweep to read, e.g. rdm_simple")
-    parser.add_argument("--experiment", default="experiment_1", help="the experiment the sweep ran under")
+    parser.add_argument("model", help="a model of the family whose sweep to read, e.g. rdm_simple_meta")
+    parser.add_argument("--experiment", default="experiment_2", help="the experiment the sweep ran under")
     parser.add_argument(
         "--weights",
         default="1,1,1",
@@ -139,6 +139,11 @@ def main() -> None:
     objectives = ", ".join(f"{name}={value:.4g}" for name, value in zip(OBJECTIVE_NAMES, best.values, strict=True))
     provenance = [
         f"study:     {study.study_name}  ({sweeper['storage']})",
+        # The study name is keyed on the family alone, so it does not say which arm the sweep
+        # was hosted on -- and that choice decides what the architecture was fitted to serve.
+        # slurm/sweep_all.sh points it at the family's full-varying arm; this line is the only
+        # place the answer survives once the sweep database has been archived.
+        f"swept on:  {args.experiment} / {args.model}",
         f"trial:     {best.number} of {len(study.trials)}, Pareto front of {len(study.best_trials)}",
         f"objective: {objectives}",
         f"selected:  nearest ideal point, weights {tuple(float(w) for w in weights)}, distance {score:.4g}",

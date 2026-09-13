@@ -8,8 +8,8 @@
 # network nodes under conf/approximator/*_network/ interpolate them.
 #
 # study:     not yet swept -- these are the values the single shared architecture carried
-#            before the sweep was split per family. Run `slurm/sweep.sh experiment_1
-#            rdm_simple` to replace them.
+#            before the sweep was split per family. Run `slurm/sweep.sh experiment_2
+#            rdm_simple_meta` to replace them.
 architecture_family: rdm
 
 inference_mlp_depth: 6

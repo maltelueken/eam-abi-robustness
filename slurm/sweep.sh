@@ -3,15 +3,29 @@
 # Run the Optuna architecture sweep for one model family -- one job, `n_trials` trainings back
 # to back, followed by the selection step that writes the winner back into the config.
 #
-#   sbatch slurm/sweep.sh                                        # experiment_1 / rdm_simple
-#   sbatch slurm/sweep.sh experiment_1 lba_simple
-#   sbatch slurm/sweep.sh experiment_1 rdm_simple hydra.sweeper.n_trials=40
+#   sbatch slurm/sweep.sh                                        # experiment_2 / rdm_simple_meta
+#   sbatch slurm/sweep.sh experiment_2 lba_simple_meta
+#   sbatch slurm/sweep.sh experiment_2 rdm_simple_meta hydra.sweeper.n_trials=40
 #
 # There is one sweep per family, not one per (experiment, model): the RDM and the LBA are
 # different forward models and deserve their own architecture, while the variants within a family
 # differ only in a prior, a design or a data band. `conf/sweeper/optuna.yaml` therefore keys the
 # study and the database on `architecture_family` -- so `rdm_simple` and `rdm_sat` write into the
 # same RDM study, and `slurm/sweep_all.sh` submits exactly two jobs.
+#
+# The (experiment, model) the sweep is *hosted* on is therefore invisible to the study name, but
+# it is not arbitrary: it is the family's full-varying arm under experiment_2, because that arm's
+# task contains every other arm's. slurm/sweep_all.sh carries the argument; the header
+# `scripts/select_architecture.py` writes into `conf/architecture/<family>.yaml` records which
+# host a given architecture was actually selected on, since nothing else does.
+#
+# What the sweep must *not* be scored on is anything out of the swept model's own training
+# distribution -- a shifted `drift_slope_loc`, or a `num_obs` outside the design simulator's
+# grid. Both are what studies 1-3 measure, and an architecture selected on them would be
+# selected on the studies' own outcome. `conf/experiment/experiment_1.yaml`'s `diag_num_obs`
+# stays inside `random_num_obs_discrete`'s grid for that reason, and the meta simulator draws
+# `drift_slope_loc` per batch element, so a diagnostic batch already averages over the full
+# training range without scoring a single point outside it.
 #
 # The sweep tunes a *single* network, not an ensemble: `conf/config.yaml` defaults to the
 # ensemble because that is what the experiments train, but searching an architecture five
@@ -50,8 +64,8 @@ set -euo pipefail
 
 PROJECT_ROOT="${EAM_ABI_ROOT:-/projects/0/prjs1372/eam-abi-robustness}"
 
-experiment=${1:-experiment_1}
-model=${2:-rdm_simple}
+experiment=${1:-experiment_2}
+model=${2:-rdm_simple_meta}
 
 # Drop whichever of the two positionals were actually given, leaving "$@" as the overrides.
 # Written arithmetically because `[ $# -ge 1 ] && shift` returns non-zero with no arguments,

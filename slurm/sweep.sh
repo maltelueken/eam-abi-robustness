@@ -85,12 +85,19 @@ fi
 # Sidecar journal files outlive a moved database and sqlite would reattach them to the new one.
 rm -f "${db}-wal" "${db}-shm" "${db}-journal"
 
-module load 2023
-source bin/activate
+module purge
+module load 2025
+
+# As in slurm/submit.sh: the environment is uv's, resolved from `uv.lock` at `uv run` rather
+# than activated, and `--frozen` keeps a sweep from re-resolving it mid-flight. That matters
+# more here than anywhere else -- a Pareto front is only comparable across trials scored
+# against the same dependency versions, which is the same reason the database is started
+# empty above.
+export PATH="${PATH}:${HOME}/.local/bin"
 
 echo "[$(date -Is)] sweep | ${family} | ${experiment} | ${model} | extra: $*"
 
-python scripts/train_npe.py \
+uv run --frozen python scripts/train_npe.py \
     --multirun \
     sweeper=optuna \
     approximator=continuous_approximator \
@@ -102,6 +109,6 @@ python scripts/train_npe.py \
 # it. Given the same overrides as the sweep, since they can change the study the trials landed in.
 echo "[$(date -Is)] selecting architecture | ${family}"
 
-python scripts/select_architecture.py "${model}" --experiment "${experiment}" "$@"
+uv run --frozen python scripts/select_architecture.py "${model}" --experiment "${experiment}" "$@"
 
 git --no-pager diff --stat -- "conf/architecture/${family}.yaml" || true

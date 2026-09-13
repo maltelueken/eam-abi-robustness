@@ -57,12 +57,14 @@ cd "$PROJECT_ROOT"
 
 mkdir -p slurm/logs
 
-module load 2023
-source bin/activate
+module purge
+module load 2025
+
+export PATH="${PATH}:${HOME}/.local/bin"
 
 echo "[$(date -Is)] ${stage} | ${experiment} | ${model} | extra: $*"
 
-python "scripts/${stage}.py" \
+uv run --frozen python "scripts/${stage}.py" \
     experiment="${experiment}" \
     model="${model}" \
     "$@"

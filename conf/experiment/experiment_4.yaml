@@ -8,8 +8,15 @@ test_num_obs: 100
 
 test_num_posterior_predictive_samples: 100
 
-# Study 4 is not a training run: it applies the networks study 2 trained on simulations, which is
-# the amortization claim it exists to test -- hence no train_npe row for it in slurm/jobs.tsv.
+# Study 4 is not a training run: it applies networks trained on simulations to the empirical
+# subjects, which is the amortization claim it exists to test -- hence no train_npe row for it
+# in slurm/jobs.tsv. Its conditions are drawn from two studies: study 2's drift-slope arms (the
+# prior the network was trained under moves) and study 5's accuracy-band arms (the prior is
+# fixed and the *data* the network was trained on are restricted), so `npe_path` cannot name one
+# study outright. `npe_experiment` is that name, defaulting to study 2; the band models declare
+# `experiment_5` in their own config, which wins because `model` is composed after `experiment`.
+npe_experiment: experiment_2
+
 # Keyed on the model choice rather than model_family: the family is about which held-out data a
-# run shares (studies 5 and 6), whereas the network is always the one trained for this model.
-npe_path: ${hydra:runtime.cwd}/outputs/experiment_2/${hydra:runtime.choices.model}/${hydra:runtime.choices.inference-method}
+# run shares, whereas the network is always the one trained for this model.
+npe_path: ${hydra:runtime.cwd}/outputs/${npe_experiment}/${hydra:runtime.choices.model}/${hydra:runtime.choices.inference-method}

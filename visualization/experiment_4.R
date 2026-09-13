@@ -17,31 +17,48 @@ data_path <- "outputs/experiment_4"
 tasks <- c("FF1", "FN1", "FV1")
 task_labels <- c("Figural", "Numeric", "Verbal")
 
-study_labels <- c(
-  TeX("A: medium-fixed"),
-  TeX("B: high-fixed"),
-  TeX("C: low-fixed"),
-  TeX("D: high-varying"),
-  TeX("E: low-varying"),
-  TeX("F: full-varying")
-)
-
+# The empirical study applies networks trained elsewhere. Five come from study 2, where the
+# training prior on the drift slope moves; four from study 5, where the prior is study 2's full
+# meta prior and the *training data* are restricted to an accuracy band instead. `models` is the
+# directory name under outputs/experiment_4 and `study_labels` its facet label, so the two are
+# positional and have to stay in step -- lower is 0.7 and upper 3.9, not the other way round.
 models <- c(
-  "rdm_simple",
   "rdm_simple_lower",
   "rdm_simple_upper",
   "rdm_simple_meta_lower",
   "rdm_simple_meta_upper",
-  "rdm_simple_meta"
+  "rdm_simple_meta",
+  "rdm_simple_meta_acc_low",
+  "rdm_simple_meta_acc_medium",
+  "rdm_simple_meta_acc_high",
+  "rdm_simple_meta_acc_full"
 )
+
+study_labels <- c(
+  TeX("A: low-fixed"),
+  TeX("B: high-fixed"),
+  TeX("C: low-varying"),
+  TeX("D: high-varying"),
+  TeX("E: full-varying"),
+  TeX("F: accuracy 0.5--0.6"),
+  TeX("G: accuracy 0.7--0.8"),
+  TeX("H: accuracy 0.9--1.0"),
+  TeX("I: accuracy 0.5--1.0")
+)
+
+# Only study 2's arms have a prior_stats table: study 5 holds the prior fixed and rejects
+# datasets afterwards, which is why slurm/jobs.tsv runs prior_stats for the drift-slope arms
+# alone (its acceptance rates make it unaffordable for a band). The prior overlays below are
+# therefore drawn on those facets only.
+prior_models <- models[1:5]
 
 # Empirical data distributions --------------------------------------------
 
-data_fn1 <- read.delim("outputs/experiment_4/rdm_simple/test_data/FN1.txt", sep = " ") |>
+data_fn1 <- read.delim("outputs/experiment_4/rdm_simple_meta/test_data/FN1.txt", sep = " ") |>
   mutate(name = "FN1")
-data_fv1 <- read.delim("outputs/experiment_4/rdm_simple/test_data/FV1.txt", sep = " ") |>
+data_fv1 <- read.delim("outputs/experiment_4/rdm_simple_meta/test_data/FV1.txt", sep = " ") |>
   mutate(name = "FV1")
-data_ff1 <- read.delim("outputs/experiment_4/rdm_simple/test_data/FF1.txt", sep = " ") |>
+data_ff1 <- read.delim("outputs/experiment_4/rdm_simple_meta/test_data/FF1.txt", sep = " ") |>
   mutate(name = "FF1")
 
 quantile_df <- function(x, probs = seq(0, 1, 0.25)) {
@@ -156,7 +173,7 @@ df_ppd_acc |>
     strip.background.y = element_blank()
   )
 
-ggsave(file.path(figure_path, "study_4_ppd_acc_recovery.png"), width = 10, height = 6)
+ggsave(file.path(figure_path, "study_4_ppd_acc_recovery.png"), width = 10, height = 9)
 
 df_ppd_acc |>
   ggplot(aes(x = "", y = acc_rmsd, color = method)) +
@@ -174,7 +191,7 @@ df_ppd_acc |>
     strip.background.y = element_blank()
   )
 
-ggsave(file.path(figure_path, "study_4_ppd_acc_rmsd.png"), width = 10, height = 6)
+ggsave(file.path(figure_path, "study_4_ppd_acc_rmsd.png"), width = 10, height = 9)
 
 df_ppd_rt |>
   filter(quantile %in% c(0.1, 0.5, 0.9)) |>
@@ -202,7 +219,7 @@ df_ppd_rt |>
     strip.background.y = element_blank()
   )
 
-ggsave(file.path(figure_path, "study_4_ppd_rt_recovery.png"), width = 10, height = 6)
+ggsave(file.path(figure_path, "study_4_ppd_rt_recovery.png"), width = 10, height = 9)
 
 df_ppd_rt |>
   filter(quantile %in% c(0.1, 0.5, 0.9)) |>
@@ -219,14 +236,14 @@ df_ppd_rt |>
     strip.background.y = element_blank()
   )
 
-ggsave(file.path(figure_path, "study_4_ppd_rt_rmsd.png"), width = 10, height = 6)
+ggsave(file.path(figure_path, "study_4_ppd_rt_rmsd.png"), width = 10, height = 9)
 
 
 # Posterior mismatch ------------------------------------------------------
 
 df_summary <- read_by_model(data_path, models, "flow_matching/metrics/summary_stats.csv", read_summary_stats)
 
-df_prior <- read_by_model("outputs/experiment_2", models, "flow_matching/metrics/prior_stats.csv", read_prior_stats)
+df_prior <- read_by_model("outputs/experiment_2", prior_models, "flow_matching/metrics/prior_stats.csv", read_prior_stats)
 
 # prior_stats.csv is already long (draw, param, value), so no pivot is needed here.
 df_segment_prior <- df_prior |>
@@ -262,7 +279,7 @@ df_summary |>
   ) +
   geom_blank(data = df_range) +
   geom_abline(slope = 1, intercept = 0) +
-  scale_color_brewer(palette = "Dark2") +
+  scale_color_viridis_d() +
   labs(x = "MCMC posterior median", y = "NPE posterior median") +
   theme_half_open() +
   theme(
@@ -271,12 +288,12 @@ df_summary |>
     strip.background.y = element_blank()
   )
 
-ggsave(file.path(figure_path, "study_4_recovery.png"), width = 10, height = 6)
+ggsave(file.path(figure_path, "study_4_recovery.png"), width = 10, height = 9)
 
 df_range <- data.frame(
-  param = rep(rep(c("b", "s_true", "t0", "v_intercept", "v_slope"), each = 2), 6),
+  param = rep(rep(c("b", "s_true", "t0", "v_intercept", "v_slope"), each = 2), length(models)),
   error_rate = 0,
-  median_diff = rep(c(0, 1.5, 0, 1.0, 0, 0.3, 0, 1.0, 0, 2), 6),
+  median_diff = rep(c(0, 1.5, 0, 1.0, 0, 0.3, 0, 1.0, 0, 2), length(models)),
   study = factor(rep(models, each=10))
 ) |>
   mutate(
@@ -308,7 +325,7 @@ df_summary |>
     alpha = 0.3
   ) +
   geom_blank(data = df_range) +
-  scale_color_brewer(palette = "Dark2") +
+  scale_color_viridis_d() +
   labs(x = "Error rate (in %)", y = "Absolute difference posterior median") +
   theme_half_open() +
   theme(
@@ -317,4 +334,4 @@ df_summary |>
     strip.background.y = element_blank()
   )
 
-ggsave(file.path(figure_path, "study_4_posterior_mismatch.png"), width = 10, height = 6)
+ggsave(file.path(figure_path, "study_4_posterior_mismatch.png"), width = 10, height = 9)

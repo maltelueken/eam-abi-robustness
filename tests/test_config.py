@@ -199,22 +199,39 @@ def test_test_case_groups_enumerate_the_expected_cases(experiment, expected_firs
     assert cases[0].key == expected_first_key
 
 
-def test_the_empirical_study_reads_the_networks_study_2_trained():
-    """Study 4 trains nothing -- it applies study 2's networks to the subject files.
+def test_the_empirical_study_reads_networks_the_simulation_studies_trained():
+    """Study 4 trains nothing -- it applies networks trained on simulations to the subject files.
 
     That reuse is the amortization claim the empirical study exists to test, and
     `hydra.job.chdir` puts every stage in its own `outputs/<experiment>/<model>/...` directory,
     so without `npe_path` study 4 would look for a checkpoint that no train_npe run ever wrote
     -- which is why `slurm/jobs.tsv` has no train_npe row for it.
+
+    Its conditions come from two studies, so the borrowed checkpoint is not always study 2's:
+    the accuracy-band arms are trained under study 5 and say so with `npe_experiment`. That key
+    is what keeps the two straight, and a band arm silently reading a study-2 directory would
+    fail as a missing file only on the cluster.
     """
-    empirical = get_checkpoint_path(build(["experiment=experiment_4", "model=lba_simple"]))
+    empirical = get_checkpoint_path(build(["experiment=experiment_4", "model=lba_simple_meta"]))
 
     assert empirical.endswith(
         os.path.join(
-            "outputs", "experiment_2", "lba_simple", "flow_matching", "checkpoints", "model.keras",
+            "outputs", "experiment_2", "lba_simple_meta", "flow_matching", "checkpoints",
+            "model.keras",
         ),
     )
     assert os.path.isabs(empirical), empirical
+
+    banded = get_checkpoint_path(
+        build(["experiment=experiment_4", "model=rdm_simple_meta_acc_low"]),
+    )
+
+    assert banded.endswith(
+        os.path.join(
+            "outputs", "experiment_5", "rdm_simple_meta_acc_low", "flow_matching", "checkpoints",
+            "model.keras",
+        ),
+    )
 
     # Every other study reads what its own training run wrote, relative to that run's directory.
     simulated = get_checkpoint_path(build(["experiment=experiment_1", "model=rdm_simple"]))
@@ -362,7 +379,7 @@ def test_the_default_training_grid_reaches_the_empirical_studys_trial_counts():
     measure. The grid therefore has to reach at least study 4's own `test_num_obs`.
     """
     trained = list(build([])["simulator"]["design_simulator"]["sample_fn"]["values"])
-    empirical = build(["experiment=experiment_4", "model=rdm_simple"])["test_num_obs"]
+    empirical = build(["experiment=experiment_4", "model=rdm_simple_meta"])["test_num_obs"]
 
     assert min(trained) <= empirical
 

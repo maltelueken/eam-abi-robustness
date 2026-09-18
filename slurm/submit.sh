@@ -36,8 +36,8 @@
 #SBATCH --gpus=1
 #SBATCH --partition=gpu_a100
 #SBATCH --time=12:00:00
-#SBATCH --output=%x_%j.out
-#SBATCH --error=%x_%j.err
+#SBATCH --output=/projects/0/prjs1372/eam-abi-robustness/slurm/logs/%x_%j.out
+#SBATCH --error=/projects/0/prjs1372/eam-abi-robustness/slurm/logs/%x_%j.err
 
 set -euo pipefail
 

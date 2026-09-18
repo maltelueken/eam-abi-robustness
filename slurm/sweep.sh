@@ -55,7 +55,7 @@
 #SBATCH --ntasks=1
 #SBATCH --cpus-per-task=18
 #SBATCH --gpus=1
-#SBATCH --partition=gpu_a100
+#SBATCH --partition=gpu_mig
 #SBATCH --time=120:00:00
 #SBATCH --output=%x_%j.out
 #SBATCH --error=%x_%j.err

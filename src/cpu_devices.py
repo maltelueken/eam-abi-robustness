@@ -1,7 +1,8 @@
-"""Give JAX one CPU device per MCMC chain, before anything imports JAX.
+"""Give JAX one CPU device per available core, before anything imports JAX.
 
-`scripts/fit_mcmc_cpu.py` runs each chain on its own device (see `mcmc.fit_mcmc_cpu_batch`),
-and JAX exposes the host CPU as a *single* device unless told otherwise. Splitting it is an
+`scripts/fit_mcmc_cpu.py` spreads its (chain, dataset) fits over every device (see
+`mcmc.fit_mcmc_cpu_batch`), and JAX exposes the host CPU as a *single* device unless told
+otherwise. Splitting it is an
 XLA flag, and XLA reads its flags when the backend is initialised -- which happens on the
 first array operation, not at `import jax`. So this has to run before any of that, which is
 why it lives in a module of its own that imports nothing but `os`: `scripts/fit_mcmc_cpu.py`
@@ -14,18 +15,26 @@ the GPU away from training.
 
 import os
 
-#: Chains per fit, and therefore CPU devices. Matches `mcmc_sampling_fun.num_chains` in
-#: `conf/experiment/experiment_1.yaml`; override both together.
-DEFAULT_NUM_DEVICES = 4
-
-#: Environment variable a caller can use to raise or lower that, e.g. under a SLURM
-#: allocation with a different `--cpus-per-task`. `slurm/submit_all.sh` exports it.
+#: Environment variable a caller can use to override the device count. Without it, every core
+#: this process may run on becomes a device.
 ENV_VAR = "MCMC_NUM_CPU_DEVICES"
 
 
+def available_cores():
+    """Cores this process may run on -- under SLURM, the job's `--cpus-per-task` cpuset.
+
+    `os.sched_getaffinity` rather than `os.cpu_count`, which reports the whole node however
+    few cores the allocation holds; oversubscribing them would only add contention.
+    """
+    try:
+        return len(os.sched_getaffinity(0))
+    except AttributeError:  # not on Linux
+        return os.cpu_count() or 1
+
+
 def requested_num_devices():
-    """How many CPU devices to ask for: `$MCMC_NUM_CPU_DEVICES`, or the default."""
-    return int(os.environ.get(ENV_VAR, DEFAULT_NUM_DEVICES))
+    """How many CPU devices to ask for: `$MCMC_NUM_CPU_DEVICES`, or every available core."""
+    return int(os.environ.get(ENV_VAR, available_cores()))
 
 
 def configure_cpu_devices(num_devices=None):

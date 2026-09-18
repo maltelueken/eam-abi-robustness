@@ -1,8 +1,9 @@
 """Fit ground-truth MCMC posteriors on the CPU, one job per test case.
 
-`mcmc.fit_mcmc_cpu_batch` runs BlackJAX NUTS with one chain per CPU core -- `pmap` over the
-chain axis -- and every dataset in the case vmapped inside each core. Every chain adapts its
-own tuning from its own draw out of the prior. The log-density, the prior to start from, the
+`mcmc.fit_mcmc_cpu_batch` runs BlackJAX NUTS over every CPU core the job has: each chain of
+each dataset is an independent fit, and those fits are dealt out over the cores -- `pmap` over
+devices, `vmap` over the fits each one holds. Every chain adapts its own tuning from its own
+draw out of the prior. The log-density, the prior to start from, the
 parameterization and the transform all come from the `mcmc` config group, so this script has
 no model-specific branching.
 

@@ -119,12 +119,10 @@ psrf_threshold: 1.01
 # One case may be selected by key (`case=sample_size_50`); null fits every case.
 case: null
 
-# CPU-parallelized MCMC fitting (scripts/fit_mcmc_cpu.py): one chain per core via `pmap`,
-# every dataset of the case vmapped inside each. See mcmc.fit_mcmc_cpu_batch.
-#
-# `num_chains` is also the number of CPU devices the stage asks JAX for, and that count is
-# fixed before JAX starts -- so raising it here means raising `MCMC_NUM_CPU_DEVICES` in the
-# environment too (see src/cpu_devices.py). Four is what `slurm/submit_all.sh` allocates.
+# CPU-parallelized MCMC fitting (scripts/fit_mcmc_cpu.py): the `num_chains * num_datasets`
+# (chain, dataset) fits are spread over every core the job has, one JAX device per core (see
+# src/cpu_devices.py and mcmc.fit_mcmc_cpu_batch). `num_chains` is independent of the core
+# count.
 mcmc_sampling_fun:
   _target_: mcmc.fit_mcmc_cpu_batch
   _partial_: true

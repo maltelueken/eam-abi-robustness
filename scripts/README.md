@@ -11,7 +11,7 @@ studies differ only in configuration, not in code.
 | `prior_stats.py` | Dump prior draws, for the prior ranges shown in the figures. |
 | `prior_pushforward.py` | Figure of the training prior, the data it generates, and example datasets. |
 | `predict_npe.py` | Sample the trained NPE's posterior for every case (one chain per ensemble member). |
-| `fit_mcmc_cpu.py` | Fit ground-truth MCMC posteriors: one chain per CPU core, datasets vmapped inside each. |
+| `fit_mcmc_cpu.py` | Fit ground-truth MCMC posteriors: every (chain, dataset) fit spread over all CPU cores. |
 | `check_metrics.py` | RMSE / contraction / calibration against the simulating parameters. |
 | `check_summary_stats.py` | Posterior median and 95% credible interval per dataset. |
 | `check_robustness.py` | Maximum mean discrepancy between the NPE and MCMC posteriors, per ensemble member. |
@@ -82,16 +82,16 @@ Any `conf/**/*.yaml` key can be overridden on the command line. `fit_mcmc_cpu.py
 `case=<key>` to fit a single test case (e.g. `case=sample_size_50`); by default it fits all
 of them in one job.
 
-`fit_mcmc_cpu.py` is the one stage that wants **cores rather than a GPU**. It runs
-`mcmc_sampling_fun.num_chains` chains in parallel, one per JAX device, and splits the host CPU
-into that many devices before JAX starts (`src/cpu_devices.py`). Raising `num_chains` therefore
-means raising `MCMC_NUM_CPU_DEVICES` to match, and asking SLURM for that many CPUs;
-`slurm/submit_all.sh` does all three for you.
+`fit_mcmc_cpu.py` is the one stage that wants **cores rather than a GPU**, and it uses as many
+as it is given. Every chain of every dataset is an independent fit, and the
+`num_chains * num_datasets` of them are dealt out over the host CPU, which is split into one JAX
+device per available core before JAX starts (`src/cpu_devices.py`; `MCMC_NUM_CPU_DEVICES`
+overrides the count). A simulated case is 400 fits, so up to 400 cores shorten it;
+`slurm/submit_all.sh` asks for a full 192-core genoa node (`MCMC_CPUS` overrides that).
 
-Budget for it, twice over. Four chains on four cores cost about the same wall-clock as one
-chain did, so the per-chain warm-up `eamax` insists on is paid for — but the *datasets* of a
-case are still vmapped within a core, and a CPU core is far slower per leapfrog step than the
-GPU this used to run on. Warm-up also got harder, not just more numerous: chains now start from
+Budget for it anyway. A CPU core is far slower per leapfrog step than the GPU this used to run
+on, and the fits a core holds advance in lockstep, each step waiting for the deepest trajectory
+among them. Warm-up also got harder, not just more numerous: chains now start from
 draws out of the prior rather than from one hand-placed vector, and a prior draw can land
 somewhere stiff. On a four-dataset toy fit that was 140 s against 89 s for the same budget from
 a fixed start — the price of a diagnostic that can fail.

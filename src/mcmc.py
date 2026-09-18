@@ -10,17 +10,18 @@ The sampler itself is `eamax.inference`: window adaptation, the vmapped inferenc
 NUTS driver, R-hat, pooling and thinning. What is left in here is this study's three
 decisions on top of it.
 
-**Chains run on separate CPU cores.** `fit_mcmc_cpu_batch` `pmap`s one chain per device --
-over the host devices `cpu_devices.configure_cpu_devices` splits the CPU into -- and `vmap`s
-every dataset of the case inside each. That is the same total work as the old single-GPU
-`vmap`-over-both, laid out so the four chains proceed in parallel rather than in lockstep on
-one accelerator.
+**Fits run on every CPU core.** Each chain of each dataset is an independent NUTS run, and
+`fit_mcmc_cpu_batch` deals those `num_chains * num_datasets` runs out over every host device
+`cpu_devices.configure_cpu_devices` splits the CPU into -- `pmap` over devices, `vmap` over the
+runs each device holds. That is the same total work as the old single-GPU `vmap`-over-both,
+spread over as many cores as the job has rather than advancing in lockstep on one
+accelerator.
 
 **Every chain adapts its own tuning, from its own starting point.** `eamax` offers no shared
 warm-up, and the reason is the point of this study: replicating one warmed state across chains
 starts between-chain variance at zero, so R-hat cannot fail, and the converged fraction *is*
 the comparison set for the NPE-vs-MCMC result. Per-chain adaptation costs `num_chains` times
-the warm-up work -- which is exactly what running the chains on `num_chains` cores gives back.
+the warm-up work, which the extra cores absorb.
 
 **Every chain starts from its own draw from the prior, rejected into the `t0` support.** The
 prior supplies the dispersion R-hat needs, and supplies it already on the right scale -- unlike
@@ -41,32 +42,29 @@ the hierarchical models sample a hyperparameter ahead of them, which the NPE nev
 
 import dataclasses
 import logging
-
 import jax
 import jax.numpy as jnp
 import numpy as np
 from eamax.inference.diagnostics import rhat
-from eamax.inference.init import (
-    DEFAULT_MAX_T0_FRACTION,
-    T0Support,
-    init_positions_from_prior,
-    min_valid_rt,
-)
-from eamax.inference.mcmc import fit_nuts_batch
-from eamax.inference.posterior import pool_chains, thin
+from eamax.inference.init import DEFAULT_MAX_T0_FRACTION
+from eamax.inference.init import T0Support
+from eamax.inference.init import init_positions_from_prior
+from eamax.inference.init import min_valid_rt
+from eamax.inference.mcmc import fit_nuts
+from eamax.inference.posterior import pool_chains
+from eamax.inference.posterior import thin
+from eamax.inference.transforms import BlockTransform  # noqa: F401  (re-exported; the tests reach for them here)
+from eamax.inference.transforms import simple_to_constrained  # noqa: F401  (re-exported; the tests reach for them here)
 from eamax.inference.transforms import (  # noqa: F401  (re-exported; the tests reach for them here)
-    BlockTransform,
-    simple_to_constrained,
     simple_to_unconstrained,
 )
-from eamax.io import load_dataset_posterior, save_dataset_posterior
-
-from cpu_devices import ENV_VAR
-
+from eamax.io import load_dataset_posterior
+from eamax.io import save_dataset_posterior
 # `rdm_jax` turns on JAX's 64-bit mode; the transforms and the race log-densities are
 # precision-sensitive and this module is importable without it, so pull it in for the side
 # effect rather than relying on the caller's import order.
 import rdm_jax  # noqa: F401
+from cpu_devices import ENV_VAR
 
 logger = logging.getLogger(__name__)
 
@@ -126,27 +124,25 @@ def make_init_positions_fn(prior_sample_fn, spec, transform, num_starts):
     return make_init_positions
 
 
-def chain_devices(num_chains):
-    """The devices `fit_mcmc_cpu_batch` puts one chain on each of.
+def fit_devices(num_units):
+    """The devices `fit_mcmc_cpu_batch` spreads its `num_units` (chain, dataset) fits over.
 
-    Raises with the fix rather than silently falling back to fewer chains or to a single
-    device: `pmap` needs one device per chain, and the device count is fixed before JAX
-    initialises its backend (see `cpu_devices.configure_cpu_devices`), so by the time this
-    runs it cannot be changed.
+    Every visible device, up to one per unit -- a device with nothing to fit would only pad.
+    The count is fixed before JAX initialises its backend (see
+    `cpu_devices.configure_cpu_devices`), so a single device here almost always means the
+    stage was not started through `scripts/fit_mcmc_cpu.py`; that still runs, serially, and is
+    logged rather than raised because the tests rely on it.
     """
     devices = jax.local_devices()
 
-    if len(devices) < num_chains:
-        msg = (
-            f"{num_chains} chains need {num_chains} JAX devices, but only {len(devices)} "
-            f"are visible ({[d.device_kind for d in devices]}). Run this stage through "
-            f"scripts/fit_mcmc_cpu.py, and set {ENV_VAR}={num_chains} in the environment if "
-            "you have changed mcmc_sampling_fun.num_chains -- the device count is fixed "
-            "before JAX starts and cannot be raised from here."
+    if len(devices) == 1:
+        logger.warning(
+            "Only one JAX device is visible, so every MCMC fit runs on one core. Start this "
+            "stage through scripts/fit_mcmc_cpu.py, and set %s to raise the core count.",
+            ENV_VAR,
         )
-        raise RuntimeError(msg)
 
-    return devices[:num_chains]
+    return devices[: max(1, min(len(devices), num_units))]
 
 
 def fit_mcmc_cpu_batch(
@@ -161,20 +157,30 @@ def fit_mcmc_cpu_batch(
     num_steps_warmup,
     num_steps_sampling,
 ):
-    """Fit MCMC posteriors for a whole batch of datasets, one chain per CPU core.
+    """Fit MCMC posteriors for a whole batch of datasets, spread over every CPU core.
 
-    Two nested maps, and which one is which is the whole design. `pmap` takes the **chain**
-    axis, so the four chains of every dataset advance on four cores at once; `vmap` inside
-    each takes the **dataset** axis, so a case's datasets still cost one XLA computation
-    rather than one job each. Adaptation is per chain, so the warm-up work that per-chain
-    adaptation multiplies by `num_chains` is precisely what the `num_chains` cores absorb.
+    The unit of work is one chain of one dataset: `num_chains * num_datasets` independent NUTS
+    runs, since every chain adapts its own tuning from its own start. They are dealt out evenly
+    over the devices `cpu_devices.configure_cpu_devices` split the host into -- `pmap` over
+    devices, `vmap` over the units each one holds -- so a case of 100 datasets and four chains
+    uses up to 400 cores rather than four. The last round is padded with repeats of the first
+    unit, whose results are discarded; a padded slot costs nothing but the core it sits on.
+
+    The fewer units a device holds, the better, beyond the core count alone: a `vmap`ped NUTS
+    advances its units in lockstep, so every leapfrog step waits for the deepest trajectory
+    among them.
+
+    Unit `(c, d)` is fitted from `split(split(rng_key, num_chains)[c], num_datasets)[d]`, the key
+    it got when chains were pmapped and datasets vmapped inside each, whatever the core count.
+    With four devices the draws are bit-identical to that layout's; with another count they
+    agree up to floating-point rounding, which XLA does differently at a different `vmap`
+    width and NUTS then amplifies.
 
     `make_logdensity_fn(data)` and the starting-value factory are both called *inside*
-    `eamax.inference.mcmc.fit_nuts`, under the dataset `vmap`, so each dataset gets its own
-    closure and its own support-aware starts rather than one dataset's being baked in. Each
-    device's chain draws its own starting position from the prior, adapts its own step size and
-    mass matrix, and samples with that tuning unmodified -- there is no repair step, because a
-    collapsed adaptation is a finding to report rather than something to overwrite.
+    `eamax.inference.mcmc.fit_nuts`, once per unit, so each gets its own closure and its own
+    support-aware start rather than one dataset's being baked in. Each chain adapts its own step
+    size and mass matrix and samples with that tuning unmodified -- there is no repair step,
+    because a collapsed adaptation is a finding to report rather than something to overwrite.
 
     Everything after `make_logdensity_fn` is keyword-only. The tail is six same-shaped
     arguments that a caller reorders silently -- an array landing in `prior_sample_fn` surfaces
@@ -189,7 +195,7 @@ def fit_mcmc_cpu_batch(
         prior_sample_fn: `f(key) -> (P,)` natural-scale prior draw, from `mcmc_prior_sample_fun`.
         spec: the model's `eamax.design.Parameterization`, from `mcmc_spec`.
         transform: the model's `BlockTransform`, from `mcmc_transform`.
-        num_chains: chains per dataset, and CPU devices.
+        num_chains: chains per dataset.
         num_steps_warmup: window-adaptation steps, per chain.
         num_steps_sampling: draws recorded per chain.
 
@@ -198,32 +204,54 @@ def fit_mcmc_cpu_batch(
         num_chains, num_params)` -- the layout `save_mcmc_posterior` expects -- and NUTS
         diagnostics (e.g. `infos.is_divergent`) with a matching leading `num_datasets` axis.
     """
-    devices = chain_devices(num_chains)
     data = jnp.asarray(data)
+    num_datasets = data.shape[0]
+    num_units = num_chains * num_datasets
+
+    devices = fit_devices(num_units)
+    num_devices = len(devices)
+    units_per_device = -(-num_units // num_devices)
+
+    logger.info(
+        "Fitting %s chains x %s datasets on %s devices, %s per device",
+        num_chains, num_datasets, num_devices, units_per_device,
+    )
 
     make_init_positions = make_init_positions_fn(prior_sample_fn, spec, transform, num_starts=1)
 
-    def one_chain(chain_key, chain_data):
-        # One chain per device, so `fit_nuts` adapts and runs a single chain here; the four
-        # devices between them are the four independently adapted chains.
-        return fit_nuts_batch(
-            chain_key, chain_data, make_logdensity_fn, make_init_positions,
-            num_chains=1,
-            num_steps_warmup=num_steps_warmup,
-            num_steps_sampling=num_steps_sampling,
+    # Unit u is chain u // num_datasets of dataset u % num_datasets.
+    chain_keys = jax.random.split(rng_key, num_chains)
+    unit_keys = jax.vmap(lambda key: jax.random.split(key, num_datasets))(chain_keys)
+    # Trailing axes survive for a legacy `PRNGKey`, whose keys are `(2,)` uint32 arrays.
+    unit_keys = unit_keys.reshape(num_units, *unit_keys.shape[2:])
+    unit_datasets = jnp.tile(jnp.arange(num_datasets), num_chains)
+
+    slots = jnp.arange(num_devices * units_per_device)
+    slots = jnp.where(slots < num_units, slots, 0).reshape(num_devices, units_per_device)
+
+    def one_unit(key, dataset_index, all_data):
+        return fit_nuts(
+            key, all_data[dataset_index], make_logdensity_fn, make_init_positions,
+            1, num_steps_warmup, num_steps_sampling,
         )
 
-    keys = jax.random.split(rng_key, num_chains)
+    def one_device(keys, dataset_indices, all_data):
+        return jax.vmap(one_unit, in_axes=(0, 0, None))(keys, dataset_indices, all_data)
 
-    positions, infos = jax.pmap(one_chain, in_axes=(0, None), devices=devices)(keys, data)
+    positions, infos = jax.pmap(one_device, in_axes=(0, 0, None), devices=devices)(
+        unit_keys[slots], unit_datasets[slots], data,
+    )
 
-    # (chain, dataset, draw, 1, ...) -> (dataset, draw, chain, ...): drop the within-device
-    # chain axis of length 1 and move the pmapped one into its place. The same two moves are
-    # right for every diagnostic leaf too, whatever trailing axes it carries.
-    positions = jnp.moveaxis(jnp.squeeze(positions, axis=3), 0, 2)
-    infos = jax.tree.map(lambda leaf: jnp.moveaxis(jnp.squeeze(leaf, axis=3), 0, 2), infos)
+    # (device, slot, draw, 1, ...) -> (dataset, draw, chain, ...): flatten the slots back into
+    # units, drop the padding and the within-unit chain axis of length 1, then split the units
+    # into (chain, dataset) and move the chain axis into place. The same moves are right for
+    # every diagnostic leaf too, whatever trailing axes it carries.
+    def to_dataset_major(leaf):
+        leaf = jnp.squeeze(leaf, axis=3)
+        leaf = leaf.reshape(-1, *leaf.shape[2:])[:num_units]
+        return jnp.moveaxis(leaf.reshape(num_chains, num_datasets, *leaf.shape[1:]), 0, 2)
 
-    return positions, infos
+    return to_dataset_major(positions), jax.tree.map(to_dataset_major, infos)
 
 
 # ---------------------------------------------------------------------------

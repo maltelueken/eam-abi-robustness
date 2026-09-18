@@ -18,16 +18,15 @@
 # thing that wants a single network, and it has its own script: `slurm/sweep.sh`.
 #
 # The directives below are the GPU stages' defaults. `fit_mcmc_cpu` wants the opposite -- no GPU
-# and one core per MCMC chain -- and `slurm/submit_all.sh` overrides them on the sbatch command
+# and as many cores as possible -- and `slurm/submit_all.sh` overrides them on the sbatch command
 # line, where they win over what is written here. Submitting that stage by hand means doing the
 # same:
 #
-#   sbatch --gpus=0 --cpus-per-task=4 --partition=genoa \
-#          --export=ALL,MCMC_NUM_CPU_DEVICES=4 \
+#   sbatch --gpus=0 --cpus-per-task=192 --partition=genoa \
 #          slurm/submit.sh fit_mcmc_cpu experiment_1 rdm_simple
 #
-# `MCMC_NUM_CPU_DEVICES` has to match `mcmc_sampling_fun.num_chains`: it is how many devices
-# JAX splits the host CPU into, and one chain runs on each. See src/cpu_devices.py.
+# Every core of the allocation becomes a JAX device, and the (chain, dataset) fits are spread
+# over them; `MCMC_NUM_CPU_DEVICES` overrides the count. See src/cpu_devices.py.
 #
 #SBATCH --job-name=eam_abi
 #SBATCH --nodes=1

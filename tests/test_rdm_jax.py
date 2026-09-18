@@ -115,10 +115,10 @@ def test_make_rdm_meta_logdensity_finite_at_init():
 
 
 def test_fit_mcmc_cpu_batch_recovers_parameters_across_datasets():
-    # scripts/fit_mcmc_cpu.py's core: pmap BlackJAX NUTS over chains -- one per CPU core --
-    # and vmap over every dataset of the case inside each. Under pytest the host has not been
-    # split into devices, so this runs the four chains on the one device it has; what it pins
-    # is the shape contract and the recovery, not the parallelism.
+    # scripts/fit_mcmc_cpu.py's core: every (chain, dataset) fit dealt out over the CPU
+    # devices. Under pytest the host has not been split into devices, so this runs every fit
+    # on the one device it has; what it pins is the shape contract and the recovery, not the
+    # parallelism (test_mcmc_devices.py covers that).
     true_v_intercept, true_v_slope, true_s_true, true_b, true_t0 = 1.0, 1.5, 0.3, 1.2, 0.3
     drift_slope_loc, threshold_scale = 1.5, 1.0
     num_datasets, n_trials = 3, 500

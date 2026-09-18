@@ -8,10 +8,10 @@
 #   DRY_RUN=1 ./slurm/submit_all.sh            # print without submitting
 #
 # Every stage but one runs on a GPU, and takes `slurm/submit.sh`'s own SBATCH directives.
-# `fit_mcmc_cpu` runs its MCMC chains one per CPU core instead, so it is submitted with no GPU,
-# one core per chain, and `MCMC_NUM_CPU_DEVICES` set to that count -- which is what
-# `src/cpu_devices.py` reads to decide how many devices to split the host CPU into. Passed on
-# the sbatch command line, where they override the directives in the batch file.
+# `fit_mcmc_cpu` spreads its MCMC fits -- one per chain per dataset -- over CPU cores instead, so
+# it is submitted with no GPU and `MCMC_CPUS` cores; `src/cpu_devices.py` turns every core of the
+# allocation into a JAX device. Passed on the sbatch command line, where they override the
+# directives in the batch file.
 #
 set -euo pipefail
 
@@ -21,9 +21,9 @@ stage_filter=${1:-}
 experiment_filter=${2:-}
 model_filter=${3:-}
 
-# Chains per dataset, hence cores. Keep in step with `mcmc_sampling_fun.num_chains` in
-# conf/experiment/experiment_1.yaml; `mcmc.chain_devices` fails loudly if they disagree.
-mcmc_chains=${MCMC_NUM_CPU_DEVICES:-4}
+# Cores per MCMC job. A full genoa node by default: a simulated case is 4 chains x 100 datasets
+# = 400 independent fits, so every core up to that count shortens the job.
+mcmc_cpus=${MCMC_CPUS:-192}
 cpu_partition=${CPU_PARTITION:-genoa}
 
 while IFS=$'\t' read -r stage experiment model; do
@@ -37,8 +37,7 @@ while IFS=$'\t' read -r stage experiment model; do
         opts+=(
             --gpus=0
             --partition="$cpu_partition"
-            --cpus-per-task="$mcmc_chains"
-            --export="ALL,MCMC_NUM_CPU_DEVICES=${mcmc_chains}"
+            --cpus-per-task="$mcmc_cpus"
         )
     fi
 

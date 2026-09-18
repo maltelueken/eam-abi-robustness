@@ -128,14 +128,15 @@ def fit_devices(num_units):
     """The devices `fit_mcmc_cpu_batch` spreads its `num_units` (chain, dataset) fits over.
 
     Every visible device, up to one per unit -- a device with nothing to fit would only pad.
-    The count is fixed before JAX initialises its backend (see
-    `cpu_devices.configure_cpu_devices`), so a single device here almost always means the
+    On the CPU the count is fixed before JAX initialises its backend (see
+    `cpu_devices.configure_cpu_devices`), so a single CPU device here almost always means the
     stage was not started through `scripts/fit_mcmc_cpu.py`; that still runs, serially, and is
-    logged rather than raised because the tests rely on it.
+    logged rather than raised because the tests rely on it. A single GPU is the ordinary case
+    for `scripts/fit_mcmc_gpu.py` and is not warned about.
     """
     devices = jax.local_devices()
 
-    if len(devices) == 1:
+    if len(devices) == 1 and devices[0].platform == "cpu":
         logger.warning(
             "Only one JAX device is visible, so every MCMC fit runs on one core. Start this "
             "stage through scripts/fit_mcmc_cpu.py, and set %s to raise the core count.",

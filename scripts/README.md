@@ -12,6 +12,7 @@ studies differ only in configuration, not in code.
 | `prior_pushforward.py` | Figure of the training prior, the data it generates, and example datasets. |
 | `predict_npe.py` | Sample the trained NPE's posterior for every case (one chain per ensemble member). |
 | `fit_mcmc_cpu.py` | Fit ground-truth MCMC posteriors: every (chain, dataset) fit spread over all CPU cores. |
+| `fit_mcmc_gpu.py` | The same fits on the GPU(s): all (chain, dataset) fits of a block in one `vmap` per device. |
 | `check_metrics.py` | RMSE / contraction / calibration against the simulating parameters. |
 | `check_summary_stats.py` | Posterior median and 95% credible interval per dataset. |
 | `check_robustness.py` | Maximum mean discrepancy between the NPE and MCMC posteriors, per ensemble member. |

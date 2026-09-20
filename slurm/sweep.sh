@@ -53,7 +53,7 @@
 #SBATCH --job-name=eam_abi_sweep
 #SBATCH --nodes=1
 #SBATCH --ntasks=1
-#SBATCH --cpus-per-task=18
+#SBATCH --cpus-per-task=9
 #SBATCH --gpus=1
 #SBATCH --partition=gpu_mig
 #SBATCH --time=120:00:00

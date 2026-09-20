@@ -36,6 +36,10 @@ hydra:
           - pushforward_num_draws
           - pushforward_num_examples
           - pushforward_num_obs
+          # And for the diagnostic sampling chunk: it trades peak memory for wall-clock and
+          # changes no result, so a node that needs a smaller one must not send `predict_npe`
+          # looking for a model in a directory `train_npe` never wrote to.
+          - diag_sample_batch_size
   job_logging:
     handlers:
       file:
@@ -49,6 +53,17 @@ eval_num_obs: 1000
 
 diag_batch_size: 100
 diag_num_posterior_samples: 1000
+
+# How many of those datasets are pushed through the networks at once. Posterior sampling holds
+# two tensors that grow with this count and that no architecture the sweep can pick makes small:
+# the summary network's self-attention over a dataset's trials, quadratic in `num_obs` at four
+# heads, and the inference network's activations over
+# `diag_sample_batch_size * diag_num_posterior_samples` rows. At `experiment_2`'s batch of 1000
+# and the top of `diag_num_obs` the attention alone is ~15 GiB, which the MIG slice the sweep
+# runs on does not have -- so the trial dies rather than scoring badly. Chunking is sequential
+# and exact: `sample` slices the conditions, so what moves is which draws the seed generator
+# yields, not their distribution. Left at the batch size the test stages already use.
+diag_sample_batch_size: 100
 
 # The trial counts train_npe scores at, and the Optuna objective is the mean over them rather
 # than one value. The architecture has to serve every study, and they test at 500 (studies 2, 3,

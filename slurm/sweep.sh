@@ -109,6 +109,16 @@ module load 2025
 # empty above.
 export PATH="${PATH}:${HOME}/.local/bin"
 
+# Take the whole MIG slice rather than the 75% the CUDA client preallocates by default. The
+# summary network's attention scores are `(batch, 4 heads, num_obs, num_obs)` and materialize:
+# at `train_npe`'s batch of 64 and the 1000 of `random_num_obs_discrete`'s grid that is ~3.7 GiB
+# per `summary_embed_depth` block once the backward pass holds them, so the top of the search
+# space needs ~17 GiB against a 20 GiB slice. The default 75% leaves 15 and the trial dies --
+# and because a failed job aborts the whole `--multirun`, one such trial costs the sweep, not
+# just itself. `summary_embed_depth` is capped for the same reason; see
+# `conf/summary-method/set_transformer.yaml`. Harmless on a larger GPU.
+export XLA_CLIENT_MEM_FRACTION=0.95
+
 echo "[$(date -Is)] sweep | ${family} | ${experiment} | ${model} | extra: $*"
 
 uv run --frozen python scripts/train_npe.py \

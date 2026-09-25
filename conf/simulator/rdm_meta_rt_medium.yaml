@@ -1,0 +1,8 @@
+# Study 6 training condition: the prior is study 2's full meta prior, unchanged, and only the
+# *data* are restricted -- `simulation` keeps drawing until every dataset in the batch has all
+# of its response times inside this window. About 38-52% of the prior lands in it.
+defaults:
+- rdm_meta
+
+rt_lower: 0.15
+rt_upper: 2.0

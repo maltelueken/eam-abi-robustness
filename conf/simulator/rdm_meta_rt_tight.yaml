@@ -1,0 +1,11 @@
+# Study 6 training condition: the prior is study 2's full meta prior, unchanged, and only the
+# *data* are restricted -- `simulation` keeps drawing until every dataset in the batch has all
+# of its response times inside this window. The tightest condition: about 4-10% of the prior
+# lands in it, and rarer at larger trial counts, since the slowest of 1000 trials is slower
+# than the slowest of 250. Most of the test grid therefore lies outside the response-time range
+# this approximator has ever seen.
+defaults:
+- rdm_meta
+
+rt_lower: 0.15
+rt_upper: 1.0

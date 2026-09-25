@@ -1,0 +1,5 @@
+# @package _global_
+
+defaults:
+- rdm_sat
+- override /simulator/prior_simulator: rdm_sat_lower

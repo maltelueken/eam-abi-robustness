@@ -1,3 +1,5 @@
+# keras.callbacks.TensorBoard writes event files via tensorflow.summary, so this
+# group requires tensorflow to be installed (it is not a project dependency).
 - _target_: keras.callbacks.TensorBoard
   write_graph: false
 - _target_: keras.callbacks.ModelCheckpoint

@@ -1,0 +1,5 @@
+# @package _global_
+
+defaults:
+- lba_sat_meta
+- override /simulator/meta_simulator: random_prior_meta_continuous_sat_lower

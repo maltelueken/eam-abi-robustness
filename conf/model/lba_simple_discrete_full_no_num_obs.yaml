@@ -1,0 +1,10 @@
+# @package _global_
+
+# Study 1's unconditioned arm: the training grid is the test sweep itself
+# (`lba_simple_discrete_full`), but the inference network is not given `sqrt(num_obs)` --
+# the count reaches it only through the summary network's pooling over `x`. Read against
+# `lba_simple_discrete_full`, which differs in nothing else, it separates *covering* a
+# trial count in training from being *told* it at inference time.
+defaults:
+- lba_simple_discrete_full
+- override /approximator/adapter: lba_simple_no_num_obs

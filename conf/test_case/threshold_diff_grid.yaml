@@ -1,0 +1,36 @@
+# @package _global_
+
+# Study 3: sweep the *location* of the prior on the speed-accuracy threshold difference -- its
+# mean, with its spread held fixed at `threshold_diff_sd` -- at a fixed sample size. The centre
+# point (1.2) is the value conf/simulator/prior_simulator/rdm_sat.yaml trains on, so the sweep
+# keeps a cell where test prior and training prior agree, as study 2's does.
+#
+# Nine points over 0.4-2.0, the same count as conf/test_case/drift_slope_grid.yaml and the same
+# reach in units of the prior's own sd (6.5 against study 2's 6.4), so the two studies' sweeps
+# are directly comparable. The grid's *lower* bound is what `b_diff`'s positivity costs: at a
+# fixed sd of 0.245 a mean much below 0.4 drives the Gamma's shape towards 1, where it stops
+# being a location family and piles up at zero. This used to sweep the Gamma's `scale` at fixed
+# shape, which moved the prior's mean and sd together -- see
+# conf/simulator/prior_simulator/rdm_sat.yaml.
+#
+# The grid's thirds are what the varying arms are cut on: points 1-3 and 7-9 are the
+# `_meta_lower` / `_meta_upper` training ranges, `_meta` spans all nine, and points 1, 5 and 9
+# are the three fixed-prior models (`_sat_lower`, `_sat_medium`, `_sat_upper`). There is no
+# middle-third varying arm: it overlapped the medium-fixed prior at 0.95 on the marginal, so
+# that pair isolated prior spread at a fixed centre while the low and high pairs, at ~0.70,
+# moved position and spread together.
+#
+# The name must match the one randomized in
+# conf/simulator/meta_simulator/random_prior_meta_continuous_sat.yaml.
+test_case:
+  _target_: cases.prior_param_grid
+  name: threshold_diff_loc
+  num_obs: ${test_num_obs}
+  values:
+    _target_: numpy.round
+    a:
+      _target_: numpy.linspace
+      start: 0.4
+      stop: 2.0
+      num: 9
+    decimals: 3

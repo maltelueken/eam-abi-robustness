@@ -1,5 +1,8 @@
 # @package _global_
 
+defaults:
+- override /test_case: num_obs_grid
+
 hydra:
   run:
     dir: outputs/${hydra:runtime.choices.experiment}/${hydra:runtime.choices.model}/${hydra:runtime.choices.inference-method}/${hydra.job.override_dirname}
@@ -13,63 +16,132 @@ hydra:
     config:
       override_dirname:
         item_sep: "/"
+        # Group choices that already appear in hydra.run.dir, so they must not be repeated
+        # in the override_dirname suffix.
         exclude_keys:
           - experiment
           - model
-          - method,
-          - mcmc_model_fun
+          - inference-method
+          - summary-method
+          - mcmc
+          - test_case
+          # Not a group choice: `prior_distance` reads the checkpoint `train_npe` wrote, and
+          # this knob means nothing to `train_npe`. Left in the suffix it would move only the
+          # reader's run directory, and the reader would look for a model nothing had written.
+          - prior_distance_num_draws
+          - prior_distance_mmd_draws
+          # Likewise for the pushforward figure: these size a picture of the prior, which every
+          # stage of the run shares, so tuning them must not move the figure out of the run
+          # directory the rest of the artifacts live in.
+          - pushforward_num_draws
+          - pushforward_num_examples
+          - pushforward_num_obs
+          # And for the diagnostic sampling chunk: it trades peak memory for wall-clock and
+          # changes no result, so a node that needs a smaller one must not send `predict_npe`
+          # looking for a model in a directory `train_npe` never wrote to.
+          - diag_sample_batch_size
   job_logging:
     handlers:
       file:
         mode: w
 
-defaults:
-  - override /model: rdm_simple
-  - override /inference-method: flow_matching
-  - override /summary-method: set_transformer
-
 seed: 2024
 
+# scripts/prior_stats.py only: the trial count its prior draws are simulated at, which sets how
+# wide the rt_min/rt_max rows of its table can reach. The training diagnostics use diag_num_obs.
 eval_num_obs: 1000
 
 diag_batch_size: 100
 diag_num_posterior_samples: 1000
 
-diag_num_obs:
-  _target_: numpy.array
-  object: ${simulator.design_simulator.sample_fn.values}
+# How many of those datasets are pushed through the networks at once. Posterior sampling holds
+# two tensors that grow with this count and that no architecture the sweep can pick makes small:
+# the summary network's self-attention over a dataset's trials, quadratic in `num_obs` at four
+# heads, and the inference network's activations over
+# `diag_sample_batch_size * diag_num_posterior_samples` rows. At `experiment_2`'s batch of 1000
+# and the top of `diag_num_obs` the attention alone is ~15 GiB, which the MIG slice the sweep
+# runs on does not have -- so the trial dies rather than scoring badly. Chunking is sequential
+# and exact: `sample` slices the conditions, so what moves is which draws the seed generator
+# yields, not their distribution. Left at the batch size the test stages already use.
+diag_sample_batch_size: 100
+
+# The trial counts train_npe scores at, and the Optuna objective is the mean over them rather
+# than one value. The architecture has to serve every study, and they test at 500 (studies 2, 3,
+# 5 and 6), at the subjects' 93-100 (study 4) and across 50-1200 (study 1) -- so scoring at a
+# single num_obs, 1000, selected an architecture at the one count none of them use, and the
+# summary network's set-size behaviour is precisely what varies over this axis.
+#
+# Fixed here rather than read off each model's own design simulator: study 1's coverage arms
+# (discrete_lower/upper/full) are then scored on the same axis as the default grid, so their
+# numbers can be read against each other. tests/test_config.py pins it to that grid.
+diag_num_obs: [100, 250, 500, 1000]
 
 epochs: 100
 iterations_per_epoch: 500
 batch_size: 64
 
-test_data_path: ${hydra:runtime.cwd}/outputs/${hydra:runtime.choices.experiment}/${hydra:runtime.choices.model}
+# Which set of held-out data a run compares against. Defaults to the model itself; study 5's
+# accuracy-band models override it so a family's four training conditions share one set, since
+# their test cases and MCMC ground truth are identical.
+model_family: ${hydra:runtime.choices.model}
+
+# Which run directory predict_npe loads the trained network from. The directory, not the file:
+# the checkpoint's name stays defined once, in conf/callbacks/*.yaml. A study reads what its own
+# train_npe wrote; conf/experiment/experiment_4.yaml points this at study 2 instead, since the
+# empirical study applies networks trained on simulations rather than training its own.
+npe_path: .
+
+# Shared across inference methods: test data and MCMC ground truth do not depend on the
+# approximator, so every method is compared against the same held-out data.
+test_data_path: ${hydra:runtime.cwd}/outputs/${hydra:runtime.choices.experiment}/${model_family}
 
 test_batch_size: 100
 test_num_posterior_samples: 2000
 
+# scripts/prior_stats.py: the figures take 0.1% and 99.9% quantiles of these draws, which
+# needs far more than test_batch_size samples to be meaningful.
+prior_stats_num_draws: 20000
+
+# scripts/prior_pushforward.py: the figure of the training prior and the datasets it
+# generates. `pushforward_num_draws` sets the marginals' resolution and is also how many prior
+# draws each shifted test case is outlined from; `pushforward_num_examples` is how many
+# individual datasets are drawn as response-time histograms. Far smaller than
+# `prior_stats_num_draws` because every draw here is a simulated dataset and the banded studies
+# reject most of them -- this has to work for every model, including study 6's tightest window.
+pushforward_num_draws: 2000
+pushforward_num_examples: 6
+
+# The trial count the prior is pushed through. `null` means the count this study tests at
+# (`test_num_obs`), which every study but the first defines; study 1 sweeps that count instead,
+# so it falls back to `eval_num_obs`. Set it explicitly to draw the figure at another size.
+pushforward_num_obs: null
+
+# scripts/prior_distance.py: two samples of this size per test case. The KL is a Monte Carlo
+# average over these draws, costing memory linear in the count, so it can afford to be large --
+# it is the *dataset* count, and each dataset is `test_num_obs` trials, the same simulation the
+# test data themselves cost.
+prior_distance_num_draws: 20000
+
+# The MMD is not linear: it builds a kernel matrix over every pair of draws, so its cost grows
+# with the square of this and with the summary network's width, and unlike the KL above every one
+# of these draws is a simulated dataset. A two-sample MMD is well resolved at this size, it keeps
+# the narrow-band conditions of studies 5 and 6 affordable despite their rejection rates, and it
+# is the order of the empirical sample study 4 compares against anyway.
+prior_distance_mmd_draws: 100
+
 psrf_threshold: 1.01
 
-test_num_obs:
-  _target_: numpy.arange
-  start: 50
-  stop: 1250
-  step: 50
+# One case may be selected by key (`case=sample_size_50`); null fits every case.
+case: null
 
-mcmc_sampler: blackjax.nuts
-
+# CPU-parallelized MCMC fitting (scripts/fit_mcmc_cpu.py): the `num_chains * num_datasets`
+# (chain, dataset) fits are spread over every core the job has, one JAX device per core (see
+# src/cpu_devices.py and mcmc.fit_mcmc_cpu_batch). `num_chains` is independent of the core
+# count.
 mcmc_sampling_fun:
-  _target_: pymc_models.run_mcmc
+  _target_: mcmc.fit_mcmc_cpu_batch
   _partial_: true
   _convert_: object
-  init_position:
-    _target_: numpy.array
-    object:
-      - 1
-      - 2
-      - 1
-      - 1
-      - 0.2
   num_chains: 4
   num_steps_warmup: 2000
   num_steps_sampling: ${test_num_posterior_samples}

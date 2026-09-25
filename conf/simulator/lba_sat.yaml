@@ -1,0 +1,6 @@
+defaults:
+- design_simulator: random_num_obs_discrete
+- prior_simulator: lba_sat
+- experiment_simulator: lba_sat
+
+_target_: simulation.CustomSimulator

@@ -1,0 +1,17 @@
+# Study 1's no-coverage arm: every training dataset has 500 trials, which is where studies 2, 3,
+# 5 and 6 read their networks and one of the four points `random_num_obs_discrete` holds.
+# `sqrt(num_obs)` is then a constant input, so nothing in training tells the network what a set
+# size *means* -- it is handed the number, but never two different ones. Read against
+# `random_num_obs_discrete_full`, whose grid is study 1's test sweep itself, this is the bottom
+# of the coverage axis rather than another position on it: the `_lower`/`_upper` arms move where
+# the training grid sits, this one removes the grid.
+_target_: bayesflow.simulators.LambdaSimulator
+sample_fn:
+  _target_: design.random_num_obs_discrete
+  _partial_: true
+  values:
+  - 500
+  rng:
+    _target_: numpy.random.default_rng
+    seed: ${seed}
+is_batched: true

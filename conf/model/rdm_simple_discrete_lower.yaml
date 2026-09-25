@@ -1,0 +1,10 @@
+# @package _global_
+
+defaults:
+- rdm_simple
+- override /simulator/design_simulator: random_num_obs_discrete_lower
+
+# The arms differ from `rdm_simple` only in what training said about the trial count, and a test
+# case pins `num_obs` itself -- so their held-out data and MCMC fits are bit-identical to its
+# and are read from its directory instead of being simulated and fitted five more times.
+model_family: rdm_simple

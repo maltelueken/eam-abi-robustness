@@ -1,0 +1,10 @@
+# @package _global_
+
+# Study 5: bin the *data*, not the prior. Each case redraws from the same wide prior but keeps
+# only datasets whose empirical accuracy falls in its bin, overriding the band the approximator
+# was trained on. Bins are half-open apart from the last, which is closed so that a perfect
+# dataset has somewhere to go.
+test_case:
+  _target_: cases.accuracy_bins
+  num_obs: ${test_num_obs}
+  edges: [0.5, 0.6, 0.7, 0.8, 0.9, 1.0]

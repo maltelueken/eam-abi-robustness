@@ -1,5 +1,5 @@
 defaults:
   - rdm
-  - meta_fun: random_prior_meta_continuous_multivariate
+  - meta_simulator: random_prior_meta_continuous_multivariate
 
 _target_: simulation.CustomMetaSimulator

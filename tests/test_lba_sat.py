@@ -1,0 +1,158 @@
+"""Tests for study 3's speed-vs-accuracy linear ballistic accumulator.
+
+The LBA counterpart of `tests/test_rdm_sat.py`, and the same two tests carry the weight: that
+NUTS recovers a known threshold-gap difference from simulated data, and that the likelihood
+collapses onto the already-validated simple one when the manipulation is switched off.
+"""
+
+import blackjax
+import jax
+import jax.numpy as jnp
+import numpy as np
+from lba_jax import (
+    _lba_sat_log_likelihood,
+    make_lba_sat_meta_prior_sample,
+    _lba_simple_log_likelihood,
+    lba_experiment_sat_jax,
+    lba_experiment_sat_jax_stateful,
+    lba_experiment_simple_jax,
+    make_lba_sat_logdensity,
+    make_lba_sat_meta_logdensity,
+)
+from eamax.inference.mcmc import inference_loop_multiple_chains
+from eamax.inference.warmup import window_adaptation
+from mcmc import BlockTransform, simple_to_unconstrained
+
+# v_intercept, v_slope, s_true, A, B, B_diff, t0 -- the centre of the prior in
+# conf/simulator/prior_simulator/lba_sat.yaml, with a threshold gap that grows by half again
+# under the accuracy instruction.
+TRUE = {"v_intercept": 2.0, "v_slope": 1.5, "s_true": 1.2, "A": 0.6, "B": 1.2, "B_diff": 0.6, "t0": 0.3}
+
+
+def simulate(key, num_obs, **overrides):
+    params = TRUE | overrides
+    return np.array(lba_experiment_sat_jax(key, s_false=1.0, num_obs=num_obs, **params)["x"])
+
+
+def test_simulated_data_carry_rt_response_and_condition():
+    data_x = simulate(jax.random.PRNGKey(0), 400)
+
+    assert data_x.shape == (400, 3)
+    assert set(np.unique(data_x[:, 1])) <= {0.0, 1.0}
+    assert data_x[:, 2].sum() == 200
+    assert np.all(data_x[:, 0] > TRUE["t0"])
+
+
+def test_the_accuracy_block_is_slower_and_more_accurate():
+    # The manipulation raises the threshold *gap*, so the threshold is A + B under speed and
+    # A + B + B_diff under accuracy: more evidence required, hence slower and more accurate.
+    data_x = simulate(jax.random.PRNGKey(1), 4000, B_diff=1.5)
+    is_accuracy = data_x[:, 2] == 1
+
+    assert data_x[is_accuracy, 0].mean() > data_x[~is_accuracy, 0].mean()
+    assert data_x[is_accuracy, 1].mean() > data_x[~is_accuracy, 1].mean()
+
+
+def test_stateful_wrapper_matches_the_bayesflow_calling_convention():
+    class FixedKey:
+        def next(self):
+            return jax.random.PRNGKey(7)
+
+    expected = lba_experiment_sat_jax(jax.random.PRNGKey(7), s_false=1.0, num_obs=50, **TRUE)
+    actual = lba_experiment_sat_jax_stateful(s_false=1.0, num_obs=50, rng=FixedKey(), **TRUE)
+
+    assert np.allclose(np.array(actual["x"]), np.array(expected["x"]))
+
+
+def test_likelihood_reduces_to_the_simple_one_when_every_trial_is_speed():
+    # With no accuracy-instructed trials the gap is `B` everywhere, so this must agree exactly
+    # with the simple LBA likelihood -- whatever `B_diff` happens to be.
+    simple_x = np.array(
+        lba_experiment_simple_jax(
+            jax.random.PRNGKey(2), TRUE["v_intercept"], TRUE["v_slope"], TRUE["s_true"], 1.0,
+            TRUE["A"], TRUE["B"], TRUE["t0"], 300,
+        )["x"],
+    )
+    rt, is_true = jnp.asarray(simple_x[:, 0]), jnp.asarray(simple_x[:, 1] == 1)
+    is_accuracy = jnp.zeros_like(is_true)
+
+    args = (TRUE["v_intercept"], TRUE["v_slope"], TRUE["s_true"], TRUE["A"], TRUE["B"])
+    expected = _lba_simple_log_likelihood(rt, is_true, *args, TRUE["t0"])
+    actual = _lba_sat_log_likelihood(rt, is_true, is_accuracy, *args, 0.9, TRUE["t0"])
+
+    assert np.isclose(float(actual), float(expected))
+
+
+def test_likelihood_is_sensitive_to_the_threshold_difference():
+    # Otherwise `B_diff` would be unidentified and the recovery test could pass on the prior alone.
+    data_x = simulate(jax.random.PRNGKey(3), 2000)
+    logdensity_fn = make_lba_sat_logdensity(
+        data_x, drift_slope_loc=TRUE["v_slope"], threshold_scale=0.15,
+        threshold_diff_loc=0.6, threshold_diff_sd=0.245,
+    )
+
+    at_truth = logdensity_fn(simple_to_unconstrained(jnp.array(list(TRUE.values()))))
+    at_wrong = logdensity_fn(simple_to_unconstrained(jnp.array(list((TRUE | {"B_diff": 0.05}).values()))))
+
+    assert at_truth > at_wrong
+
+
+def test_logdensity_recovers_the_parameters_with_blackjax_nuts():
+    key = jax.random.PRNGKey(4)
+    key, sim_key = jax.random.split(key)
+    data_x = simulate(sim_key, 1600)
+
+    logdensity_fn = make_lba_sat_logdensity(
+        data_x, drift_slope_loc=TRUE["v_slope"], threshold_scale=0.15,
+        threshold_diff_loc=0.6, threshold_diff_sd=0.245,
+    )
+    init_position = simple_to_unconstrained(jnp.array([1.0, 1.0, 1.0, 0.5, 1.0, 0.5, 0.2]))
+
+    key, warmup_key, sample_key = jax.random.split(key, 3)
+    last_states, parameters = window_adaptation(
+        blackjax.nuts, logdensity_fn, init_position[None, :], 500, warmup_key, num_chains=1,
+    )
+
+    step = blackjax.nuts.build_kernel()
+
+    def kernel(chain_key, state, params):
+        return step(chain_key, state, logdensity_fn, **params)
+
+    positions, infos = inference_loop_multiple_chains(
+        sample_key, kernel, last_states, 1000, num_chains=1, kernel_params=parameters,
+    )
+
+    post_mean = jnp.mean(jnp.exp(positions[300:, 0]), axis=0)
+    truth = jnp.array(list(TRUE.values()))
+
+    assert jnp.max(jnp.abs(post_mean - truth) / truth) < 0.4
+    assert jnp.mean(infos.is_divergent) < 0.05
+
+
+def test_meta_logdensity_is_finite_at_its_initial_position():
+    data_x = simulate(jax.random.PRNGKey(5), 200)
+
+    logdensity_fn = make_lba_sat_meta_logdensity(
+        data_x, drift_slope_loc=1.5, threshold_scale=0.15, threshold_diff_sd=0.245,
+        threshold_diff_loc_lower=0.4, threshold_diff_loc_upper=2.0,
+    )
+    position = BlockTransform([0.4], [2.0]).inverse(jnp.array([0.6, *TRUE.values()]))
+
+    assert jnp.isfinite(logdensity_fn(position))
+    assert jnp.all(jnp.isfinite(jax.grad(logdensity_fn)(position)))
+
+
+def test_meta_prior_draws_start_inside_the_narrowed_bounds():
+    # The LBA twin of the RDM's equivalent test; see it for what this guards against.
+    lower, upper = 1.5, 2.0
+    sample = make_lba_sat_meta_prior_sample(
+        drift_slope_loc=1.5, threshold_scale=0.15, threshold_diff_sd=0.245,
+        threshold_diff_loc_lower=lower, threshold_diff_loc_upper=upper,
+    )
+
+    draws = np.asarray(jax.vmap(sample)(jax.random.split(jax.random.key(0), 200)))
+
+    assert draws.shape == (200, 8)
+    assert np.all(np.isfinite(np.asarray(BlockTransform([lower], [upper]).inverse(draws))))
+    assert np.all((lower < draws[:, 0]) & (draws[:, 0] < upper))
+    assert np.all(draws[:, 1:] > 0.0)

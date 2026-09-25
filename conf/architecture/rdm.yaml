@@ -1,0 +1,24 @@
+# @package _global_
+#
+# The architecture every RDM model trains at.
+#
+# Written by scripts/select_architecture.py from the family's Optuna sweep; edit by hand
+# only to pin an architecture deliberately, since the next sweep of this family
+# overwrites the file. The keys are exactly the ones the sweeper searches over, and the
+# network nodes under conf/approximator/*_network/ interpolate them.
+#
+# study:     train_npe-rdm-flow_matching-set_transformer  (sqlite:///multirun/train_npe_trials_rdm.db)
+# swept on:  experiment_2 / rdm_simple_meta
+# trial:     15 of 20, Pareto front of 5
+# objective: rmse=0.323, contraction=0.8848, calibration_error=0.08245
+# selected:  nearest ideal point, weights (1.0, 1.0, 1.0), distance 0.06867
+# written:   2026-09-22T01:29:58+00:00
+architecture_family: rdm
+
+inference_mlp_depth: 8
+inference_mlp_width: 7
+summary_dim: 12
+summary_embed_depth: 3
+summary_embed_width: 4
+summary_expansion_factor: 4
+summary_num_seeds: 3

@@ -1,0 +1,19 @@
+# @package _global_
+
+# Study 6: window the *data*, not the prior. Each case redraws from the same wide prior but
+# keeps only datasets whose response times all fall in its window, overriding the one the
+# approximator was trained on. Closed at both ends: response time is continuous, so ties with
+# an edge have probability zero.
+#
+# The windows are the four the training conditions use, so each model has exactly one case it
+# was trained on and three it was not. They are nested, not disjoint -- a dataset accepted by
+# [0.15, 1.0] is accepted by all of them -- which is what makes the realized slowest response
+# time, written per dataset by the check scripts, the axis the figures actually read.
+test_case:
+  _target_: cases.rt_windows
+  num_obs: ${test_num_obs}
+  windows:
+  - [0.15, 1.0]
+  - [0.15, 2.0]
+  - [0.15, 4.0]
+  - [0.0, 20.0]

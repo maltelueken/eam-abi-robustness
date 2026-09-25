@@ -70,3 +70,4 @@ share
 *.swp
 *.swo
 *.orig
+.Rproj.user

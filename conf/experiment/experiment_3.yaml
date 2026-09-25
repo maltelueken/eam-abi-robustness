@@ -1,0 +1,13 @@
+# @package _global_
+
+# Study 3: a simulated speed-vs-accuracy manipulation. Every dataset holds two blocks of
+# trials differing only in response threshold; the prior on that threshold *difference* is
+# what the test cases shift away from the prior the approximator was trained on.
+defaults:
+- experiment_1
+- override /test_case: threshold_diff_grid
+
+diag_batch_size: 1000
+
+# Split evenly between the speed and the accuracy condition, so 250 trials each.
+test_num_obs: 500

@@ -1,0 +1,26 @@
+# Which hyperparameter this simulator randomizes. Spelled out rather than interpolated from
+# `meta_param_name`: that lives in conf/test_case/drift_slope_grid.yaml, so interpolating it
+# made every hierarchical model fail to compose under any other study's test-case group -- and
+# study 5 reuses this simulator with a different one. tests/test_config.py checks that the name
+# here matches the one the study-2 test cases sweep.
+# Amortized over the bottom third of the swept grid -- its first three points -- so the rest of
+# the sweep falls outside the range of priors it was trained on. A third rather than the one
+# grid step it used to be: at that width the marginal prior was all but identical to
+# `rdm_lower.yaml`'s (0.86 overlap), leaving the fixed-vs-varying contrast with almost nothing
+# to separate. It is now 0.72, in line with the upper arm.
+#
+# `rdm_simple.yaml`'s 1.5 falls inside this range, which is exactly why study 2's medium-fixed
+# arm is `rdm_medium.yaml` at 2.3 rather than `rdm_simple.yaml` -- and why `rdm_simple.yaml` is
+# not one of this study's conditions at all any more, only the checkpoint study 4 borrows.
+_target_: bayesflow.simulators.LambdaSimulator
+sample_fn:
+  _target_: design.random_prior_meta_continuous_multivariate
+  _partial_: true
+  min_value: [0.7]
+  max_value: [1.5]
+  name:
+  - drift_slope_loc
+  rng:
+    _target_: numpy.random.default_rng
+    seed: ${seed}
+is_batched: true

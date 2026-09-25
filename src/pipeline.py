@@ -154,6 +154,7 @@ def load_paired_posteriors(cfg, artifacts, case, param_names):
         to_constrained=instantiate(cfg["mcmc_transform"]).forward,
         param_names=param_names,
         psrf_threshold=cfg["psrf_threshold"],
+        ess_threshold=cfg["ess_threshold"],
         num_target_samples=cfg["test_num_posterior_samples"],
     )
 
@@ -175,11 +176,13 @@ def iter_comparable_cases(cfg, artifacts, cases, param_names):
 
         if not is_converged.any():
             logger.warning(
-                "Skipping case %s: none of its %s MCMC fits reached R-hat < %s. "
-                "Consider more warmup steps (mcmc_sampling_fun.num_steps_warmup) or a looser psrf_threshold.",
+                "Skipping case %s: none of its %s MCMC fits reached R-hat < %s and bulk and tail ESS > %s. "
+                "Consider more warmup or sampling steps (mcmc_sampling_fun.num_steps_warmup, "
+                "num_steps_sampling) or looser psrf_threshold / ess_threshold.",
                 case.key,
                 is_converged.size,
                 cfg["psrf_threshold"],
+                cfg["ess_threshold"],
             )
             continue
 

@@ -10,6 +10,7 @@ the pooling and the thinning are composed in `mcmc.load_mcmc_posterior`. That is
 test: the composition and its order, not the file format.
 """
 
+import arviz
 import numpy as np
 import pytest
 from data import save_posterior
@@ -66,6 +67,7 @@ def test_it_back_transforms_and_thins_to_the_requested_sample_count(tmp_path):
         to_constrained=simple_to_constrained,
         param_names=SUBJECT_PARAMS,
         psrf_threshold=1.01,
+        ess_threshold=400,
         num_target_samples=200,
     )
 
@@ -86,6 +88,7 @@ def test_meta_posteriors_are_reduced_to_the_parameters_the_npe_infers(tmp_path):
         to_constrained=BlockTransform(LOWER, UPPER).forward,
         param_names=SUBJECT_PARAMS,
         psrf_threshold=1.01,
+        ess_threshold=400,
         num_target_samples=100,
     )
 
@@ -109,6 +112,7 @@ def test_unconverged_datasets_are_dropped(tmp_path):
         to_constrained=simple_to_constrained,
         param_names=SUBJECT_PARAMS,
         psrf_threshold=1.01,
+        ess_threshold=400,
         num_target_samples=100,
     )
 
@@ -131,6 +135,7 @@ def test_all_unconverged_returns_empty_rather_than_raising(tmp_path):
         to_constrained=simple_to_constrained,
         param_names=SUBJECT_PARAMS,
         psrf_threshold=1.01,
+        ess_threshold=400,
         num_target_samples=100,
     )
 
@@ -148,5 +153,84 @@ def test_requesting_an_unknown_parameter_is_an_error(tmp_path):
             to_constrained=simple_to_constrained,
             param_names=["nonexistent"],
             psrf_threshold=1.01,
+            ess_threshold=400,
             num_target_samples=10,
         )
+
+
+def test_datasets_with_too_few_effective_draws_are_dropped(tmp_path):
+    """Chains that agree (R-hat passes) but move too slowly to supply 400 effective draws."""
+    rng = np.random.default_rng(5)
+    num_chains, num_draws, num_datasets = 4, 2000, 3
+    shape = (num_chains, len(SUBJECT_PARAMS))
+    samples = rng.normal(size=(num_chains, num_draws, num_datasets, len(SUBJECT_PARAMS)))
+    # A stationary AR(1) for dataset 1, identical in law across chains, so R-hat stays near 1
+    # while its bulk ESS is ~200 of the 8000 stored draws.
+    phi = 0.95
+    samples[:, 0, 1, :] = rng.normal(size=shape) / np.sqrt(1 - phi**2)
+    for draw in range(1, num_draws):
+        samples[:, draw, 1, :] = phi * samples[:, draw - 1, 1, :] + rng.normal(size=shape)
+    # Small values: `simple_to_constrained` exponentiates what is stored.
+    samples *= 0.01
+
+    path = tmp_path / "sticky.nc"
+    save_posterior(str(path), samples, SUBJECT_PARAMS)
+
+    def load(ess_threshold):
+        return load_mcmc_posterior(
+            str(path),
+            to_constrained=simple_to_constrained,
+            param_names=SUBJECT_PARAMS,
+            psrf_threshold=1.1,
+            ess_threshold=ess_threshold,
+            num_target_samples=100,
+        )
+
+    posterior, is_converged = load(400)
+    assert is_converged.tolist() == [True, False, True]
+    assert posterior.shape[0] == num_datasets - 1
+
+    # The same fit with the ESS criterion switched off keeps it: R-hat alone does not catch it.
+    _, is_converged = load(0)
+    assert is_converged.all()
+
+
+def test_datasets_with_too_few_effective_draws_in_the_tails_are_dropped(tmp_path):
+    """Chains whose centre mixes well enough for bulk ESS but whose upper tail is sticky."""
+    rng = np.random.default_rng(7)
+    num_chains, num_draws, num_datasets = 4, 2000, 3
+    shape = (num_chains, len(SUBJECT_PARAMS))
+    samples = rng.normal(size=(num_chains, num_draws, num_datasets, len(SUBJECT_PARAMS)))
+    # Dataset 1: a two-state Markov chain decides whether a draw is in the upper 5% tail, and
+    # once there it tends to stay (probability 0.95 per step). Values are independent given
+    # the state, so the centre moves freely and only the tail quantile is autocorrelated.
+    tail_mass, stay = 0.05, 0.95
+    enter = tail_mass * (1 - stay) / (1 - tail_mass)
+    in_tail = np.empty((num_chains, num_draws, len(SUBJECT_PARAMS)), dtype=bool)
+    in_tail[:, 0] = rng.random(shape) < tail_mass
+    for draw in range(1, num_draws):
+        u = rng.random(shape)
+        in_tail[:, draw] = np.where(in_tail[:, draw - 1], u < stay, u < enter)
+    samples[:, :, 1, :] = np.where(
+        in_tail,
+        3.0 + rng.exponential(size=in_tail.shape),
+        np.minimum(samples[:, :, 1, :], 2.9),
+    )
+    # Bulk ESS alone would keep it -- the tail check is what does the work below.
+    assert (arviz.ess(samples[:, :, 1, :], method="bulk", chain_axis=0, draw_axis=1) > 400).all()
+    samples *= 0.01
+
+    path = tmp_path / "sticky_tail.nc"
+    save_posterior(str(path), samples, SUBJECT_PARAMS)
+
+    posterior, is_converged = load_mcmc_posterior(
+        str(path),
+        to_constrained=simple_to_constrained,
+        param_names=SUBJECT_PARAMS,
+        psrf_threshold=1.1,
+        ess_threshold=400,
+        num_target_samples=100,
+    )
+
+    assert is_converged.tolist() == [True, False, True]
+    assert posterior.shape[0] == num_datasets - 1

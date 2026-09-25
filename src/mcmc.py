@@ -42,6 +42,7 @@ the hierarchical models sample a hyperparameter ahead of them, which the NPE nev
 
 import dataclasses
 import logging
+import arviz
 import jax
 import jax.numpy as jnp
 import numpy as np
@@ -271,7 +272,9 @@ def save_mcmc_posterior(filename, positions, param_names):
     save_dataset_posterior(filename, np.asarray(positions), param_names, layout="sampler")
 
 
-def load_mcmc_posterior(filename, *, to_constrained, param_names, psrf_threshold, num_target_samples):
+def load_mcmc_posterior(
+    filename, *, to_constrained, param_names, psrf_threshold, ess_threshold, num_target_samples,
+):
     """Load MCMC samples, drop unconverged datasets, back-transform, and thin.
 
     Four steps in an order that does not commute. `eamax.io.load_dataset_posterior` does the
@@ -284,6 +287,15 @@ def load_mcmc_posterior(filename, *, to_constrained, param_names, psrf_threshold
     it on the back-transformed values rather than the stored unconstrained ones changes
     nothing, since it is invariant under any monotone link.
 
+    ESS is checked twice, both from the same paper and over all chains together, via arviz
+    since `eamax` has no ESS of its own: the rank-normalized *bulk* ESS, and the *tail* ESS --
+    the smaller of the ESS of the 5% and 95% quantiles. R-hat says the chains agree; bulk ESS
+    says they agree on enough independent draws to take their pooled sample as the reference,
+    which a stiff posterior with small, autocorrelated steps can fail while still passing
+    R-hat; tail ESS says the same of the tails, which the centre can pass without -- and the
+    tails are where posterior intervals and the NPE-vs-MCMC discrepancies are read. Both are
+    rank- or quantile-based, so the link does not matter here either.
+
     Args:
         filename: NetCDF file written by `save_mcmc_posterior`.
         to_constrained: unconstrained -> natural scale, applied over the full parameter vector
@@ -292,7 +304,8 @@ def load_mcmc_posterior(filename, *, to_constrained, param_names, psrf_threshold
         param_names: parameters to keep, selected by name. The hierarchical models store a
             hyperparameter ahead of the subject-level ones, so this is how the MCMC posterior
             is aligned with the NPE posterior rather than by position.
-        psrf_threshold: a dataset is converged when every parameter's R-hat is below this.
+        psrf_threshold: a dataset is converged when every parameter's R-hat is below this...
+        ess_threshold: ...and every parameter's bulk and tail ESS are both above this.
         num_target_samples: thin `draw` down to (at most) this many samples, so that MCMC
             and NPE posteriors are compared at equal sample size.
 
@@ -302,15 +315,33 @@ def load_mcmc_posterior(filename, *, to_constrained, param_names, psrf_threshold
     """
     theta = load_dataset_posterior(filename, to_constrained=to_constrained, param_names=param_names)
 
-    is_converged = np.all(
+    passes_rhat = np.all(
         np.asarray(rhat(theta, chain_axis=0, sample_axis=1)) < psrf_threshold, axis=-1,
     )
+    theta_np = np.asarray(theta)
+    passes_bulk_ess = np.all(
+        arviz.ess(theta_np, method="bulk", chain_axis=0, draw_axis=1) > ess_threshold, axis=-1,
+    )
+    # `prob` has no default for a bare array in arviz; (0.05, 0.95) is the paper's tail ESS.
+    passes_tail_ess = np.all(
+        arviz.ess(theta_np, method="tail", prob=(0.05, 0.95), chain_axis=0, draw_axis=1)
+        > ess_threshold,
+        axis=-1,
+    )
+    is_converged = passes_rhat & passes_bulk_ess & passes_tail_ess
 
     if not is_converged.all():
         logger.info(
-            "%.3f of MCMC fits did not converge: %s",
+            "%.3f of MCMC fits did not converge: %s "
+            "(R-hat >= %s: %s; bulk ESS <= %s: %s; tail ESS <= %s: %s)",
             1.0 - is_converged.mean(),
             np.where(~is_converged)[0].tolist(),
+            psrf_threshold,
+            np.where(~passes_rhat)[0].tolist(),
+            ess_threshold,
+            np.where(~passes_bulk_ess)[0].tolist(),
+            ess_threshold,
+            np.where(~passes_tail_ess)[0].tolist(),
         )
 
     return thin(pool_chains(theta)[is_converged], num_target_samples, axis=1), is_converged

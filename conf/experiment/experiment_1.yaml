@@ -129,7 +129,12 @@ prior_distance_num_draws: 20000
 # is the order of the empirical sample study 4 compares against anyway.
 prior_distance_mmd_draws: 100
 
+# A dataset's MCMC fit is its reference posterior only if every parameter has rank-normalized
+# split R-hat below `psrf_threshold` *and* both bulk and tail ESS above `ess_threshold` (Vehtari
+# et al. 2021's 400 for each, i.e. 100 per chain at 4 chains). Anything else is dropped before
+# analysis.
 psrf_threshold: 1.01
+ess_threshold: 400
 
 # One case may be selected by key (`case=sample_size_50`); null fits every case.
 case: null

@@ -8,11 +8,12 @@ and checked against over the study's real grid; the hierarchical mixture has non
 checked against a direct Monte Carlo estimate instead.
 """
 
+import bayesflow as bf
 import numpy as np
 import pytest
 from scipy import stats
 
-from divergence import kl_from_log_densities, mixture_log_density, standardize
+from divergence import kl_from_log_densities, mixture_log_density, mmd_members, standardize
 from rdm_jax import make_rdm_simple_log_prior
 
 SCALE = 0.5  # `drift_slope_scale` in conf/simulator/prior_simulator/rdm_simple.yaml
@@ -176,3 +177,17 @@ def test_standardize_leaves_a_constant_column_alone_rather_than_dividing_by_zero
 
     assert np.all(np.isfinite(scaled))
     assert scaled[:, 1] == pytest.approx([0.0, 0.0])
+
+
+def test_mmd_members_matches_bayesflow():
+    """`mmd_members` is BayesFlow's default MMD, one member at a time, just computed faster.
+
+    Both compute in float32, but round differently, hence the tolerance.
+    """
+    rng = np.random.default_rng(0)
+    reference = rng.normal(size=(300, 5))
+    members = rng.normal(loc=[[[0.0]], [[0.3]], [[1.0]]], size=(3, 300, 5))
+
+    expected = [float(bf.metrics.functional.maximum_mean_discrepancy(reference, member)) for member in members]
+
+    np.testing.assert_allclose(mmd_members(reference, members), expected, rtol=1e-4)

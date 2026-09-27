@@ -9,10 +9,10 @@ same scale as the mismatch itself.
 
 import logging
 
-import bayesflow as bf
 import hydra
 from omegaconf import DictConfig
 
+from divergence import mmd_members
 from pipeline import (
     accuracy,
     iter_comparable_cases,
@@ -49,20 +49,27 @@ def check_robustness(cfg: DictConfig):
         # them first would average the ensemble into one approximator and lose the spread.
         members = load_npe_members(artifacts.npe_samples(case), param_names)[:, is_converged]
 
-        for member, member_draws in enumerate(members):
-            for index, (mcmc_draws, npe_draws) in enumerate(zip(posterior_mcmc, member_draws, strict=True)):
-                records.append(
-                    {
-                        **case.labels,
-                        "member": member,
-                        "dataset": index,
-                        "num_obs": int(trial_counts[index]),
-                        "accuracy": float(rates[index]),
-                        "rt_min": float(lowest_rt[index]),
-                        "rt_max": float(highest_rt[index]),
-                        "mmd": float(bf.metrics.functional.maximum_mean_discrepancy(mcmc_draws, npe_draws)),
-                    },
-                )
+        if members.shape[1] != len(posterior_mcmc):
+            msg = f"case {case.key}: {members.shape[1]} NPE datasets against {len(posterior_mcmc)} MCMC datasets"
+            raise ValueError(msg)
+
+        # One compiled call per dataset scores every member against the same MCMC reference.
+        for index, mcmc_draws in enumerate(posterior_mcmc):
+            mmds = mmd_members(mcmc_draws, members[:, index])
+
+            records.extend(
+                {
+                    **case.labels,
+                    "member": member,
+                    "dataset": index,
+                    "num_obs": int(trial_counts[index]),
+                    "accuracy": float(rates[index]),
+                    "rt_min": float(lowest_rt[index]),
+                    "rt_max": float(highest_rt[index]),
+                    "mmd": float(mmd),
+                }
+                for member, mmd in enumerate(mmds)
+            )
 
     path = artifacts.csv("robustness", "mmd")
     logger.info("Writing %s", path)

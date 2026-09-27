@@ -23,8 +23,14 @@ restrict the *data*, so there is no prior distance to report. What moves for the
 distribution of `x`, which `scripts/prior_distance.py` measures in the summary network's space.
 """
 
+import jax
+import jax.numpy as jnp
 import numpy as np
 from scipy.special import logsumexp
+
+# `bayesflow.metrics.functional.kernels.default_scales`, i.e. `logspace(-6, 6, 11)`: the mixture
+# of bandwidths `mmd_members` must share with BayesFlow's MMD to report the same number.
+MMD_SCALES = np.logspace(-6, 6, 11)
 
 
 def kl_from_log_densities(log_density_test, log_density_trained):
@@ -90,3 +96,52 @@ def standardize(reference, *samples):
     spread = np.where(spread > 0, spread, 1.0)
 
     return tuple((np.asarray(sample, dtype=float) - centre) / spread for sample in samples)
+
+
+def _inverse_multiquadratic_mean(x, y):
+    """Mean of BayesFlow's inverse-multiquadratic kernel mixture over all pairs of `x` and `y`.
+
+    Squared distances are taken from the differences, as BayesFlow does, not from the cheaper
+    `|x|^2 + |y|^2 - 2 x.y`. In float32 that expansion leaves a residue around 1e-6 where two draws
+    coincide -- every diagonal entry of a self-term, and any repeated MCMC draw -- and 1e-6 is the
+    smallest bandwidth, so those pairs lose half their kernel value: 1% error on 300 draws.
+    Differences give exactly zero there, and under `jit` they cost little more.
+    """
+    sq_dist = jnp.sum((x[:, None, :] - y[None, :, :]) ** 2, axis=-1)
+    scales = jnp.asarray(MMD_SCALES, dtype=x.dtype)
+
+    return jnp.mean(jnp.sum(scales / (sq_dist[..., None] + scales), axis=-1))
+
+
+@jax.jit
+def _mmd_members(reference, members):
+    reference_term = _inverse_multiquadratic_mean(reference, reference)
+
+    def one(member):
+        return (
+            reference_term
+            + _inverse_multiquadratic_mean(member, member)
+            - 2.0 * _inverse_multiquadratic_mean(reference, member)
+        )
+
+    return jax.vmap(one)(members)
+
+
+def mmd_members(reference, members):
+    """MMD between `reference` and each of `members`, as `bf.metrics.functional.maximum_mean_discrepancy`.
+
+    The same biased estimator and inverse-multiquadratic mixture BayesFlow uses by default, for
+    `reference` of shape `(num_draws, num_features)` against every slice of `members`,
+    `(num_members, num_draws, num_features)`, in one compiled call. The `reference` self-term is
+    shared by all members and computed once. That and compilation make it
+    several times faster than calling BayesFlow once per member, which evaluates op by op under
+    the JAX backend. Returns a NumPy array of shape `(num_members,)`.
+
+    It computes in float32 whatever JAX's x64 setting, which costs about half as much as float64
+    and agrees with it to around 1e-4 relative at 2000 draws -- far below the estimator's own
+    Monte Carlo noise.
+    """
+    return np.asarray(
+        _mmd_members(jnp.asarray(reference, dtype=jnp.float32), jnp.asarray(members, dtype=jnp.float32)),
+        dtype=float,
+    )

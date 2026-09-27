@@ -17,8 +17,8 @@ architecture_family: rdm
 
 inference_mlp_depth: 8
 inference_mlp_width: 7
-summary_dim: 12
+summary_dim: 16
 summary_embed_depth: 3
-summary_embed_width: 4
+summary_embed_width: 6
 summary_expansion_factor: 4
 summary_num_seeds: 3

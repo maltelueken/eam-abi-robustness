@@ -3,18 +3,25 @@
 defaults:
   - override /approximator/summary_network: set_transformer
 
-embed_depth: 2
-embed_width: 6 # 2^6 = 64
-mlp_depth: 2
-mlp_width: 7 # 2^7 = 128
-
+# As in `conf/inference-method/flow_matching.yaml`: the selected values live in
+# `conf/architecture/<family>.yaml`; only the search space is spelled out here. Every key below
+# is a plain global one that the summary network node interpolates, rather than a dotted path
+# into the node -- `scripts/select_architecture.py` writes the sweeper's parameter names
+# straight into the architecture file, so a swept knob has to be addressable as a bare key.
 hydra:
   sweeper:
     params:
-      approximator.summary_network.summary_dim: range(8, 32)
-      embed_depth: range(1, 4)
-      embed_width: range(4, 8) # 16 - 256
-      mlp_depth: range(1, 4)
-      mlp_width: range(5, 9) # 32 - 512
-      approximator.summary_network.num_seeds: range(1, 4)
-      
+      summary_dim: range(8, 32)
+      # Capped at 3, not 4. `range(a, b)` reaches `b`: hydra-optuna maps it to an
+      # `IntUniformDistribution` whose high is inclusive. Each block holds an attention score
+      # tensor of `(batch, 4 heads, num_obs, num_obs)`, ~3.7 GiB at `train_npe`'s batch of 64
+      # and the 1000 in `random_num_obs_discrete`'s grid once the backward pass holds the
+      # forward scores, the softmax output and their gradient at once -- and that cost depends
+      # on none of the widths below, so depth is what multiplies it. Four blocks at the widest
+      # point peak at ~22 GiB, over the sweep's MIG slice even before `XLA_CLIENT_MEM_FRACTION`
+      # (slurm/sweep.sh) hands back the 25% the CUDA client otherwise reserves; three fit in
+      # ~17. An out-of-memory trial does not score badly, it aborts the whole `--multirun`.
+      summary_embed_depth: range(1, 3)
+      summary_embed_width: range(4, 8) # 16 - 256
+      summary_num_seeds: range(1, 4)
+      summary_expansion_factor: choice(2, 4, 8)

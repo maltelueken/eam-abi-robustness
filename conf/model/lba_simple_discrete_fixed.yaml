@@ -1,0 +1,12 @@
+# @package _global_
+
+# Study 1's no-coverage arm: trained at a single trial count (500) and tested across the whole
+# 50-1200 sweep. Everything else is lba_simple.
+defaults:
+- lba_simple
+- override /simulator/design_simulator: random_num_obs_discrete_fixed
+
+# The arms differ from `lba_simple` only in what training said about the trial count, and a test
+# case pins `num_obs` itself -- so their held-out data and MCMC fits are bit-identical to its
+# and are read from its directory instead of being simulated and fitted five more times.
+model_family: lba_simple

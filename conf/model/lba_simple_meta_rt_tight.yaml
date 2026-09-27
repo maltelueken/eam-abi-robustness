@@ -1,0 +1,10 @@
+# @package _global_
+
+defaults:
+- lba_simple_meta
+- override /simulator: lba_meta_rt_tight
+
+# All four windows of a family train against the same wide prior and are evaluated on the
+# same response-time windows, so their held-out data and MCMC ground truth are identical --
+# one shared directory instead of four copies of the most expensive artifact in the pipeline.
+model_family: lba_rt

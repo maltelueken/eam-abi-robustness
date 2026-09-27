@@ -3,4 +3,4 @@ defaults:
 - inference_network: flow_matching
 - summary_network: set_transformer
 
-_target_: custom.CustomContinuousApproximator
+_target_: bayesflow.approximators.ContinuousApproximator

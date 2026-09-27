@@ -1,4 +1,5 @@
 """Documentation about eam_abi_robustness."""
+
 import logging
 
 logging.getLogger(__name__).addHandler(logging.NullHandler())

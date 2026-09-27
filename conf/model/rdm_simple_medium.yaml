@@ -1,0 +1,8 @@
+# @package _global_
+
+# Study 2's medium-fixed arm: a point prior at 2.3, the centre grid point. This is the "medium"
+# arm of the seven-arm design rather than rdm_simple, whose 1.5 sits inside the bottom third of
+# the sweep; rdm_simple still trains under experiment_2 because study 4 borrows its checkpoint.
+defaults:
+- rdm_simple
+- override /simulator/prior_simulator: rdm_medium

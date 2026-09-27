@@ -1,0 +1,19 @@
+# Study 3's hierarchical variant, amortized over the bottom third of the swept grid -- its
+# first three points -- so the rest of it falls outside the range of priors it was trained on.
+# A third rather than the one grid step it used to be: at that width the marginal prior was all
+# but identical to the matching fixed-prior model's (0.81 overlap), leaving the fixed-vs-varying
+# contrast with almost nothing to separate. It is now 0.66, in line with the other two narrow
+# arms. Study 2's ..._multivariate_lower.yaml is cut the same way.
+# See random_prior_meta_continuous_sat.yaml for the full-range version.
+_target_: bayesflow.simulators.LambdaSimulator
+sample_fn:
+  _target_: design.random_prior_meta_continuous_multivariate
+  _partial_: true
+  min_value: [0.4]
+  max_value: [0.8]
+  name:
+  - threshold_diff_loc
+  rng:
+    _target_: numpy.random.default_rng
+    seed: ${seed}
+is_batched: true

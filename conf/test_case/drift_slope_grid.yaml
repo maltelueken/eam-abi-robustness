@@ -1,0 +1,31 @@
+# @package _global_
+
+# Study 2: sweep the location of the prior on the drift slope, at a fixed sample size.
+# The sweep lives here rather than in conf/experiment/, so the SLURM scripts and the Python
+# read the same definition instead of mirroring it by hand.
+#
+# One axis, not the two this study used to cross. The threshold prior is now fixed: the study-4
+# MCMC posteriors put every empirical threshold inside `Gamma(8, 0.15)` (371 datasets, none
+# outside its 0.1/99.9 percentiles), so randomizing that hyperparameter amortized the networks
+# over a direction the empirical study never exercises. The drift slope is the opposite case --
+# 80% of those same datasets fall outside the training prior's central 95% interval and 29% sit
+# above its 99.9th percentile -- which is why the range reaches 3.9: the empirical median is
+# 2.84 and the largest is 3.70, both of which the old top of 2.5 failed to bracket.
+#
+# Nine points in steps of 0.4, so the *third* is the 1.5 the `_simple` models train on. That cell
+# is the reference the rest of the sweep is read against -- the one place where the test prior
+# and the training prior agree, and NPE and MCMC therefore ought to.
+meta_param_name: drift_slope_loc
+
+test_case:
+  _target_: cases.prior_param_grid
+  name: ${meta_param_name}
+  num_obs: ${test_num_obs}
+  values:
+    _target_: numpy.round
+    a:
+      _target_: numpy.linspace
+      start: 0.7
+      stop: 3.9
+      num: 9
+    decimals: 3

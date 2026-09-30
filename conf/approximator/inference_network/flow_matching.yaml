@@ -18,5 +18,5 @@ subnet_kwargs:
 time_power_law_alpha: 0.0
 integrate_kwargs:
   _target_: builtins.dict
-  method: euler
-  steps: 100
+  method: tsit5
+  steps: adaptive

@@ -36,6 +36,7 @@ mcmc_model_fun:
   _target_: lba_jax.make_lba_meta_logdensity
   _partial_: true
   prior: ${mcmc_prior}
+  s_false: ${simulator.experiment_simulator.sample_fn.s_false}  # as `mcmc_spec`: the simulated noise identification
   drift_slope_loc_lower: ${mcmc_bounds.lower[0]}
   drift_slope_loc_upper: ${mcmc_bounds.upper[0]}
 

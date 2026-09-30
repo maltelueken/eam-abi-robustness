@@ -38,7 +38,7 @@ SCRIPT = textwrap.dedent(
     data = jnp.stack([rdm_experiment_simple_jax(k, 1.0, 1.5, 0.3, 1.0, 1.2, 0.3, 50)["x"] for k in keys])
     positions, infos = fit_mcmc_cpu_batch(
         jax.random.key(1), data,
-        functools.partial(make_rdm_simple_logdensity, prior=PRIOR),
+        functools.partial(make_rdm_simple_logdensity, prior=PRIOR, s_false=1.0),
         prior_sample_fn=make_rdm_simple_prior_sample(PRIOR),
         spec=rdm_spec(), transform=BlockTransform(),
         num_chains=2, num_steps_warmup=20, num_steps_sampling=10,

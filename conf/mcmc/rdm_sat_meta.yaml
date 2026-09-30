@@ -34,6 +34,7 @@ mcmc_model_fun:
   _target_: rdm_jax.make_rdm_sat_meta_logdensity
   _partial_: true
   prior: ${mcmc_prior}
+  s_false: ${simulator.experiment_simulator.sample_fn.s_false}  # as `mcmc_spec`: the simulated noise identification
   threshold_diff_loc_lower: ${mcmc_bounds.lower[0]}
   threshold_diff_loc_upper: ${mcmc_bounds.upper[0]}
 

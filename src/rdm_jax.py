@@ -531,17 +531,30 @@ def _rdm_simple_log_likelihood(rt, is_true, v_intercept, v_slope, s_true, b, t0)
     )
 
 
-def make_rdm_simple_logdensity(data_x, prior):
+def _rdm_parameterization(s_false, *, sat=False):
+    """`(rdm_spec, rdm_params_fn)` for the configured non-target noise, as the simulators build them.
+
+    `s_false` is the "mismatch" noise identification, and it is structural: a constant in the
+    parameterization rather than a parameter. The simulators resolve it with
+    `static_noise_scale` before building their spec, so the log-densities have to do the same
+    -- scoring data simulated under one noise identification with the default of another would
+    leave the MCMC reference targeting a different model, silently.
+    """
+    noise_scale = static_noise_scale(s_false)
+    return rdm_spec(sat, noise_scale), rdm_params_fn(sat, noise_scale)
+
+
+def make_rdm_simple_logdensity(data_x, prior, *, s_false):
     """Build a BlackJAX-ready log-density function for the simple (non-hierarchical) RDM.
 
     `position` passed to the returned function is a length-5 array of *unconstrained*
     (log-space) values in the order [v_intercept, v_slope, s_true, b, t0] -- matching
     `mcmc_param_names` in `conf/mcmc/rdm.yaml` and `eamax.design.rdm_intercept_slope_spec`.
     """
-    return fixed_prior_logdensity(data_x, prior, rdm_simple_prior_dists, rdm_spec(), rdm_params_fn(), _WALD)
+    return fixed_prior_logdensity(data_x, prior, rdm_simple_prior_dists, *_rdm_parameterization(s_false), _WALD)
 
 
-def make_rdm_meta_logdensity(data_x, prior, drift_slope_loc_lower, drift_slope_loc_upper):
+def make_rdm_meta_logdensity(data_x, prior, drift_slope_loc_lower, drift_slope_loc_upper, *, s_false):
     """Build a BlackJAX-ready log-density function for the hierarchical (meta) RDM.
 
     `position` is a length-6 array of *unconstrained* values in the order
@@ -549,7 +562,7 @@ def make_rdm_meta_logdensity(data_x, prior, drift_slope_loc_lower, drift_slope_l
     """
     return meta_prior_logdensity(
         data_x, prior, rdm_simple_prior_dists, "drift_slope_loc",
-        drift_slope_loc_lower, drift_slope_loc_upper, rdm_params_fn(), _WALD,
+        drift_slope_loc_lower, drift_slope_loc_upper, _rdm_parameterization(s_false)[1], _WALD,
     )
 
 
@@ -651,7 +664,7 @@ def _rdm_sat_log_likelihood(rt, is_true, is_accuracy, v_intercept, v_slope, s_tr
     )
 
 
-def make_rdm_sat_logdensity(data_x, prior):
+def make_rdm_sat_logdensity(data_x, prior, *, s_false):
     """Build a BlackJAX-ready log-density for the speed-accuracy RDM.
 
     `position` is a length-6 array of *unconstrained* (log-space) values in the order
@@ -660,12 +673,12 @@ def make_rdm_sat_logdensity(data_x, prior):
     puts it and what `mcmc.t0_support` reads back out by name.
     """
     return fixed_prior_logdensity(
-        data_x, prior, rdm_sat_prior_dists, rdm_spec(sat=True), rdm_params_fn(sat=True), _WALD,
+        data_x, prior, rdm_sat_prior_dists, *_rdm_parameterization(s_false, sat=True), _WALD,
         has_condition=True,
     )
 
 
-def make_rdm_sat_meta_logdensity(data_x, prior, threshold_diff_loc_lower, threshold_diff_loc_upper):
+def make_rdm_sat_meta_logdensity(data_x, prior, threshold_diff_loc_lower, threshold_diff_loc_upper, *, s_false):
     """Build a BlackJAX-ready log-density for the hierarchical speed-accuracy RDM.
 
     `position` is a length-7 array of *unconstrained* values in the order
@@ -674,7 +687,7 @@ def make_rdm_sat_meta_logdensity(data_x, prior, threshold_diff_loc_lower, thresh
     """
     return meta_prior_logdensity(
         data_x, prior, rdm_sat_prior_dists, "threshold_diff_loc",
-        threshold_diff_loc_lower, threshold_diff_loc_upper, rdm_params_fn(sat=True), _WALD,
+        threshold_diff_loc_lower, threshold_diff_loc_upper, _rdm_parameterization(s_false, sat=True)[1], _WALD,
         has_condition=True,
     )
 

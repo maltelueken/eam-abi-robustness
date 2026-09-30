@@ -62,7 +62,7 @@ def test_make_lba_simple_logdensity_recovers_parameters_with_blackjax_nuts():
     out = lba_experiment_simple_jax(sim_key, *truth[:3], 1.0, *truth[3:], 800)
     data_x = np.array(out["x"])
 
-    logdensity_fn = make_lba_simple_logdensity(data_x, prior("lba_simple", drift_slope_loc=truth[1]))
+    logdensity_fn = make_lba_simple_logdensity(data_x, prior("lba_simple", drift_slope_loc=truth[1]), s_false=1.0)
     init_positions = simple_to_unconstrained(jnp.array([[1.0, 1.0, 1.0, 0.5, 1.0, 0.2]]))
 
     key, warmup_key, sample_key = jax.random.split(key, 3)
@@ -86,7 +86,7 @@ def test_make_lba_simple_logdensity_recovers_parameters_with_blackjax_nuts():
 
 def test_make_lba_meta_logdensity_finite_at_init():
     data_x = np.array([[0.5, 1.0], [0.7, 0.0], [1.2, 1.0]])
-    logdensity_fn = make_lba_meta_logdensity(data_x, prior("lba_simple"), 0.7, 3.9)
+    logdensity_fn = make_lba_meta_logdensity(data_x, prior("lba_simple"), 0.7, 3.9, s_false=1.0)
     # The transform is length-agnostic (it log-transforms everything after the bounded
     # hyperparameters), so the LBA reuses it unchanged for its seven-element position.
     transform = BlockTransform([0.7], [3.9])
@@ -112,7 +112,7 @@ def test_fit_mcmc_cpu_batch_recovers_lba_parameters_across_datasets():
     )
 
     hyperparameters = prior("lba_simple", drift_slope_loc=truth[1])
-    make_logdensity_fn = functools.partial(make_lba_simple_logdensity, prior=hyperparameters)
+    make_logdensity_fn = functools.partial(make_lba_simple_logdensity, prior=hyperparameters, s_false=1.0)
     positions, infos = fit_mcmc_cpu_batch(
         jax.random.PRNGKey(1), datasets, make_logdensity_fn,
         prior_sample_fn=make_lba_simple_prior_sample(hyperparameters),
@@ -129,3 +129,16 @@ def test_fit_mcmc_cpu_batch_recovers_lba_parameters_across_datasets():
     # equivalent test: one poorly mixing dataset shouldn't fail the batch fitter.
     assert jnp.mean(rel_err) < 0.3
     assert jnp.mean(infos.is_divergent) < 0.1
+
+
+def test_logdensity_scores_under_the_configured_noise_identification():
+    # See the RDM test of the same name: the log-density must use the `s_false` the data were
+    # simulated under, not the parameterization's default.
+    truth = (2.0, 1.5, 1.2, 0.6, 1.2, 0.3)  # v_intercept, v_slope, s_true, A, B, t0
+    data_x = np.array(lba_experiment_simple_jax(jax.random.PRNGKey(7), *truth[:3], 0.5, *truth[3:], 2000)["x"])
+    position = simple_to_unconstrained(jnp.array(truth))
+
+    matching = make_lba_simple_logdensity(data_x, prior("lba_simple"), s_false=0.5)(position)
+    default = make_lba_simple_logdensity(data_x, prior("lba_simple"), s_false=1.0)(position)
+
+    assert matching > default + 10.0

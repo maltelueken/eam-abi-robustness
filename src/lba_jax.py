@@ -168,7 +168,20 @@ def _lba_simple_log_likelihood(rt, is_true, v_intercept, v_slope, s_true, sp_max
     )
 
 
-def make_lba_simple_logdensity(data_x, prior):
+def _lba_parameterization(s_false, *, sat=False):
+    """`(lba_spec, lba_params_fn)` for the configured non-target noise, as the simulators build them.
+
+    `s_false` is the "mismatch" noise identification, and it is structural: a constant in the
+    parameterization rather than a parameter. The simulators resolve it with
+    `static_noise_scale` before building their spec, so the log-densities have to do the same
+    -- scoring data simulated under one noise identification with the default of another would
+    leave the MCMC reference targeting a different model, silently.
+    """
+    noise_scale = static_noise_scale(s_false)
+    return lba_spec(sat, noise_scale), lba_params_fn(sat, noise_scale)
+
+
+def make_lba_simple_logdensity(data_x, prior, *, s_false):
     """Build a BlackJAX-ready log-density function for the simple (non-hierarchical) LBA.
 
     `position` passed to the returned function is a length-6 array of *unconstrained*
@@ -176,10 +189,10 @@ def make_lba_simple_logdensity(data_x, prior):
     threshold gap `b - A` -- matching `mcmc_param_names` in `conf/mcmc/lba.yaml` and
     `eamax.design.lba_intercept_slope_spec`.
     """
-    return fixed_prior_logdensity(data_x, prior, lba_simple_prior_dists, lba_spec(), lba_params_fn(), _LBA)
+    return fixed_prior_logdensity(data_x, prior, lba_simple_prior_dists, *_lba_parameterization(s_false), _LBA)
 
 
-def make_lba_meta_logdensity(data_x, prior, drift_slope_loc_lower, drift_slope_loc_upper):
+def make_lba_meta_logdensity(data_x, prior, drift_slope_loc_lower, drift_slope_loc_upper, *, s_false):
     """Build a BlackJAX-ready log-density function for the hierarchical (meta) LBA.
 
     `position` is a length-7 array of *unconstrained* values in the order
@@ -188,7 +201,7 @@ def make_lba_meta_logdensity(data_x, prior, drift_slope_loc_lower, drift_slope_l
     """
     return meta_prior_logdensity(
         data_x, prior, lba_simple_prior_dists, "drift_slope_loc",
-        drift_slope_loc_lower, drift_slope_loc_upper, lba_params_fn(), _LBA,
+        drift_slope_loc_lower, drift_slope_loc_upper, _lba_parameterization(s_false)[1], _LBA,
     )
 
 
@@ -271,7 +284,7 @@ def _lba_sat_log_likelihood(
     )
 
 
-def make_lba_sat_logdensity(data_x, prior):
+def make_lba_sat_logdensity(data_x, prior, *, s_false):
     """Build a BlackJAX-ready log-density for the speed-accuracy LBA.
 
     `position` is a length-7 array of *unconstrained* (log-space) values in the order
@@ -279,12 +292,12 @@ def make_lba_sat_logdensity(data_x, prior):
     `conf/mcmc/lba_sat.yaml`, with `t0` last.
     """
     return fixed_prior_logdensity(
-        data_x, prior, lba_sat_prior_dists, lba_spec(sat=True), lba_params_fn(sat=True), _LBA,
+        data_x, prior, lba_sat_prior_dists, *_lba_parameterization(s_false, sat=True), _LBA,
         has_condition=True,
     )
 
 
-def make_lba_sat_meta_logdensity(data_x, prior, threshold_diff_loc_lower, threshold_diff_loc_upper):
+def make_lba_sat_meta_logdensity(data_x, prior, threshold_diff_loc_lower, threshold_diff_loc_upper, *, s_false):
     """Build a BlackJAX-ready log-density for the hierarchical speed-accuracy LBA.
 
     `position` is a length-8 array of *unconstrained* values in the order
@@ -293,7 +306,7 @@ def make_lba_sat_meta_logdensity(data_x, prior, threshold_diff_loc_lower, thresh
     """
     return meta_prior_logdensity(
         data_x, prior, lba_sat_prior_dists, "threshold_diff_loc",
-        threshold_diff_loc_lower, threshold_diff_loc_upper, lba_params_fn(sat=True), _LBA,
+        threshold_diff_loc_lower, threshold_diff_loc_upper, _lba_parameterization(s_false, sat=True)[1], _LBA,
         has_condition=True,
     )
 

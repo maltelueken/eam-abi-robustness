@@ -142,6 +142,10 @@ def test_the_mcmc_prior_is_the_simulators_prior(model):
     names = list(simulator.prior_simulator.sample(4))
     assert names == list(cfg["mcmc_param_names"])[-len(names):], model
 
+    # The noise identification is part of the model too, and structural rather than a draw.
+    s_false = cfg["simulator"]["experiment_simulator"]["sample_fn"]["s_false"]
+    assert cfg["mcmc_model_fun"]["s_false"] == cfg["mcmc_spec"]["noise_scale"] == s_false, model
+
 
 @pytest.mark.parametrize("model", MODELS)
 def test_transform_round_trips_on_a_prior_draw(model):

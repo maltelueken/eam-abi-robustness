@@ -30,6 +30,7 @@ mcmc_model_fun:
   _target_: lba_jax.make_lba_sat_logdensity
   _partial_: true
   prior: ${mcmc_prior}
+  s_false: ${simulator.experiment_simulator.sample_fn.s_false}  # as `mcmc_spec`: the simulated noise identification
 
 # The prior as something to *draw from*, for the chains' starting values -- built from the same
 # distributions `mcmc_log_prior_fun` scores against (`priors.lba_sat_prior_dists`), so a chain

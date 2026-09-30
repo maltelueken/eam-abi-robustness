@@ -89,6 +89,7 @@ def test_likelihood_is_sensitive_to_the_threshold_difference():
     data_x = simulate(jax.random.PRNGKey(3), 2000)
     logdensity_fn = make_lba_sat_logdensity(
         data_x, prior("lba_sat", drift_slope_loc=TRUE["v_slope"], threshold_scale=0.15, threshold_diff_loc=0.6),
+        s_false=1.0,
     )
 
     at_truth = logdensity_fn(simple_to_unconstrained(jnp.array(list(TRUE.values()))))
@@ -104,6 +105,7 @@ def test_logdensity_recovers_the_parameters_with_blackjax_nuts():
 
     logdensity_fn = make_lba_sat_logdensity(
         data_x, prior("lba_sat", drift_slope_loc=TRUE["v_slope"], threshold_scale=0.15, threshold_diff_loc=0.6),
+        s_false=1.0,
     )
     init_position = simple_to_unconstrained(jnp.array([1.0, 1.0, 1.0, 0.5, 1.0, 0.5, 0.2]))
 
@@ -132,7 +134,7 @@ def test_meta_logdensity_is_finite_at_its_initial_position():
     data_x = simulate(jax.random.PRNGKey(5), 200)
 
     logdensity_fn = make_lba_sat_meta_logdensity(
-        data_x, prior("lba_sat"), threshold_diff_loc_lower=0.4, threshold_diff_loc_upper=2.0,
+        data_x, prior("lba_sat"), threshold_diff_loc_lower=0.4, threshold_diff_loc_upper=2.0, s_false=1.0,
     )
     position = BlockTransform([0.4], [2.0]).inverse(jnp.array([0.6, *TRUE.values()]))
 

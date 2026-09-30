@@ -79,7 +79,7 @@ def test_make_rdm_simple_logdensity_recovers_parameters_with_blackjax_nuts():
     out = rdm_experiment_simple_jax(sim_key, true_v_intercept, true_v_slope, true_s_true, 1.0, true_b, true_t0, 800)
     data_x = np.array(out["x"])
 
-    logdensity_fn = make_rdm_simple_logdensity(data_x, prior("rdm_simple", drift_slope_loc=true_v_slope, threshold_scale=1.0))
+    logdensity_fn = make_rdm_simple_logdensity(data_x, prior("rdm_simple", drift_slope_loc=true_v_slope, threshold_scale=1.0), s_false=1.0)
     init_positions = simple_to_unconstrained(jnp.array([[1.0, 1.0, 0.5, 1.0, 0.2]]))
 
     key, warmup_key, sample_key = jax.random.split(key, 3)
@@ -104,7 +104,7 @@ def test_make_rdm_simple_logdensity_recovers_parameters_with_blackjax_nuts():
 
 def test_make_rdm_meta_logdensity_finite_at_init():
     data_x = np.array([[0.5, 1.0], [0.7, 0.0], [1.2, 1.0]])
-    logdensity_fn = make_rdm_meta_logdensity(data_x, prior("rdm_simple"), 0.7, 3.9)
+    logdensity_fn = make_rdm_meta_logdensity(data_x, prior("rdm_simple"), 0.7, 3.9, s_false=1.0)
     transform = BlockTransform([0.7], [3.9])
 
     position = transform.inverse(jnp.array([1.5, 1.0, 1.0, 0.5, 1.0, 0.2]))
@@ -134,7 +134,7 @@ def test_fit_mcmc_cpu_batch_recovers_parameters_across_datasets():
     )
 
     hyperparameters = prior("rdm_simple", drift_slope_loc=drift_slope_loc, threshold_scale=threshold_scale)
-    make_logdensity_fn = functools.partial(make_rdm_simple_logdensity, prior=hyperparameters)
+    make_logdensity_fn = functools.partial(make_rdm_simple_logdensity, prior=hyperparameters, s_false=1.0)
     positions, infos = fit_mcmc_cpu_batch(
         jax.random.PRNGKey(1), datasets, make_logdensity_fn,
         prior_sample_fn=make_rdm_simple_prior_sample(hyperparameters),
@@ -153,3 +153,18 @@ def test_fit_mcmc_cpu_batch_recovers_parameters_across_datasets():
     # reflecting a problem with fit_mcmc_cpu_batch itself.
     assert jnp.mean(rel_err) < 0.3
     assert jnp.mean(infos.is_divergent) < 0.1
+
+
+def test_logdensity_scores_under_the_configured_noise_identification():
+    # `s_false` is structural -- a constant in the parameterization -- so the log-density has to
+    # be built with the value the data were simulated under. Scoring data simulated at
+    # `s_false=0.5` with the default of 1.0 targets a different model; the truth must look
+    # better under the matching identification.
+    truth = (1.0, 1.5, 0.3, 1.2, 0.3)  # v_intercept, v_slope, s_true, b, t0
+    data_x = np.array(rdm_experiment_simple_jax(jax.random.PRNGKey(7), *truth[:3], 0.5, *truth[3:], 2000)["x"])
+    position = simple_to_unconstrained(jnp.array(truth))
+
+    matching = make_rdm_simple_logdensity(data_x, prior("rdm_simple"), s_false=0.5)(position)
+    default = make_rdm_simple_logdensity(data_x, prior("rdm_simple"), s_false=1.0)(position)
+
+    assert matching > default + 10.0

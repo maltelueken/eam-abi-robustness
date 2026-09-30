@@ -37,6 +37,9 @@ The factory returns the `EnsembleApproximator` rather than the workflow that bui
 import bayesflow as bf
 import numpy as np
 from hydra.utils import instantiate
+# Imported for its side effect. Every script that samples a network imports this module, and
+# flow matching's adaptive integrator fails under the x64 mode `rdm_jax` turns on.
+import bayesflow_x64  # noqa: F401
 
 # Below two members `EnsembleOnlineDataset` refuses to build, and the spread this module
 # exists to measure is undefined anyway.

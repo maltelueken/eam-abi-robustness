@@ -23,3 +23,13 @@ _target_: ensemble.create_ensemble_approximator
 _recursive_: false
 
 ensemble_size: 5
+
+# Standardize every input the networks see, not just the targets: `inference_variables` (the
+# BayesFlow default), `summary_variables` (each channel of `x`, pooled over datasets and
+# trials) and `inference_conditions` (`sqrt(num_obs)`). The running means and sds are
+# accumulated during training only and saved in the checkpoint, so a network standardizes
+# test and empirical data by the statistics of what *it* was trained on -- which differ across
+# the arms of a study by design. An input a model does not have (study 1's
+# `discrete_full_no_num_obs` has no `inference_conditions`) is skipped, and a constant one
+# (`discrete_fixed`'s single trial count) is centred but left unscaled rather than divided by 0.
+standardize: all

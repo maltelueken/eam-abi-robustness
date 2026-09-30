@@ -76,9 +76,12 @@ def test_batched_path_reproduces_the_single_dataset_path(name, single_fn, batche
         for index in range(num_datasets)
     ])
 
-    # The RDM agrees bit-for-bit; the LBA to a couple of ULP, because vmap reassociates its
-    # arithmetic. Either way this is the same function, not merely the same distribution.
-    assert np.allclose(batched, expected, rtol=1e-12, atol=0.0)
+    # Agreement to a few ULP, because vmap reassociates the arithmetic: in float64 the RDM is
+    # bit-for-bit and the LBA within 2 ULP, in float32 both within 4. Either way this is the
+    # same function, not merely the same distribution. The tolerance is in ULP of whatever
+    # precision the simulator ran in, because that depends on whether an earlier test in the
+    # session imported `mcmc`, which turns on JAX's 64-bit mode.
+    assert np.allclose(batched, expected, rtol=8 * np.finfo(batched.dtype).eps, atol=0.0)
 
 
 def test_static_num_obs_accepts_one_value_in_any_wrapper():

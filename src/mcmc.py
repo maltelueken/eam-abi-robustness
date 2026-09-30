@@ -43,6 +43,7 @@ the hierarchical models sample a hyperparameter ahead of them, which the NPE nev
 import dataclasses
 import logging
 import arviz
+import eamax
 import jax
 import jax.numpy as jnp
 import numpy as np
@@ -61,13 +62,19 @@ from eamax.inference.transforms import (  # noqa: F401  (re-exported; the tests 
 )
 from eamax.io import load_dataset_posterior
 from eamax.io import save_dataset_posterior
-# `rdm_jax` turns on JAX's 64-bit mode; the transforms and the race log-densities are
-# precision-sensitive and this module is importable without it, so pull it in for the side
-# effect rather than relying on the caller's import order.
-import rdm_jax  # noqa: F401
+
 from cpu_devices import ENV_VAR
 
 logger = logging.getLogger(__name__)
+
+# NUTS window adaptation and the race log-density (small squared terms, exp/log transforms of
+# sub-unit values like t0) are precision-sensitive. `eamax` never touches JAX's global config
+# on import -- a library that did would change the numerics of unrelated code in the same
+# process -- so the entry points that need float64 turn it on themselves. This module is the
+# one, and `pipeline` imports it, so every stage except `train_npe` runs in float64. Training
+# stays in float32 on purpose: the networks are float32 anyway, and the simulator does not
+# need float64 (see `rdm_jax`).
+eamax.enable_x64()
 
 #: Highest fraction of a dataset's fastest response time that a starting `t0` may take --
 #: `eamax`'s own default, restated here because it is a modelling decision rather than a

@@ -36,7 +36,6 @@ import functools
 import logging
 import threading
 
-import eamax
 import jax
 import jax.numpy as jnp
 import numpy as np
@@ -47,12 +46,11 @@ from eamax.race import race_loglik
 from eamax.simulate import simulate_race
 from tensorflow_probability.substrates import jax as tfp
 
-# NUTS window adaptation and the race log-density (small squared terms, exp/log transforms of
-# sub-unit values like t0) are precision-sensitive. `eamax` never touches JAX's global config
-# on import -- a library that did would change the numerics of unrelated code in the same
-# process -- so the entry points that need float64 turn it on themselves. This module is one:
-# `lba_jax` and `mcmc` both rely on the side effect of importing it.
-eamax.enable_x64()
+# This module does not turn on JAX's 64-bit mode, so the simulator runs in whatever precision
+# the process is in: float32 in `train_npe`, float64 anywhere `mcmc` has been imported, which
+# is every other stage. The simulator does not need float64: TFP's inverse Gaussian sampler is
+# written to avoid cancellation, and the adapter casts `x` to float32 anyway. The log-densities
+# below do need it, and `mcmc` turns it on for them.
 
 tfd = tfp.distributions
 

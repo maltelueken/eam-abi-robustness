@@ -44,8 +44,8 @@ threshold increment `b_diff` where this study's config calls it `B_diff`; the sp
 indexed positionally here, and `mcmc_param_names` stays authoritative for what is written to
 disk.
 
-Note `rdm_jax` enables float64 globally on import; this module relies on that, and on its
-`_as_scalar` / `batched_experiment` / `simulation_design` helpers, rather than duplicating them.
+This module relies on `rdm_jax`'s `_as_scalar` / `batched_experiment` / `simulation_design`
+helpers rather than duplicating them. Like `rdm_jax`, it leaves JAX's 64-bit mode to `mcmc`.
 """
 
 import functools

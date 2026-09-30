@@ -1,7 +1,8 @@
 """Make BayesFlow's adaptive ODE integrator work with JAX's x64 mode on.
 
-`rdm_jax` turns on `jax_enable_x64` at import, and the pipeline scripts import it, since the
-simulator and the MCMC reference need float64. The networks stay float32 (`keras.config.floatx()`).
+`mcmc` turns on `jax_enable_x64` at import, since the MCMC reference needs float64, and every
+stage but `train_npe` imports it through `pipeline`. `predict_npe` therefore samples the networks
+with x64 on, although the networks stay float32 (`keras.config.floatx()`).
 
 BayesFlow 2.0.14's `integrate_adaptive`, which flow matching uses with
 `steps: adaptive` (e.g. `method: tsit5`), keeps the current time in a `while_loop` and

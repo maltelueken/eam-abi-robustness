@@ -19,9 +19,18 @@ from a GPU row once the tables are concatenated. `positions.block_until_ready()`
 timed block on purpose: JAX dispatches asynchronously, and timing around a call that returns
 before the device has run would report the dispatch. The first block of a run also pays for
 its XLA compilation, once per distinct trial count.
+
+The configured `rng_key` is a base key, not the key a fit receives: `block_key` folds the case
+and the block's trial count into it. Handing every block the same key gave dataset `i` of every
+block -- and of every case of a sweep -- the same prior starts and the same NUTS randomness, so
+the Monte Carlo error of the reference posteriors was correlated across subjects and cases. The
+case enters by a checksum of its key rather than by its position, so a fit does not change with
+which cases a job was asked to run.
 """
 
 import logging
+import zlib
+import jax
 import numpy as np
 from hydra.utils import instantiate
 from omegaconf import DictConfig
@@ -36,6 +45,12 @@ from timing import TimingLog
 from timing import run_labels
 
 logger = logging.getLogger(__name__)
+
+
+def block_key(base_key, case_key: str, num_obs: int):
+    """The RNG key for one trial-count block of one case, derived from the configured base key."""
+    key = jax.random.fold_in(base_key, np.uint32(zlib.crc32(case_key.encode())))
+    return jax.random.fold_in(key, np.uint32(num_obs))
 
 
 def run_fit_mcmc(cfg: DictConfig, task: str):
@@ -55,6 +70,7 @@ def run_fit_mcmc(cfg: DictConfig, task: str):
     spec = instantiate(cfg["mcmc_spec"])
     transform = instantiate(cfg["mcmc_transform"])
     fit_fun = instantiate(cfg["mcmc_sampling_fun"])
+    base_key = fit_fun.keywords["rng_key"]
 
     for case in select_cases(cases, cfg["case"]):
         blocks = num_obs_groups(load_case_data(case, artifacts))
@@ -81,6 +97,7 @@ def run_fit_mcmc(cfg: DictConfig, task: str):
                 num_chains=cfg["mcmc_sampling_fun"]["num_chains"],
             ):
                 positions, infos = fit_fun(
+                    rng_key=block_key(base_key, case.key, data_x.shape[1]),
                     data=data_x,
                     make_logdensity_fn=make_logdensity_fn,
                     prior_sample_fn=prior_sample_fn,

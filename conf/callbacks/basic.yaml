@@ -3,6 +3,6 @@
   save_weights_only: false
   monitor: loss
   mode: min
-  save_best_only: true
+  save_best_only: false
 - _target_: keras.callbacks.CSVLogger
   filename: history.csv

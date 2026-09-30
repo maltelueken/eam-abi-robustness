@@ -5,7 +5,13 @@
 #   ./slurm/submit_all.sh                      # everything
 #   ./slurm/submit_all.sh train_npe            # one stage
 #   ./slurm/submit_all.sh '' experiment_2      # one experiment
+#   ./slurm/submit_all.sh train_npe experiment_2 rdm   # one stage, experiment and model family
+#   ./slurm/submit_all.sh '' '' rdm_simple_meta  # one model
 #   DRY_RUN=1 ./slurm/submit_all.sh            # print without submitting
+#
+# The third argument is either a model name, matched exactly, or a model family (`rdm`, `lba`),
+# matching every model whose name starts with `<family>_`. No model is named after a bare family,
+# so the two cannot collide.
 #
 # Every stage but one runs on a GPU, and takes `slurm/submit.sh`'s own SBATCH directives.
 # `fit_mcmc_cpu` spreads its MCMC fits -- one per chain per dataset -- over CPU cores instead, so
@@ -30,7 +36,8 @@ while IFS=$'\t' read -r stage experiment model; do
     [[ -z "${stage// }" || "$stage" == \#* ]] && continue
     [[ -n "$stage_filter" && "$stage" != "$stage_filter" ]] && continue
     [[ -n "$experiment_filter" && "$experiment" != "$experiment_filter" ]] && continue
-    [[ -n "$model_filter" && "$model" != "$model_filter" ]] && continue
+    [[ -n "$model_filter" && "$model" != "$model_filter" && "${model%%_*}" != "$model_filter" ]] \
+        && continue
 
     opts=(--job-name="${stage}_${model}")
     if [ "$stage" = "fit_mcmc_cpu" ]; then

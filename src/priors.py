@@ -5,43 +5,48 @@ Every prior here is a *batched* sampler (`is_batched: true` in
 shape `batch_shape` per parameter. `simulation.CustomSimulator` then lifts those to `(batch, 1)`,
 the same shape BayesFlow's per-element path used to produce.
 
+The draws are made with `jax.random`, from the `rdm_jax.SplittableKey` passed as `rng` -- the
+same stateful key the experiment simulators use, on a stream of its own (see the prior
+configs) -- and handed back as numpy arrays, since everything downstream of the simulator
+(rejection sampling, the adapter, `data.save_dataset`) indexes and concatenates them as such.
+They come out in JAX's default float width: 64-bit wherever `mcmc` has been imported, 32-bit
+in a training process, which is the width the experiment simulator then runs in anyway.
+
 Hyperparameters may arrive as a scalar from the yaml, as a `(batch,)` array from a hierarchical
-model's meta simulator, or as a 0-d array pinned by a test case; numpy broadcasts all three
-against `size=batch_shape` without special handling.
+model's meta simulator, or as a 0-d array pinned by a test case; `jax.random` broadcasts all
+three against `shape=batch_shape` without special handling.
 """
 
+import jax
+import jax.numpy as jnp
 import numpy as np
-from scipy import stats
 
 
-def truncated_normal_rvs(
-    loc: float,
-    scale: float,
-    lower: float = 0.0,
-    size: int = 1,
-    random_state: int = None,
-) -> np.ndarray:
-    """Sample from a truncated normal distribution with a lower bound."""
-    quantile_l = stats.norm.cdf(lower, loc=loc, scale=scale)
+def _float(value):
+    return jnp.asarray(value, dtype=jnp.result_type(float))
 
-    if random_state is not None:
-        probs = random_state.uniform(quantile_l, 1.0, size=size)
-    else:
-        probs = np.random.default_rng().uniform(quantile_l, 1.0, size=size)
 
-    return stats.norm.ppf(
-        probs,
-        loc=loc,
-        scale=scale,
+def truncated_normal_rvs(key, loc, scale, lower=0.0, size=()):
+    """Sample from a normal distribution truncated below at `lower`.
+
+    `jax.random.truncated_normal` draws on the standardized scale by inverting the CDF between
+    the two bounds, the same construction the numpy version used. Its precision degrades only
+    when `lower` sits far into the *upper* tail of the untruncated normal, which no prior here
+    comes near: the bound is at least 1.4 sd below the location everywhere.
+    """
+    loc, scale = _float(loc), _float(scale)
+    standard = jax.random.truncated_normal(
+        key, (_float(lower) - loc) / scale, jnp.inf, shape=size, dtype=loc.dtype,
     )
+    return loc + scale * standard
 
 
-def gamma_mean_sd_rvs(
-    loc: float,
-    sd: float,
-    size: int = 1,
-    random_state: int = None,
-) -> np.ndarray:
+def gamma_rvs(key, shape, scale, size=()):
+    """Sample a Gamma by shape and scale, the parameterization the prior configs use."""
+    return _float(scale) * jax.random.gamma(key, _float(shape), shape=size, dtype=_float(shape).dtype)
+
+
+def gamma_mean_sd_rvs(key, loc, sd, size=()):
     """Sample a Gamma parameterized by its *mean* and *standard deviation*.
 
     Study 3 sweeps how large a speed-accuracy effect the network was trained to expect. Sweeping
@@ -58,7 +63,12 @@ def gamma_mean_sd_rvs(
     `loc < sd`. `conf/test_case/threshold_diff_grid.yaml` keeps its lowest point well clear of
     that; at the trained-on `loc` of 0.6 with `sd` 0.245 the shape is ~6.
     """
-    return random_state.gamma(shape=(loc / sd) ** 2, scale=sd**2 / loc, size=size)
+    loc, sd = _float(loc), _float(sd)
+    return gamma_rvs(key, (loc / sd) ** 2, sd**2 / loc, size=size)
+
+
+def _to_numpy(draws):
+    return {name: np.asarray(value) for name, value in draws.items()}
 
 
 def rdm_prior_simple(
@@ -77,23 +87,22 @@ def rdm_prior_simple(
     rng,
 ):
     """Sample from a custom prior for the racing diffusion model with two accumulators."""
+    keys = rng.next(5)
     drift_intercept = truncated_normal_rvs(
-        drift_intercept_loc, drift_intercept_scale, size=batch_shape, random_state=rng,
+        keys[0], drift_intercept_loc, drift_intercept_scale, size=batch_shape,
     )
-    drift_slope = truncated_normal_rvs(
-        drift_slope_loc, drift_slope_scale, size=batch_shape, random_state=rng,
-    )
-    sd_true = rng.gamma(shape=sd_true_shape, scale=sd_true_scale, size=batch_shape)
-    threshold = rng.gamma(shape=threshold_shape, scale=threshold_scale, size=batch_shape)
-    t0 = truncated_normal_rvs(t0_loc, t0_scale, lower=t0_lower, size=batch_shape, random_state=rng)
+    drift_slope = truncated_normal_rvs(keys[1], drift_slope_loc, drift_slope_scale, size=batch_shape)
+    sd_true = gamma_rvs(keys[2], sd_true_shape, sd_true_scale, size=batch_shape)
+    threshold = gamma_rvs(keys[3], threshold_shape, threshold_scale, size=batch_shape)
+    t0 = truncated_normal_rvs(keys[-1], t0_loc, t0_scale, lower=t0_lower, size=batch_shape)
 
-    return {
+    return _to_numpy({
         "v_intercept": drift_intercept,
         "v_slope": drift_slope,
         "s_true": sd_true,
         "b": threshold,
         "t0": t0,
-    }
+    })
 
 
 def lba_prior_simple(
@@ -126,25 +135,24 @@ def lba_prior_simple(
     Returned keys are ordered to match `conf/approximator/adapter/lba_simple.yaml` and the
     unconstrained position vector built by `lba_jax.make_lba_simple_logdensity`.
     """
+    keys = rng.next(6)
     drift_intercept = truncated_normal_rvs(
-        drift_intercept_loc, drift_intercept_scale, size=batch_shape, random_state=rng,
+        keys[0], drift_intercept_loc, drift_intercept_scale, size=batch_shape,
     )
-    drift_slope = truncated_normal_rvs(
-        drift_slope_loc, drift_slope_scale, size=batch_shape, random_state=rng,
-    )
-    sd_true = rng.gamma(shape=sd_true_shape, scale=sd_true_scale, size=batch_shape)
-    sp_max = rng.gamma(shape=sp_max_shape, scale=sp_max_scale, size=batch_shape)
-    sp_gap = rng.gamma(shape=threshold_shape, scale=threshold_scale, size=batch_shape)
-    t0 = truncated_normal_rvs(t0_loc, t0_scale, lower=t0_lower, size=batch_shape, random_state=rng)
+    drift_slope = truncated_normal_rvs(keys[1], drift_slope_loc, drift_slope_scale, size=batch_shape)
+    sd_true = gamma_rvs(keys[2], sd_true_shape, sd_true_scale, size=batch_shape)
+    sp_max = gamma_rvs(keys[3], sp_max_shape, sp_max_scale, size=batch_shape)
+    sp_gap = gamma_rvs(keys[4], threshold_shape, threshold_scale, size=batch_shape)
+    t0 = truncated_normal_rvs(keys[-1], t0_loc, t0_scale, lower=t0_lower, size=batch_shape)
 
-    return {
+    return _to_numpy({
         "v_intercept": drift_intercept,
         "v_slope": drift_slope,
         "s_true": sd_true,
         "A": sp_max,
         "B": sp_gap,
         "t0": t0,
-    }
+    })
 
 
 def rdm_prior_sat(
@@ -179,25 +187,24 @@ def rdm_prior_sat(
     Returned keys are ordered to match `conf/approximator/adapter/rdm_sat.yaml` and the
     unconstrained position vector built by `rdm_jax.make_rdm_sat_logdensity`.
     """
+    keys = rng.next(6)
     drift_intercept = truncated_normal_rvs(
-        drift_intercept_loc, drift_intercept_scale, size=batch_shape, random_state=rng,
+        keys[0], drift_intercept_loc, drift_intercept_scale, size=batch_shape,
     )
-    drift_slope = truncated_normal_rvs(
-        drift_slope_loc, drift_slope_scale, size=batch_shape, random_state=rng,
-    )
-    sd_true = rng.gamma(shape=sd_true_shape, scale=sd_true_scale, size=batch_shape)
-    threshold = rng.gamma(shape=threshold_shape, scale=threshold_scale, size=batch_shape)
-    threshold_diff = gamma_mean_sd_rvs(threshold_diff_loc, threshold_diff_sd, size=batch_shape, random_state=rng)
-    t0 = truncated_normal_rvs(t0_loc, t0_scale, lower=t0_lower, size=batch_shape, random_state=rng)
+    drift_slope = truncated_normal_rvs(keys[1], drift_slope_loc, drift_slope_scale, size=batch_shape)
+    sd_true = gamma_rvs(keys[2], sd_true_shape, sd_true_scale, size=batch_shape)
+    threshold = gamma_rvs(keys[3], threshold_shape, threshold_scale, size=batch_shape)
+    threshold_diff = gamma_mean_sd_rvs(keys[4], threshold_diff_loc, threshold_diff_sd, size=batch_shape)
+    t0 = truncated_normal_rvs(keys[-1], t0_loc, t0_scale, lower=t0_lower, size=batch_shape)
 
-    return {
+    return _to_numpy({
         "v_intercept": drift_intercept,
         "v_slope": drift_slope,
         "s_true": sd_true,
         "b": threshold,
         "b_diff": threshold_diff,
         "t0": t0,
-    }
+    })
 
 
 def lba_prior_sat(
@@ -230,19 +237,18 @@ def lba_prior_sat(
     Returned keys are ordered to match `conf/approximator/adapter/lba_sat.yaml` and the
     unconstrained position vector built by `lba_jax.make_lba_sat_logdensity`.
     """
+    keys = rng.next(7)
     drift_intercept = truncated_normal_rvs(
-        drift_intercept_loc, drift_intercept_scale, size=batch_shape, random_state=rng,
+        keys[0], drift_intercept_loc, drift_intercept_scale, size=batch_shape,
     )
-    drift_slope = truncated_normal_rvs(
-        drift_slope_loc, drift_slope_scale, size=batch_shape, random_state=rng,
-    )
-    sd_true = rng.gamma(shape=sd_true_shape, scale=sd_true_scale, size=batch_shape)
-    sp_max = rng.gamma(shape=sp_max_shape, scale=sp_max_scale, size=batch_shape)
-    sp_gap = rng.gamma(shape=threshold_shape, scale=threshold_scale, size=batch_shape)
-    sp_gap_diff = gamma_mean_sd_rvs(threshold_diff_loc, threshold_diff_sd, size=batch_shape, random_state=rng)
-    t0 = truncated_normal_rvs(t0_loc, t0_scale, lower=t0_lower, size=batch_shape, random_state=rng)
+    drift_slope = truncated_normal_rvs(keys[1], drift_slope_loc, drift_slope_scale, size=batch_shape)
+    sd_true = gamma_rvs(keys[2], sd_true_shape, sd_true_scale, size=batch_shape)
+    sp_max = gamma_rvs(keys[3], sp_max_shape, sp_max_scale, size=batch_shape)
+    sp_gap = gamma_rvs(keys[4], threshold_shape, threshold_scale, size=batch_shape)
+    sp_gap_diff = gamma_mean_sd_rvs(keys[5], threshold_diff_loc, threshold_diff_sd, size=batch_shape)
+    t0 = truncated_normal_rvs(keys[-1], t0_loc, t0_scale, lower=t0_lower, size=batch_shape)
 
-    return {
+    return _to_numpy({
         "v_intercept": drift_intercept,
         "v_slope": drift_slope,
         "s_true": sd_true,
@@ -250,4 +256,4 @@ def lba_prior_sat(
         "B": sp_gap,
         "B_diff": sp_gap_diff,
         "t0": t0,
-    }
+    })

@@ -48,8 +48,8 @@ def train_npe(cfg: DictConfig):
             batch_size=cfg["batch_size"],
             callbacks=instantiate(cfg["callbacks"], _convert_="partial"),
             simulator=simulator,
-            # Keras defaults to cpu_count() loader threads, which all share this simulator's one
-            # SplittableKey and one numpy Generator -- so the training stream depended on thread
+            # Keras defaults to cpu_count() loader threads, which all share this simulator's
+            # SplittableKeys -- so the training stream depended on thread
             # interleaving and `seed` did not fully determine a run. Now that a batch takes ~4 ms
             # to simulate rather than ~470, single-threaded loading costs nothing and buys
             # reproducibility.

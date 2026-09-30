@@ -12,6 +12,7 @@ sample_fn:
   name:
   - threshold_diff_loc
   rng:
-    _target_: numpy.random.default_rng
+    _target_: rdm_jax.SplittableKey
     seed: ${seed}
+    stream: 3  # one per simulator role: experiment 0, prior 1, design 2, meta 3
 is_batched: true

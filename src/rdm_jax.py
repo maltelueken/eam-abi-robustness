@@ -208,12 +208,10 @@ def _theta_from_natural(values):
 
 
 class SplittableKey:
-    """Stateful `jax.random.PRNGKey` wrapper, for use as the experiment simulators' `rng`.
+    """Stateful `jax.random.PRNGKey` wrapper, the `rng` of every simulator in `conf/simulator/`.
 
-    BayesFlow's `LambdaSimulator` passes the *same* `rng` object reference on every call --
-    exactly how `numpy.random.default_rng()` is used elsewhere in this pipeline
-    (`conf/simulator/*/*.yaml`), which works because a numpy `Generator` mutates its own state
-    on every draw. A bare `jax.random.PRNGKey` is immutable/stateless, so this wraps one to give
+    BayesFlow's `LambdaSimulator` passes the *same* `rng` object reference on every call, which
+    works for a numpy `Generator` because it mutates its own state on every draw. A bare `jax.random.PRNGKey` is immutable/stateless, so this wraps one to give
     the same call-by-reference-then-advance behaviour: `.next()` splits off fresh subkeys, then
     updates its own internal state, so repeated calls (e.g. across training batches) never
     repeat the same randomness.
@@ -221,10 +219,17 @@ class SplittableKey:
     The lock is load-bearing. Keras runs `OnlineDataset.__getitem__` on up to `cpu_count()`
     worker *threads* sharing this one object, so without it two threads can read `self._key`
     before either writes, derive the same subkey, and hand the trainer two identical batches.
+
+    Every simulator role -- prior, design, meta, experiment -- holds one of these built from
+    the same `${seed}`, so `stream` is what keeps them apart: it is folded into the root key,
+    and the configs give each role its own. The fold is unconditional, including for the
+    default stream, because under JAX's partitionable threefry `fold_in(root, k)` *is*
+    `split(root, n)[k]`: a role holding the raw root would hand out, on its first `.next()`,
+    the very key stream 1 starts from.
     """
 
-    def __init__(self, seed):
-        self._key = jax.random.PRNGKey(seed)
+    def __init__(self, seed, stream=0):
+        self._key = jax.random.fold_in(jax.random.PRNGKey(seed), stream)
         self._lock = threading.Lock()
 
     def next(self, num=None):

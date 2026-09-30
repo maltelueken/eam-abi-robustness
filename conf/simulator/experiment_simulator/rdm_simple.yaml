@@ -6,6 +6,7 @@ sample_fn:
   rng:
     _target_: rdm_jax.SplittableKey
     seed: ${seed}
+    stream: 0  # one per simulator role: experiment 0, prior 1, design 2, meta 3
 # One vmapped call per batch instead of one Python-loop call per dataset: ~180x faster,
 # which is what makes study 5's rejection sampling affordable. See rdm_jax.batched_experiment.
 is_batched: true

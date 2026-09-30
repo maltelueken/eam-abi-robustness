@@ -11,6 +11,7 @@ sample_fn:
     stop: 300
     step: 50
   rng:
-    _target_: numpy.random.default_rng
+    _target_: rdm_jax.SplittableKey
     seed: ${seed}
+    stream: 2  # one per simulator role: experiment 0, prior 1, design 2, meta 3
 is_batched: true

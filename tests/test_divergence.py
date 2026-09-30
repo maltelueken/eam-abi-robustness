@@ -15,6 +15,7 @@ from scipy import stats
 
 from divergence import kl_from_log_densities, mixture_log_density, mmd_members, standardize
 from rdm_jax import make_rdm_simple_log_prior
+from tests.prior_config import prior
 
 SCALE = 0.5  # `drift_slope_scale` in conf/simulator/prior_simulator/rdm_simple.yaml
 TRAINED_ON = 1.5  # `drift_slope_loc` there
@@ -56,7 +57,7 @@ def draw(loc, size=40_000, seed=0):
 
 @pytest.fixture
 def log_prior():
-    return make_rdm_simple_log_prior(drift_slope_loc=TRAINED_ON, threshold_scale=THRESHOLD_SCALE)
+    return make_rdm_simple_log_prior(prior("rdm_simple", drift_slope_loc=TRAINED_ON, threshold_scale=THRESHOLD_SCALE))
 
 
 @pytest.mark.parametrize("loc", GRID)

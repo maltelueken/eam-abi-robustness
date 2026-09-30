@@ -21,6 +21,7 @@ from lba_jax import (
 )
 from eamax.inference.mcmc import inference_loop_multiple_chains
 from eamax.inference.warmup import window_adaptation
+from tests.prior_config import prior
 from mcmc import BlockTransform, simple_to_unconstrained
 
 # v_intercept, v_slope, s_true, A, B, B_diff, t0 -- the centre of the prior in
@@ -87,8 +88,7 @@ def test_likelihood_is_sensitive_to_the_threshold_difference():
     # Otherwise `B_diff` would be unidentified and the recovery test could pass on the prior alone.
     data_x = simulate(jax.random.PRNGKey(3), 2000)
     logdensity_fn = make_lba_sat_logdensity(
-        data_x, drift_slope_loc=TRUE["v_slope"], threshold_scale=0.15,
-        threshold_diff_loc=0.6, threshold_diff_sd=0.245,
+        data_x, prior("lba_sat", drift_slope_loc=TRUE["v_slope"], threshold_scale=0.15, threshold_diff_loc=0.6),
     )
 
     at_truth = logdensity_fn(simple_to_unconstrained(jnp.array(list(TRUE.values()))))
@@ -103,8 +103,7 @@ def test_logdensity_recovers_the_parameters_with_blackjax_nuts():
     data_x = simulate(sim_key, 1600)
 
     logdensity_fn = make_lba_sat_logdensity(
-        data_x, drift_slope_loc=TRUE["v_slope"], threshold_scale=0.15,
-        threshold_diff_loc=0.6, threshold_diff_sd=0.245,
+        data_x, prior("lba_sat", drift_slope_loc=TRUE["v_slope"], threshold_scale=0.15, threshold_diff_loc=0.6),
     )
     init_position = simple_to_unconstrained(jnp.array([1.0, 1.0, 1.0, 0.5, 1.0, 0.5, 0.2]))
 
@@ -133,8 +132,7 @@ def test_meta_logdensity_is_finite_at_its_initial_position():
     data_x = simulate(jax.random.PRNGKey(5), 200)
 
     logdensity_fn = make_lba_sat_meta_logdensity(
-        data_x, drift_slope_loc=1.5, threshold_scale=0.15, threshold_diff_sd=0.245,
-        threshold_diff_loc_lower=0.4, threshold_diff_loc_upper=2.0,
+        data_x, prior("lba_sat"), threshold_diff_loc_lower=0.4, threshold_diff_loc_upper=2.0,
     )
     position = BlockTransform([0.4], [2.0]).inverse(jnp.array([0.6, *TRUE.values()]))
 
@@ -146,8 +144,7 @@ def test_meta_prior_draws_start_inside_the_narrowed_bounds():
     # The LBA twin of the RDM's equivalent test; see it for what this guards against.
     lower, upper = 1.5, 2.0
     sample = make_lba_sat_meta_prior_sample(
-        drift_slope_loc=1.5, threshold_scale=0.15, threshold_diff_sd=0.245,
-        threshold_diff_loc_lower=lower, threshold_diff_loc_upper=upper,
+        prior("lba_sat"), threshold_diff_loc_lower=lower, threshold_diff_loc_upper=upper,
     )
 
     draws = np.asarray(jax.vmap(sample)(jax.random.split(jax.random.key(0), 200)))

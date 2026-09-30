@@ -19,6 +19,7 @@ from hydra.utils import instantiate
 from omegaconf import OmegaConf
 
 from config import get_param_names
+from priors import hyperparameters
 from pushforward import pushforward_num_obs
 from utils import get_checkpoint_path
 
@@ -122,6 +123,24 @@ def test_simulator_and_mcmc_instantiate_and_agree_on_parameter_count(model):
     # used to surface only once a cluster job had already started.
     draw = np.asarray(instantiate(cfg["mcmc_prior_sample_fun"])(jax.random.key(0)))
     assert draw.shape == (len(cfg["mcmc_param_names"]),), model
+
+
+@pytest.mark.parametrize("model", MODELS)
+def test_the_mcmc_prior_is_the_simulators_prior(model):
+    """The reference posterior is fitted under the prior the data were drawn from.
+
+    Both sides build their distributions with one `priors.*_prior_dists` function, so what is
+    left to pin is the input: `mcmc_prior` must carry every hyperparameter the prior simulator
+    binds, at the same values, and the simulator's parameters must be the subject-level block
+    of the vector the log-density is defined over, in the same order.
+    """
+    cfg = build([f"experiment={EXPERIMENT_BY_MODEL.get(model, 'experiment_2')}", f"model={model}"])
+    simulator = instantiate(cfg["simulator"], _convert_="partial")
+
+    assert instantiate(cfg["mcmc_prior"]) == hyperparameters(simulator.prior_simulator.sample_fn), model
+
+    names = list(simulator.prior_simulator.sample(4))
+    assert names == list(cfg["mcmc_param_names"])[-len(names):], model
 
 
 @pytest.mark.parametrize("model", MODELS)

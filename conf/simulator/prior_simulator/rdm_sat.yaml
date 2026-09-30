@@ -10,7 +10,7 @@
 # was swept at fixed shape, which moves mean and sd together (`sd = mean / sqrt(shape)`) -- the
 # same confound study 2 dropped its second axis to avoid, and the reason the upper arm of the
 # sweep used to be indistinguishable from this prior: a test prior that widens as it shifts
-# keeps covering the trained-on one. See `priors.gamma_mean_sd_rvs`. At (1.2, 0.245) the Gamma
+# keeps covering the trained-on one. See `priors.gamma_mean_sd`. At (1.2, 0.245) the Gamma
 # is shape 23.99, scale 0.050.
 #
 # This sat base moved from 0.6 to the grid centre when study 3 was cut into fixed and varying

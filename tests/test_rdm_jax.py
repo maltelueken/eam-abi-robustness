@@ -18,6 +18,7 @@ import numpy as np
 from eamax.inference.mcmc import inference_loop_multiple_chains
 from eamax.inference.warmup import window_adaptation
 from rdm_jax import SplittableKey
+from tests.prior_config import prior
 from mcmc import BlockTransform
 from rdm_jax import make_rdm_meta_logdensity
 from rdm_jax import make_rdm_simple_logdensity
@@ -78,7 +79,7 @@ def test_make_rdm_simple_logdensity_recovers_parameters_with_blackjax_nuts():
     out = rdm_experiment_simple_jax(sim_key, true_v_intercept, true_v_slope, true_s_true, 1.0, true_b, true_t0, 800)
     data_x = np.array(out["x"])
 
-    logdensity_fn = make_rdm_simple_logdensity(data_x, drift_slope_loc=true_v_slope, threshold_scale=1.0)
+    logdensity_fn = make_rdm_simple_logdensity(data_x, prior("rdm_simple", drift_slope_loc=true_v_slope, threshold_scale=1.0))
     init_positions = simple_to_unconstrained(jnp.array([[1.0, 1.0, 0.5, 1.0, 0.2]]))
 
     key, warmup_key, sample_key = jax.random.split(key, 3)
@@ -103,7 +104,7 @@ def test_make_rdm_simple_logdensity_recovers_parameters_with_blackjax_nuts():
 
 def test_make_rdm_meta_logdensity_finite_at_init():
     data_x = np.array([[0.5, 1.0], [0.7, 0.0], [1.2, 1.0]])
-    logdensity_fn = make_rdm_meta_logdensity(data_x, 0.7, 3.9, 0.15)
+    logdensity_fn = make_rdm_meta_logdensity(data_x, prior("rdm_simple"), 0.7, 3.9)
     transform = BlockTransform([0.7], [3.9])
 
     position = transform.inverse(jnp.array([1.5, 1.0, 1.0, 0.5, 1.0, 0.2]))
@@ -132,14 +133,11 @@ def test_fit_mcmc_cpu_batch_recovers_parameters_across_datasets():
         ],
     )
 
-    make_logdensity_fn = functools.partial(
-        make_rdm_simple_logdensity, drift_slope_loc=drift_slope_loc, threshold_scale=threshold_scale,
-    )
+    hyperparameters = prior("rdm_simple", drift_slope_loc=drift_slope_loc, threshold_scale=threshold_scale)
+    make_logdensity_fn = functools.partial(make_rdm_simple_logdensity, prior=hyperparameters)
     positions, infos = fit_mcmc_cpu_batch(
         jax.random.PRNGKey(1), datasets, make_logdensity_fn,
-        prior_sample_fn=make_rdm_simple_prior_sample(
-            drift_slope_loc=drift_slope_loc, threshold_scale=threshold_scale,
-        ),
+        prior_sample_fn=make_rdm_simple_prior_sample(hyperparameters),
         spec=rdm_spec(), transform=BlockTransform(),
         num_chains=1, num_steps_warmup=500, num_steps_sampling=500,
     )

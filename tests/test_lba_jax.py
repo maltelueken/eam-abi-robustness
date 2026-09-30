@@ -24,6 +24,7 @@ from eamax.inference.mcmc import inference_loop_multiple_chains
 from eamax.inference.warmup import window_adaptation
 from lba_jax import lba_spec
 from rdm_jax import SplittableKey
+from tests.prior_config import prior
 from mcmc import BlockTransform
 from mcmc import fit_mcmc_cpu_batch
 from mcmc import simple_to_unconstrained
@@ -61,7 +62,7 @@ def test_make_lba_simple_logdensity_recovers_parameters_with_blackjax_nuts():
     out = lba_experiment_simple_jax(sim_key, *truth[:3], 1.0, *truth[3:], 800)
     data_x = np.array(out["x"])
 
-    logdensity_fn = make_lba_simple_logdensity(data_x, drift_slope_loc=truth[1], threshold_scale=0.15)
+    logdensity_fn = make_lba_simple_logdensity(data_x, prior("lba_simple", drift_slope_loc=truth[1]))
     init_positions = simple_to_unconstrained(jnp.array([[1.0, 1.0, 1.0, 0.5, 1.0, 0.2]]))
 
     key, warmup_key, sample_key = jax.random.split(key, 3)
@@ -85,7 +86,7 @@ def test_make_lba_simple_logdensity_recovers_parameters_with_blackjax_nuts():
 
 def test_make_lba_meta_logdensity_finite_at_init():
     data_x = np.array([[0.5, 1.0], [0.7, 0.0], [1.2, 1.0]])
-    logdensity_fn = make_lba_meta_logdensity(data_x, 0.7, 3.9, 0.15)
+    logdensity_fn = make_lba_meta_logdensity(data_x, prior("lba_simple"), 0.7, 3.9)
     # The transform is length-agnostic (it log-transforms everything after the bounded
     # hyperparameters), so the LBA reuses it unchanged for its seven-element position.
     transform = BlockTransform([0.7], [3.9])
@@ -110,14 +111,11 @@ def test_fit_mcmc_cpu_batch_recovers_lba_parameters_across_datasets():
         [lba_experiment_simple_jax(k, *truth[:3], 1.0, *truth[3:], n_trials)["x"] for k in keys],
     )
 
-    make_logdensity_fn = functools.partial(
-        make_lba_simple_logdensity, drift_slope_loc=truth[1], threshold_scale=0.15,
-    )
+    hyperparameters = prior("lba_simple", drift_slope_loc=truth[1])
+    make_logdensity_fn = functools.partial(make_lba_simple_logdensity, prior=hyperparameters)
     positions, infos = fit_mcmc_cpu_batch(
         jax.random.PRNGKey(1), datasets, make_logdensity_fn,
-        prior_sample_fn=make_lba_simple_prior_sample(
-            drift_slope_loc=truth[1], threshold_scale=0.15,
-        ),
+        prior_sample_fn=make_lba_simple_prior_sample(hyperparameters),
         spec=lba_spec(), transform=BlockTransform(),
         num_chains=1, num_steps_warmup=500, num_steps_sampling=500,
     )

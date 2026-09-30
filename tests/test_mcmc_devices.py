@@ -28,12 +28,18 @@ SCRIPT = textwrap.dedent(
     )
 
     assert len(jax.devices()) == int(sys.argv[1])
+    # conf/simulator/prior_simulator/rdm_simple.yaml, with the threshold prior widened.
+    PRIOR = dict(
+        drift_intercept_loc=1.0, drift_intercept_scale=0.5, drift_slope_loc=1.5, drift_slope_scale=0.5,
+        sd_true_shape=12, sd_true_scale=0.1, threshold_shape=8, threshold_scale=1.0,
+        t0_loc=0.3, t0_scale=0.2, t0_lower=0.0,
+    )
     keys = jax.random.split(jax.random.PRNGKey(0), 3)
     data = jnp.stack([rdm_experiment_simple_jax(k, 1.0, 1.5, 0.3, 1.0, 1.2, 0.3, 50)["x"] for k in keys])
     positions, infos = fit_mcmc_cpu_batch(
         jax.random.key(1), data,
-        functools.partial(make_rdm_simple_logdensity, drift_slope_loc=1.5, threshold_scale=1.0),
-        prior_sample_fn=make_rdm_simple_prior_sample(drift_slope_loc=1.5, threshold_scale=1.0),
+        functools.partial(make_rdm_simple_logdensity, prior=PRIOR),
+        prior_sample_fn=make_rdm_simple_prior_sample(PRIOR),
         spec=rdm_spec(), transform=BlockTransform(),
         num_chains=2, num_steps_warmup=20, num_steps_sampling=10,
     )

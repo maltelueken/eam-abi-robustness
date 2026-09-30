@@ -46,6 +46,8 @@ from eamax.race import race_loglik
 from eamax.simulate import simulate_race
 from tensorflow_probability.substrates import jax as tfp
 
+from priors import rdm_sat_prior_dists, rdm_simple_prior_dists
+
 # This module does not turn on JAX's 64-bit mode, so the simulator runs in whatever precision
 # the process is in: float32 in `train_npe`, float64 anywhere `mcmc` has been imported, which
 # is every other stage. The simulator does not need float64: TFP's inverse Gaussian sampler is
@@ -371,55 +373,27 @@ def rdm_experiment_simple_jax_batched(batch_shape, v_intercept, v_slope, s_true,
 
 # ---------------------------------------------------------------------------
 # Priors and log-densities. `eamax` stops at the likelihood boundary: the prior
-# is this study's scientific content and stays here.
+# is this study's scientific content and stays here -- defined once per model in
+# `priors`, which the prior simulators draw the data from too. What follows folds
+# it into `eamax`'s likelihood; the builders are shared with `lba_jax`.
 # ---------------------------------------------------------------------------
 
 
-def _rdm_simple_prior_dists(drift_slope_loc, threshold_scale):
-    """One TFP distribution per coefficient, in `mcmc_param_names` order.
-
-    The single definition of the simple RDM's prior. `_rdm_simple_log_prior` scores draws
-    against it, and `make_rdm_simple_prior_sample` draws from it for the chains' starting
-    values -- so the density NUTS targets and the distribution its chains start from cannot
-    drift apart. Hyperparameters may arrive batched (`_log_prior_factory` evaluates a whole
-    quadrature at once), which every term broadcasts over.
-    """
-    return (
-        tfd.TruncatedNormal(1.0, 0.5, 0.0, jnp.inf),                # v_intercept
-        tfd.TruncatedNormal(drift_slope_loc, 0.5, 0.0, jnp.inf),    # v_slope
-        tfd.Gamma(12.0, 10.0),                                      # s_true
-        tfd.Gamma(8.0, 1.0 / threshold_scale),                      # b
-        tfd.TruncatedNormal(0.3, 0.2, 0.0, jnp.inf),                # t0
-    )
-
-
-def _gamma_mean_sd(loc, sd):
-    """`tfd.Gamma` parameterized by its mean and standard deviation.
-
-    The scoring counterpart of `priors.gamma_mean_sd_rvs`, which is how study 3's threshold
-    difference is drawn: the sweep moves `loc` with `sd` held fixed, so the test prior shifts
-    without also changing width. `tfd.Gamma` takes `(concentration, rate)`, hence
-    `shape = (loc / sd)**2` and `rate = loc / sd**2`.
-    """
-    return tfd.Gamma((loc / sd) ** 2, loc / sd**2)
-
-
 def _log_prior_from_dists(dists, values):
-    """Sum the log-densities of independent prior factors, one value per distribution."""
-    return sum(dist.log_prob(value) for dist, value in zip(dists, values, strict=True))
+    """Sum the log-densities of independent prior factors, one value per distribution, in order."""
+    return sum(dist.log_prob(value) for dist, value in zip(dists.values(), values, strict=True))
 
 
 def _prior_sampler(dists):
     """`f(key) -> (P,)`: one independent natural-scale draw per coefficient, in vector order.
 
-    The dtype is pinned rather than inherited: TFP infers `float32` from the Python-float
-    hyperparameters written in `conf/mcmc/*.yaml`, and a starting position in a different
-    dtype from the log-density's would trace the whole fit in mixed precision.
+    The dtype is pinned rather than inherited, so a starting position cannot be in a different
+    dtype from the log-density's and trace the whole fit in mixed precision.
     """
 
     def sample(key):
         keys = jax.random.split(key, len(dists))
-        draws = [dist.sample(seed=dist_key) for dist, dist_key in zip(dists, keys, strict=True)]
+        draws = [dist.sample(seed=dist_key) for dist, dist_key in zip(dists.values(), keys, strict=True)]
         return jnp.stack(draws).astype(jnp.result_type(float))
 
     return sample
@@ -437,15 +411,93 @@ def _meta_prior_sampler(hyper_dist, subject_dists_fn):
     return sample
 
 
-def _rdm_simple_log_prior(v_intercept, v_slope, s_true, b, t0, drift_slope_loc, threshold_scale):
-    """Log prior, matching the fixed hyperparameters in the former `rdm_model_simple`."""
-    return _log_prior_from_dists(
-        _rdm_simple_prior_dists(drift_slope_loc, threshold_scale),
-        (v_intercept, v_slope, s_true, b, t0),
-    )
+def _conditional_dists(dists_fn, prior, name):
+    """`hyper -> dists`: the subject-level prior with the swept hyperparameter `name` set to `hyper`."""
+    return lambda hyper: dists_fn(**{**prior, name: hyper})
 
 
-def make_rdm_simple_prior_sample(drift_slope_loc, threshold_scale):
+def fixed_prior_logdensity(data_x, prior, dists_fn, spec, params_fn, accumulator, *, has_condition=False):
+    """`log p(theta) + log|J| + log p(x | theta)` over the unconstrained vector `spec` describes.
+
+    `prior` is every hyperparameter of `dists_fn` -- `conf/mcmc/*.yaml` reads them out of the
+    prior simulator's `_partial_` -- so the density scored here is the one the data were drawn
+    from, not a transcription of it.
+    """
+    design = trial_design(data_x, has_condition=has_condition)
+
+    def logdensity_fn(position):
+        position = jnp.asarray(position)
+        log_prior = _log_prior_from_dists(dists_fn(**prior), spec.constrain(position))
+        log_lik = race_log_likelihood(params_fn, accumulator, position, design)
+
+        return log_prior + spec.log_det_jacobian(position) + log_lik
+
+    return logdensity_fn
+
+
+def meta_prior_logdensity(
+    data_x, prior, dists_fn, name, lower, upper, params_fn, accumulator, *, has_condition=False,
+):
+    """As `fixed_prior_logdensity`, with the hyperparameter `name` sampled rather than fixed.
+
+    The position is `[name, *subject]`, unconstrained: the leading hyperparameter is Uniform on
+    `[lower, upper]` -- the range the meta simulator randomizes -- and so takes a Sigmoid
+    bijector, the positive subject-level parameters take Exp.
+    `eamax.inference.transforms.BlockTransform` owns exactly that layout, and
+    `conf/mcmc/*_meta.yaml` builds the matching one for the sampler. `prior`'s own value of
+    `name` is ignored: the subject-level prior is conditioned on the sampled one.
+    """
+    design = trial_design(data_x, has_condition=has_condition)
+    transform = BlockTransform([lower], [upper])
+    hyper_dist = tfd.Uniform(lower, upper)
+    subject_dists = _conditional_dists(dists_fn, prior, name)
+
+    def logdensity_fn(position):
+        position = jnp.asarray(position)
+        hyper, *subject = transform.forward(position)
+
+        log_prior = hyper_dist.log_prob(hyper) + _log_prior_from_dists(subject_dists(hyper), subject)
+        log_lik = race_log_likelihood(params_fn, accumulator, position[1:], design)
+
+        return log_prior + transform.log_det_jacobian(position) + log_lik
+
+    return logdensity_fn
+
+
+def meta_prior_sample(prior, dists_fn, name, lower, upper):
+    """Draw a hierarchical model's *joint* prior: the hyperparameter, then the rest given it.
+
+    The same factorization `meta_prior_logdensity` scores -- Uniform on the swept
+    hyperparameter, and the subject-level prior conditioned on the value drawn -- so a start is
+    a draw from the density the chain is about to explore.
+    """
+    return _meta_prior_sampler(tfd.Uniform(lower, upper), _conditional_dists(dists_fn, prior, name))
+
+
+def log_prior_fn(dists_fn, prior):
+    """Turn a model's prior into a callable over a matrix of draws.
+
+    `scripts/prior_distance.py` needs the prior's *density*, not the posterior log-density the
+    samplers are built from, and it needs it at hyperparameter values other than the one a model
+    trains on: a hierarchical model's training prior is the mixture over everything its meta
+    simulator randomizes, which is a quadrature over that hyperparameter. So the returned callable
+    takes the hyperparameters from the config and lets a caller override any of them, the same
+    way a test case's kwargs override the `_partial_` in a prior simulator's yaml.
+
+    `params` is `(..., num_params)` in the order of `mcmc_param_names`, and every term broadcasts,
+    so passing `params[:, None, :]` against a `(grid,)` hyperparameter evaluates the whole
+    quadrature at once.
+    """
+
+    def log_prior(params, **overrides):
+        params = jnp.asarray(params)
+        dists = dists_fn(**{**prior, **overrides})
+        return _log_prior_from_dists(dists, [params[..., index] for index in range(len(dists))])
+
+    return log_prior
+
+
+def make_rdm_simple_prior_sample(prior):
     """Draw the simple RDM's prior on the natural scale, in `mcmc_param_names` order.
 
     What `mcmc.make_init_positions_fn` starts each chain from -- unconstrained by the model's
@@ -453,19 +505,13 @@ def make_rdm_simple_prior_sample(drift_slope_loc, threshold_scale):
     what makes them both dispersed and on the right scale, which is what R-hat needs to be
     able to fail.
     """
-    return _prior_sampler(_rdm_simple_prior_dists(drift_slope_loc, threshold_scale))
+    return _prior_sampler(rdm_simple_prior_dists(**prior))
 
 
-def make_rdm_meta_prior_sample(drift_slope_loc_lower, drift_slope_loc_upper, threshold_scale):
-    """Draw the hierarchical RDM's *joint* prior: the hyperparameter, then the rest given it.
-
-    The same factorization `make_rdm_meta_logdensity` scores -- Uniform on the swept
-    hyperparameter, and the subject-level prior conditioned on the value drawn -- so a start
-    is a draw from the density the chain is about to explore.
-    """
-    return _meta_prior_sampler(
-        tfd.Uniform(drift_slope_loc_lower, drift_slope_loc_upper),
-        lambda drift_slope_loc: _rdm_simple_prior_dists(drift_slope_loc, threshold_scale),
+def make_rdm_meta_prior_sample(prior, drift_slope_loc_lower, drift_slope_loc_upper):
+    """Draw the hierarchical RDM's joint prior; see `meta_prior_sample`."""
+    return meta_prior_sample(
+        prior, rdm_simple_prior_dists, "drift_slope_loc", drift_slope_loc_lower, drift_slope_loc_upper,
     )
 
 
@@ -485,62 +531,26 @@ def _rdm_simple_log_likelihood(rt, is_true, v_intercept, v_slope, s_true, b, t0)
     )
 
 
-def make_rdm_simple_logdensity(data_x, drift_slope_loc, threshold_scale):
+def make_rdm_simple_logdensity(data_x, prior):
     """Build a BlackJAX-ready log-density function for the simple (non-hierarchical) RDM.
 
     `position` passed to the returned function is a length-5 array of *unconstrained*
     (log-space) values in the order [v_intercept, v_slope, s_true, b, t0] -- matching
     `mcmc_param_names` in `conf/mcmc/rdm.yaml` and `eamax.design.rdm_intercept_slope_spec`.
     """
-    spec, params_fn = rdm_spec(), rdm_params_fn()
-    design = trial_design(data_x)
-
-    def logdensity_fn(position):
-        position = jnp.asarray(position)
-        v_intercept, v_slope, s_true, b, t0 = spec.constrain(position)
-
-        log_prior = _rdm_simple_log_prior(v_intercept, v_slope, s_true, b, t0, drift_slope_loc, threshold_scale)
-        log_lik = race_log_likelihood(params_fn, _WALD, position, design)
-
-        return log_prior + spec.log_det_jacobian(position) + log_lik
-
-    return logdensity_fn
+    return fixed_prior_logdensity(data_x, prior, rdm_simple_prior_dists, rdm_spec(), rdm_params_fn(), _WALD)
 
 
-def make_rdm_meta_logdensity(
-    data_x, drift_slope_loc_lower, drift_slope_loc_upper, threshold_scale,
-):
+def make_rdm_meta_logdensity(data_x, prior, drift_slope_loc_lower, drift_slope_loc_upper):
     """Build a BlackJAX-ready log-density function for the hierarchical (meta) RDM.
 
-    `position` passed to the returned function is a length-6 array of *unconstrained*
-    values in the order [drift_slope_loc, v_intercept, v_slope, s_true, b, t0]: the leading
-    hyperparameter is Uniform on its support and so uses a Sigmoid bijector, the rest are
-    positive and use Exp. `eamax.inference.transforms.BlockTransform` owns exactly that
-    layout, and `conf/mcmc/rdm_meta.yaml` builds the matching one for the sampler.
-
-    One randomized hyperparameter, not the two study 2 used to cross. The threshold prior's
-    scale is now fixed and arrives interpolated from the training prior, exactly as it does for
-    the non-hierarchical model.
+    `position` is a length-6 array of *unconstrained* values in the order
+    [drift_slope_loc, v_intercept, v_slope, s_true, b, t0]; see `meta_prior_logdensity`.
     """
-    params_fn = rdm_params_fn()
-    design = trial_design(data_x)
-    transform = BlockTransform([drift_slope_loc_lower], [drift_slope_loc_upper])
-
-    def logdensity_fn(position):
-        position = jnp.asarray(position)
-        drift_slope_loc, *subject = transform.forward(position)
-        v_intercept, v_slope, s_true, b, t0 = subject
-
-        log_prior = tfd.Uniform(drift_slope_loc_lower, drift_slope_loc_upper).log_prob(
-            drift_slope_loc,
-        ) + _rdm_simple_log_prior(
-            v_intercept, v_slope, s_true, b, t0, drift_slope_loc, threshold_scale,
-        )
-        log_lik = race_log_likelihood(params_fn, _WALD, position[1:], design)
-
-        return log_prior + transform.log_det_jacobian(position) + log_lik
-
-    return logdensity_fn
+    return meta_prior_logdensity(
+        data_x, prior, rdm_simple_prior_dists, "drift_slope_loc",
+        drift_slope_loc_lower, drift_slope_loc_upper, rdm_params_fn(), _WALD,
+    )
 
 
 # ---------------------------------------------------------------------------
@@ -616,62 +626,15 @@ def rdm_experiment_sat_jax_batched(batch_shape, v_intercept, v_slope, s_true, s_
     )
 
 
-def _rdm_sat_prior_dists(
-    drift_slope_loc, threshold_scale, threshold_diff_loc, threshold_diff_sd,
-):
-    """`_rdm_simple_prior_dists` with the threshold difference spliced in ahead of `t0`.
-
-    The order is `mcmc_param_names`' -- `[..., b, b_diff, t0]` -- not "the simple model's plus
-    one at the end", since `t0` stays last.
-
-    `threshold_diff_loc`/`threshold_diff_sd` parameterize the Gamma by its mean and sd exactly
-    as `priors.rdm_prior_sat` draws it -- study 3 sweeps the mean at fixed sd, see
-    `priors.gamma_mean_sd_rvs`. Both are interpolated from the same prior config in
-    `conf/mcmc/rdm_sat.yaml`, so the sampled prior and the fitted prior cannot drift apart.
-    """
-    v_intercept, v_slope, s_true, b, t0 = _rdm_simple_prior_dists(drift_slope_loc, threshold_scale)
-
-    return (
-        v_intercept, v_slope, s_true, b,
-        _gamma_mean_sd(threshold_diff_loc, threshold_diff_sd),  # b_diff
-        t0,
-    )
-
-
-def _rdm_sat_log_prior(
-    v_intercept, v_slope, s_true, b, b_diff, t0,
-    drift_slope_loc, threshold_scale, threshold_diff_loc, threshold_diff_sd,
-):
-    """Log prior for the speed-accuracy model: the simple model's, plus the threshold difference."""
-    return _log_prior_from_dists(
-        _rdm_sat_prior_dists(
-            drift_slope_loc, threshold_scale, threshold_diff_loc, threshold_diff_sd,
-        ),
-        (v_intercept, v_slope, s_true, b, b_diff, t0),
-    )
-
-
-def make_rdm_sat_prior_sample(
-    drift_slope_loc, threshold_scale, threshold_diff_loc, threshold_diff_sd,
-):
+def make_rdm_sat_prior_sample(prior):
     """Draw the speed-accuracy RDM's prior on the natural scale, in `mcmc_param_names` order."""
-    return _prior_sampler(
-        _rdm_sat_prior_dists(
-            drift_slope_loc, threshold_scale, threshold_diff_loc, threshold_diff_sd,
-        ),
-    )
+    return _prior_sampler(rdm_sat_prior_dists(**prior))
 
 
-def make_rdm_sat_meta_prior_sample(
-    drift_slope_loc, threshold_scale, threshold_diff_sd,
-    threshold_diff_loc_lower, threshold_diff_loc_upper,
-):
-    """Draw the hierarchical speed-accuracy RDM's joint prior; see `make_rdm_meta_prior_sample`."""
-    return _meta_prior_sampler(
-        tfd.Uniform(threshold_diff_loc_lower, threshold_diff_loc_upper),
-        lambda threshold_diff_loc: _rdm_sat_prior_dists(
-            drift_slope_loc, threshold_scale, threshold_diff_loc, threshold_diff_sd,
-        ),
+def make_rdm_sat_meta_prior_sample(prior, threshold_diff_loc_lower, threshold_diff_loc_upper):
+    """Draw the hierarchical speed-accuracy RDM's joint prior; see `meta_prior_sample`."""
+    return meta_prior_sample(
+        prior, rdm_sat_prior_dists, "threshold_diff_loc", threshold_diff_loc_lower, threshold_diff_loc_upper,
     )
 
 
@@ -688,7 +651,7 @@ def _rdm_sat_log_likelihood(rt, is_true, is_accuracy, v_intercept, v_slope, s_tr
     )
 
 
-def make_rdm_sat_logdensity(data_x, drift_slope_loc, threshold_scale, threshold_diff_loc, threshold_diff_sd):
+def make_rdm_sat_logdensity(data_x, prior):
     """Build a BlackJAX-ready log-density for the speed-accuracy RDM.
 
     `position` is a length-6 array of *unconstrained* (log-space) values in the order
@@ -696,96 +659,31 @@ def make_rdm_sat_logdensity(data_x, drift_slope_loc, threshold_scale, threshold_
     `conf/mcmc/rdm_sat.yaml`. `t0` stays last, which is where `eamax.design.rdm_sat_spec`
     puts it and what `mcmc.t0_support` reads back out by name.
     """
-    spec, params_fn = rdm_spec(sat=True), rdm_params_fn(sat=True)
-    design = trial_design(data_x, has_condition=True)
-
-    def logdensity_fn(position):
-        position = jnp.asarray(position)
-        v_intercept, v_slope, s_true, b, b_diff, t0 = spec.constrain(position)
-
-        log_prior = _rdm_sat_log_prior(
-            v_intercept, v_slope, s_true, b, b_diff, t0,
-            drift_slope_loc, threshold_scale, threshold_diff_loc, threshold_diff_sd,
-        )
-        log_lik = race_log_likelihood(params_fn, _WALD, position, design)
-
-        return log_prior + spec.log_det_jacobian(position) + log_lik
-
-    return logdensity_fn
+    return fixed_prior_logdensity(
+        data_x, prior, rdm_sat_prior_dists, rdm_spec(sat=True), rdm_params_fn(sat=True), _WALD,
+        has_condition=True,
+    )
 
 
-def make_rdm_sat_meta_logdensity(
-    data_x, drift_slope_loc, threshold_scale, threshold_diff_sd,
-    threshold_diff_loc_lower, threshold_diff_loc_upper,
-):
+def make_rdm_sat_meta_logdensity(data_x, prior, threshold_diff_loc_lower, threshold_diff_loc_upper):
     """Build a BlackJAX-ready log-density for the hierarchical speed-accuracy RDM.
 
     `position` is a length-7 array of *unconstrained* values in the order
-    [threshold_diff_loc, v_intercept, v_slope, s_true, b, b_diff, t0]: the leading
-    hyperparameter is Uniform on its support and so uses a Sigmoid bijector, the rest are
-    positive and use Exp. See `eamax.inference.transforms.BlockTransform` for the matching
-    forward transform.
+    [threshold_diff_loc, v_intercept, v_slope, s_true, b, b_diff, t0]; see
+    `meta_prior_logdensity`.
     """
-    params_fn = rdm_params_fn(sat=True)
-    design = trial_design(data_x, has_condition=True)
-    transform = BlockTransform([threshold_diff_loc_lower], [threshold_diff_loc_upper])
-
-    def logdensity_fn(position):
-        position = jnp.asarray(position)
-        threshold_diff_loc, *subject = transform.forward(position)
-        v_intercept, v_slope, s_true, b, b_diff, t0 = subject
-
-        log_prior = tfd.Uniform(threshold_diff_loc_lower, threshold_diff_loc_upper).log_prob(
-            threshold_diff_loc,
-        ) + _rdm_sat_log_prior(
-            v_intercept, v_slope, s_true, b, b_diff, t0,
-            drift_slope_loc, threshold_scale, threshold_diff_loc, threshold_diff_sd,
-        )
-        log_lik = race_log_likelihood(params_fn, _WALD, position[1:], design)
-
-        return log_prior + transform.log_det_jacobian(position) + log_lik
-
-    return logdensity_fn
+    return meta_prior_logdensity(
+        data_x, prior, rdm_sat_prior_dists, "threshold_diff_loc",
+        threshold_diff_loc_lower, threshold_diff_loc_upper, rdm_params_fn(sat=True), _WALD,
+        has_condition=True,
+    )
 
 
-def _log_prior_factory(term_fn, num_params, fixed):
-    """Turn one of this module's log-prior terms into a callable over a matrix of draws.
-
-    `scripts/prior_distance.py` needs the prior's *density*, not the posterior log-density the
-    samplers are built from, and it needs it at hyperparameter values other than the one a model
-    trains on: a hierarchical model's training prior is the mixture over everything its meta
-    simulator randomizes, which is a quadrature over that hyperparameter. So the returned callable
-    takes the fixed hyperparameters from the config and lets a caller override any of them, the
-    same way a test case's kwargs override the `_partial_` in a prior simulator's yaml.
-
-    `params` is `(..., num_params)` in the order of `mcmc_param_names`, and every term broadcasts,
-    so passing `params[:, None, :]` against a `(grid,)` hyperparameter evaluates the whole
-    quadrature at once.
-    """
-
-    def log_prior(params, **overrides):
-        params = jnp.asarray(params)
-        return term_fn(*(params[..., index] for index in range(num_params)), **{**fixed, **overrides})
-
-    return log_prior
-
-
-def make_rdm_simple_log_prior(drift_slope_loc, threshold_scale):
+def make_rdm_simple_log_prior(prior):
     """The simple RDM's prior density over `mcmc_param_names`, as a function of the draws."""
-    return _log_prior_factory(
-        _rdm_simple_log_prior, 5,
-        {"drift_slope_loc": drift_slope_loc, "threshold_scale": threshold_scale},
-    )
+    return log_prior_fn(rdm_simple_prior_dists, prior)
 
 
-def make_rdm_sat_log_prior(drift_slope_loc, threshold_scale, threshold_diff_loc, threshold_diff_sd):
+def make_rdm_sat_log_prior(prior):
     """The speed-accuracy RDM's prior density over `mcmc_param_names`."""
-    return _log_prior_factory(
-        _rdm_sat_log_prior, 6,
-        {
-            "drift_slope_loc": drift_slope_loc,
-            "threshold_scale": threshold_scale,
-            "threshold_diff_loc": threshold_diff_loc,
-            "threshold_diff_sd": threshold_diff_sd,
-        },
-    )
+    return log_prior_fn(rdm_sat_prior_dists, prior)

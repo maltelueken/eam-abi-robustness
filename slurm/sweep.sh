@@ -119,6 +119,16 @@ export PATH="${PATH}:${HOME}/.local/bin"
 # `conf/summary-method/set_transformer.yaml`. Harmless on a larger GPU.
 export XLA_CLIENT_MEM_FRACTION=0.95
 
+# The price of that fraction is paid outside XLA's pool: the 5% left over is all the CUDA driver
+# has, and XLA's command buffers (CUDA graphs) are instantiated there, not in the pool. A sweep
+# trial died of exactly that -- `CUDA_ERROR_OUT_OF_MEMORY` instantiating a graph for a `jit_add`
+# while converting diagnostic samples, on an architecture whose own tensors need well under
+# 1 GiB. Disabling command buffers keeps the driver's footprint flat at the cost of some
+# kernel-launch overhead, which is what the error itself recommends alongside a lower fraction
+# -- and a lower fraction is what the paragraph above rules out. Appended rather than assigned,
+# so flags set by the module environment survive.
+export XLA_FLAGS="${XLA_FLAGS:-} --xla_gpu_enable_command_buffer="
+
 echo "[$(date -Is)] sweep | ${family} | ${experiment} | ${model} | extra: $*"
 
 uv run --frozen python scripts/train_npe.py \

@@ -1,0 +1,10 @@
+# `b_diff` -- the increase in threshold under the accuracy instruction -- is inferred
+# alongside the simple model's five parameters. The condition indicator travels as a third
+# channel of `x` (see rdm_jax.rdm_experiment_sat_jax) rather than as an inference condition,
+# because it varies within a dataset rather than between datasets.
+_target_: simulation.create_data_adapter
+inference_variables: ["v_intercept", "v_slope", "s_true", "b", "b_diff", "t0"]
+inference_conditions:
+- num_obs
+summary_variables:
+- x

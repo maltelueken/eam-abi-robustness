@@ -1,0 +1,549 @@
+# stage	experiment	model
+# Every (stage, experiment, model) combination the paper's results are built from.
+# Submit them all with slurm/submit_all.sh, or one row at a time with slurm/submit.sh.
+train_npe	experiment_1	rdm_simple
+train_npe	experiment_1	rdm_simple_discrete_lower
+train_npe	experiment_1	rdm_simple_discrete_upper
+train_npe	experiment_1	rdm_simple_discrete_full
+# Two further study-1 arms, both about what training says about the trial count rather than
+# where the training grid sits: `discrete_fixed` trains at a single count (500), and
+# `discrete_full_no_num_obs` trains on the whole test sweep but is not handed sqrt(num_obs).
+train_npe	experiment_1	rdm_simple_discrete_fixed
+train_npe	experiment_1	rdm_simple_discrete_full_no_num_obs
+# `{rdm,lba}_simple` has no row here: its prior sits at 1.5, the third of nine grid points,
+# so it is not one of study 2's conditions -- `{rdm,lba}_simple_medium` (2.3) is the
+# medium-fixed arm. It used to be trained here anyway, because study 4 borrowed the
+# checkpoint; study 4 now reads the narrowed arms and study 5's bands instead, so nothing
+# outside study 1 trains it.
+train_npe	experiment_2	rdm_simple_lower
+train_npe	experiment_2	rdm_simple_medium
+train_npe	experiment_2	rdm_simple_upper
+train_npe	experiment_2	rdm_simple_meta
+train_npe	experiment_2	rdm_simple_meta_lower
+train_npe	experiment_2	rdm_simple_meta_upper
+train_npe	experiment_1	lba_simple
+train_npe	experiment_1	lba_simple_discrete_lower
+train_npe	experiment_1	lba_simple_discrete_upper
+train_npe	experiment_1	lba_simple_discrete_full
+# The same two arms, as above.
+train_npe	experiment_1	lba_simple_discrete_fixed
+train_npe	experiment_1	lba_simple_discrete_full_no_num_obs
+train_npe	experiment_2	lba_simple_lower
+train_npe	experiment_2	lba_simple_medium
+train_npe	experiment_2	lba_simple_upper
+train_npe	experiment_2	lba_simple_meta
+train_npe	experiment_2	lba_simple_meta_lower
+train_npe	experiment_2	lba_simple_meta_upper
+train_npe	experiment_3	rdm_sat_medium
+train_npe	experiment_3	rdm_sat_lower
+train_npe	experiment_3	rdm_sat_upper
+train_npe	experiment_3	rdm_sat_meta
+train_npe	experiment_3	rdm_sat_meta_lower
+train_npe	experiment_3	rdm_sat_meta_upper
+train_npe	experiment_3	lba_sat_medium
+train_npe	experiment_3	lba_sat_lower
+train_npe	experiment_3	lba_sat_upper
+train_npe	experiment_3	lba_sat_meta
+train_npe	experiment_3	lba_sat_meta_lower
+train_npe	experiment_3	lba_sat_meta_upper
+train_npe	experiment_5	rdm_simple_meta_acc_low
+train_npe	experiment_5	rdm_simple_meta_acc_medium
+train_npe	experiment_5	rdm_simple_meta_acc_high
+train_npe	experiment_5	rdm_simple_meta_acc_full
+train_npe	experiment_5	lba_simple_meta_acc_low
+train_npe	experiment_5	lba_simple_meta_acc_medium
+train_npe	experiment_5	lba_simple_meta_acc_high
+train_npe	experiment_5	lba_simple_meta_acc_full
+train_npe	experiment_6	rdm_simple_meta_rt_tight
+train_npe	experiment_6	rdm_simple_meta_rt_medium
+train_npe	experiment_6	rdm_simple_meta_rt_wide
+train_npe	experiment_6	rdm_simple_meta_rt_full
+train_npe	experiment_6	lba_simple_meta_rt_tight
+train_npe	experiment_6	lba_simple_meta_rt_medium
+train_npe	experiment_6	lba_simple_meta_rt_wide
+train_npe	experiment_6	lba_simple_meta_rt_full
+# Once per family: study 1's arms share the base model's held-out data and MCMC fits.
+generate_test_data	experiment_1	rdm_simple
+# Study 2's narrowed variants need their own held-out data and their own MCMC fits: conf/mcmc/rdm.yaml
+# interpolates the prior hyperparameters from each model's own training prior, so the reference posterior
+# differs per variant and model_family sharing -- what studies 5 and 6 do -- would compare against the
+# wrong prior. Same structure as study 3's six models below.
+generate_test_data	experiment_2	rdm_simple_lower
+generate_test_data	experiment_2	rdm_simple_medium
+generate_test_data	experiment_2	rdm_simple_upper
+generate_test_data	experiment_2	rdm_simple_meta
+generate_test_data	experiment_2	rdm_simple_meta_lower
+generate_test_data	experiment_2	rdm_simple_meta_upper
+generate_test_data	experiment_1	lba_simple
+generate_test_data	experiment_2	lba_simple_lower
+generate_test_data	experiment_2	lba_simple_medium
+generate_test_data	experiment_2	lba_simple_upper
+generate_test_data	experiment_2	lba_simple_meta
+generate_test_data	experiment_2	lba_simple_meta_lower
+generate_test_data	experiment_2	lba_simple_meta_upper
+generate_test_data	experiment_3	rdm_sat_medium
+generate_test_data	experiment_3	rdm_sat_lower
+generate_test_data	experiment_3	rdm_sat_upper
+generate_test_data	experiment_3	rdm_sat_meta
+generate_test_data	experiment_3	rdm_sat_meta_lower
+generate_test_data	experiment_3	rdm_sat_meta_upper
+generate_test_data	experiment_3	lba_sat_medium
+generate_test_data	experiment_3	lba_sat_lower
+generate_test_data	experiment_3	lba_sat_upper
+generate_test_data	experiment_3	lba_sat_meta
+generate_test_data	experiment_3	lba_sat_meta_lower
+generate_test_data	experiment_3	lba_sat_meta_upper
+# Study 5's four training bands share one set of held-out data and one set of MCMC fits
+# (model_family in conf/model/*_simple_meta_acc_*.yaml), so these run once per family.
+generate_test_data	experiment_5	rdm_simple_meta_acc_full
+generate_test_data	experiment_5	lba_simple_meta_acc_full
+# Study 6's four training windows share one set of held-out data and one set of MCMC fits
+# (model_family in conf/model/*_simple_meta_rt_*.yaml), so these run once per family.
+generate_test_data	experiment_6	rdm_simple_meta_rt_full
+generate_test_data	experiment_6	lba_simple_meta_rt_full
+prior_stats	experiment_2	rdm_simple_lower
+prior_stats	experiment_2	rdm_simple_medium
+prior_stats	experiment_2	rdm_simple_upper
+prior_stats	experiment_2	rdm_simple_meta
+prior_stats	experiment_2	rdm_simple_meta_lower
+prior_stats	experiment_2	rdm_simple_meta_upper
+prior_stats	experiment_2	lba_simple_lower
+prior_stats	experiment_2	lba_simple_medium
+prior_stats	experiment_2	lba_simple_upper
+prior_stats	experiment_2	lba_simple_meta
+prior_stats	experiment_2	lba_simple_meta_lower
+prior_stats	experiment_2	lba_simple_meta_upper
+prior_stats	experiment_3	rdm_sat_medium
+prior_stats	experiment_3	rdm_sat_lower
+prior_stats	experiment_3	rdm_sat_upper
+prior_stats	experiment_3	rdm_sat_meta
+prior_stats	experiment_3	rdm_sat_meta_lower
+prior_stats	experiment_3	rdm_sat_meta_upper
+prior_stats	experiment_3	lba_sat_medium
+prior_stats	experiment_3	lba_sat_lower
+prior_stats	experiment_3	lba_sat_upper
+prior_stats	experiment_3	lba_sat_meta
+prior_stats	experiment_3	lba_sat_meta_lower
+prior_stats	experiment_3	lba_sat_meta_upper
+prior_distance	experiment_2	rdm_simple_lower
+prior_distance	experiment_2	rdm_simple_medium
+prior_distance	experiment_2	rdm_simple_upper
+prior_distance	experiment_2	rdm_simple_meta
+prior_distance	experiment_2	rdm_simple_meta_lower
+prior_distance	experiment_2	rdm_simple_meta_upper
+prior_distance	experiment_2	lba_simple_lower
+prior_distance	experiment_2	lba_simple_medium
+prior_distance	experiment_2	lba_simple_upper
+prior_distance	experiment_2	lba_simple_meta
+prior_distance	experiment_2	lba_simple_meta_lower
+prior_distance	experiment_2	lba_simple_meta_upper
+prior_distance	experiment_3	rdm_sat_medium
+prior_distance	experiment_3	rdm_sat_lower
+prior_distance	experiment_3	rdm_sat_upper
+prior_distance	experiment_3	rdm_sat_meta
+prior_distance	experiment_3	rdm_sat_meta_lower
+prior_distance	experiment_3	rdm_sat_meta_upper
+prior_distance	experiment_3	lba_sat_medium
+prior_distance	experiment_3	lba_sat_lower
+prior_distance	experiment_3	lba_sat_upper
+prior_distance	experiment_3	lba_sat_meta
+prior_distance	experiment_3	lba_sat_meta_lower
+prior_distance	experiment_3	lba_sat_meta_upper
+# Study 4 measures the distance from the training simulations to the *empirical* subject
+# data, in the summary network's space -- the amortization gap that study exists to probe.
+# The same nine models per family predict_npe uses, since every one of them is a borrowed
+# network: study 2's five drift-slope arms and study 5's four accuracy bands.
+prior_distance	experiment_4	rdm_simple_lower
+prior_distance	experiment_4	rdm_simple_upper
+prior_distance	experiment_4	rdm_simple_meta
+prior_distance	experiment_4	rdm_simple_meta_lower
+prior_distance	experiment_4	rdm_simple_meta_upper
+prior_distance	experiment_4	rdm_simple_meta_acc_low
+prior_distance	experiment_4	rdm_simple_meta_acc_medium
+prior_distance	experiment_4	rdm_simple_meta_acc_high
+prior_distance	experiment_4	rdm_simple_meta_acc_full
+prior_distance	experiment_4	lba_simple_lower
+prior_distance	experiment_4	lba_simple_upper
+prior_distance	experiment_4	lba_simple_meta
+prior_distance	experiment_4	lba_simple_meta_lower
+prior_distance	experiment_4	lba_simple_meta_upper
+prior_distance	experiment_4	lba_simple_meta_acc_low
+prior_distance	experiment_4	lba_simple_meta_acc_medium
+prior_distance	experiment_4	lba_simple_meta_acc_high
+prior_distance	experiment_4	lba_simple_meta_acc_full
+# Studies 5 and 6 get the summary-space row only: their band rejects datasets rather than
+# shifting the prior, so there is no density to take a KL against. Affordable despite the
+# rejection rates because only `prior_distance_mmd_draws` datasets are simulated per case --
+# unlike prior_stats, which needs `prior_stats_num_draws` of them and so has no rows here.
+prior_distance	experiment_5	rdm_simple_meta_acc_low
+prior_distance	experiment_5	rdm_simple_meta_acc_medium
+prior_distance	experiment_5	rdm_simple_meta_acc_high
+prior_distance	experiment_5	rdm_simple_meta_acc_full
+prior_distance	experiment_5	lba_simple_meta_acc_low
+prior_distance	experiment_5	lba_simple_meta_acc_medium
+prior_distance	experiment_5	lba_simple_meta_acc_high
+prior_distance	experiment_5	lba_simple_meta_acc_full
+prior_distance	experiment_6	rdm_simple_meta_rt_tight
+prior_distance	experiment_6	rdm_simple_meta_rt_medium
+prior_distance	experiment_6	rdm_simple_meta_rt_wide
+prior_distance	experiment_6	rdm_simple_meta_rt_full
+prior_distance	experiment_6	lba_simple_meta_rt_tight
+prior_distance	experiment_6	lba_simple_meta_rt_medium
+prior_distance	experiment_6	lba_simple_meta_rt_wide
+prior_distance	experiment_6	lba_simple_meta_rt_full
+# Once per family, as above: study 1's arms read these fits rather than their own.
+fit_mcmc_cpu	experiment_1	rdm_simple
+fit_mcmc_cpu	experiment_1	lba_simple
+fit_mcmc_cpu	experiment_2	rdm_simple_lower
+fit_mcmc_cpu	experiment_2	rdm_simple_medium
+fit_mcmc_cpu	experiment_2	rdm_simple_upper
+fit_mcmc_cpu	experiment_2	rdm_simple_meta
+fit_mcmc_cpu	experiment_2	rdm_simple_meta_lower
+fit_mcmc_cpu	experiment_2	rdm_simple_meta_upper
+fit_mcmc_cpu	experiment_2	lba_simple_lower
+fit_mcmc_cpu	experiment_2	lba_simple_medium
+fit_mcmc_cpu	experiment_2	lba_simple_upper
+fit_mcmc_cpu	experiment_2	lba_simple_meta
+fit_mcmc_cpu	experiment_2	lba_simple_meta_lower
+fit_mcmc_cpu	experiment_2	lba_simple_meta_upper
+# The empirical study has no train_npe rows: it applies networks trained on simulations, which is
+# the amortization claim it exists to test. Its conditions come from two studies -- study 2's four
+# narrowed drift-slope arms plus the full-varying one, and study 5's four accuracy bands -- so
+# `npe_path` in conf/experiment/experiment_4.yaml resolves through `npe_experiment`, which the band
+# models set to experiment_5 and everything else inherits as experiment_2. Nothing is copied
+# between runs. Its held-out data are the subject files, placed in
+# outputs/experiment_4/<model>/test_data/ by hand (once per directory below, including the shared
+# <family>_acc one), so there is no generate_test_data row either -- and no check_metrics row,
+# since empirical data have no simulating parameters to score against.
+#
+# Every study-2 arm trains under a different prior, and conf/mcmc/*.yaml interpolates the prior
+# from the training simulator, so each needs its own reference fit on the subject data.
+fit_mcmc_cpu	experiment_4	rdm_simple_lower
+fit_mcmc_cpu	experiment_4	rdm_simple_upper
+fit_mcmc_cpu	experiment_4	rdm_simple_meta
+fit_mcmc_cpu	experiment_4	rdm_simple_meta_lower
+fit_mcmc_cpu	experiment_4	rdm_simple_meta_upper
+fit_mcmc_cpu	experiment_4	lba_simple_lower
+fit_mcmc_cpu	experiment_4	lba_simple_upper
+fit_mcmc_cpu	experiment_4	lba_simple_meta
+fit_mcmc_cpu	experiment_4	lba_simple_meta_lower
+fit_mcmc_cpu	experiment_4	lba_simple_meta_upper
+# Study 5's four bands share one `<family>_acc` directory (`model_family`), so they share
+# one set of fits here too -- the band cancels out of `p(theta | x)` and their training prior
+# is study 2's full meta prior in every case, so the four references would be identical.
+fit_mcmc_cpu	experiment_4	rdm_simple_meta_acc_full
+fit_mcmc_cpu	experiment_4	lba_simple_meta_acc_full
+fit_mcmc_cpu	experiment_3	rdm_sat_medium
+fit_mcmc_cpu	experiment_3	rdm_sat_lower
+fit_mcmc_cpu	experiment_3	rdm_sat_upper
+fit_mcmc_cpu	experiment_3	rdm_sat_meta
+fit_mcmc_cpu	experiment_3	rdm_sat_meta_lower
+fit_mcmc_cpu	experiment_3	rdm_sat_meta_upper
+fit_mcmc_cpu	experiment_3	lba_sat_medium
+fit_mcmc_cpu	experiment_3	lba_sat_lower
+fit_mcmc_cpu	experiment_3	lba_sat_upper
+fit_mcmc_cpu	experiment_3	lba_sat_meta
+fit_mcmc_cpu	experiment_3	lba_sat_meta_lower
+fit_mcmc_cpu	experiment_3	lba_sat_meta_upper
+# Once per family, as above.
+fit_mcmc_cpu	experiment_5	rdm_simple_meta_acc_full
+fit_mcmc_cpu	experiment_5	lba_simple_meta_acc_full
+# Once per family, as above.
+fit_mcmc_cpu	experiment_6	rdm_simple_meta_rt_full
+fit_mcmc_cpu	experiment_6	lba_simple_meta_rt_full
+predict_npe	experiment_1	rdm_simple
+# Study 1's five arms differ from the base model only in what training said about the trial
+# count, so they read its held-out data and its MCMC fits (`model_family` in
+# conf/model/*_simple_discrete_*.yaml) and keep their own NPE samples and result CSVs.
+predict_npe	experiment_1	rdm_simple_discrete_lower
+predict_npe	experiment_1	rdm_simple_discrete_upper
+predict_npe	experiment_1	rdm_simple_discrete_full
+predict_npe	experiment_1	rdm_simple_discrete_fixed
+predict_npe	experiment_1	rdm_simple_discrete_full_no_num_obs
+predict_npe	experiment_1	lba_simple
+# The same five arms, as above.
+predict_npe	experiment_1	lba_simple_discrete_lower
+predict_npe	experiment_1	lba_simple_discrete_upper
+predict_npe	experiment_1	lba_simple_discrete_full
+predict_npe	experiment_1	lba_simple_discrete_fixed
+predict_npe	experiment_1	lba_simple_discrete_full_no_num_obs
+predict_npe	experiment_2	rdm_simple_lower
+predict_npe	experiment_2	rdm_simple_medium
+predict_npe	experiment_2	rdm_simple_upper
+predict_npe	experiment_2	rdm_simple_meta
+predict_npe	experiment_2	rdm_simple_meta_lower
+predict_npe	experiment_2	rdm_simple_meta_upper
+predict_npe	experiment_2	lba_simple_lower
+predict_npe	experiment_2	lba_simple_medium
+predict_npe	experiment_2	lba_simple_upper
+predict_npe	experiment_2	lba_simple_meta
+predict_npe	experiment_2	lba_simple_meta_lower
+predict_npe	experiment_2	lba_simple_meta_upper
+predict_npe	experiment_4	rdm_simple_lower
+predict_npe	experiment_4	rdm_simple_upper
+predict_npe	experiment_4	rdm_simple_meta
+predict_npe	experiment_4	rdm_simple_meta_lower
+predict_npe	experiment_4	rdm_simple_meta_upper
+predict_npe	experiment_4	rdm_simple_meta_acc_low
+predict_npe	experiment_4	rdm_simple_meta_acc_medium
+predict_npe	experiment_4	rdm_simple_meta_acc_high
+predict_npe	experiment_4	rdm_simple_meta_acc_full
+predict_npe	experiment_4	lba_simple_lower
+predict_npe	experiment_4	lba_simple_upper
+predict_npe	experiment_4	lba_simple_meta
+predict_npe	experiment_4	lba_simple_meta_lower
+predict_npe	experiment_4	lba_simple_meta_upper
+predict_npe	experiment_4	lba_simple_meta_acc_low
+predict_npe	experiment_4	lba_simple_meta_acc_medium
+predict_npe	experiment_4	lba_simple_meta_acc_high
+predict_npe	experiment_4	lba_simple_meta_acc_full
+predict_npe	experiment_3	rdm_sat_medium
+predict_npe	experiment_3	rdm_sat_lower
+predict_npe	experiment_3	rdm_sat_upper
+predict_npe	experiment_3	rdm_sat_meta
+predict_npe	experiment_3	rdm_sat_meta_lower
+predict_npe	experiment_3	rdm_sat_meta_upper
+predict_npe	experiment_3	lba_sat_medium
+predict_npe	experiment_3	lba_sat_lower
+predict_npe	experiment_3	lba_sat_upper
+predict_npe	experiment_3	lba_sat_meta
+predict_npe	experiment_3	lba_sat_meta_lower
+predict_npe	experiment_3	lba_sat_meta_upper
+predict_npe	experiment_5	rdm_simple_meta_acc_low
+predict_npe	experiment_5	rdm_simple_meta_acc_medium
+predict_npe	experiment_5	rdm_simple_meta_acc_high
+predict_npe	experiment_5	rdm_simple_meta_acc_full
+predict_npe	experiment_5	lba_simple_meta_acc_low
+predict_npe	experiment_5	lba_simple_meta_acc_medium
+predict_npe	experiment_5	lba_simple_meta_acc_high
+predict_npe	experiment_5	lba_simple_meta_acc_full
+predict_npe	experiment_6	rdm_simple_meta_rt_tight
+predict_npe	experiment_6	rdm_simple_meta_rt_medium
+predict_npe	experiment_6	rdm_simple_meta_rt_wide
+predict_npe	experiment_6	rdm_simple_meta_rt_full
+predict_npe	experiment_6	lba_simple_meta_rt_tight
+predict_npe	experiment_6	lba_simple_meta_rt_medium
+predict_npe	experiment_6	lba_simple_meta_rt_wide
+predict_npe	experiment_6	lba_simple_meta_rt_full
+check_metrics	experiment_1	rdm_simple
+# Study 1's five arms differ from the base model only in what training said about the trial
+# count, so they read its held-out data and its MCMC fits (`model_family` in
+# conf/model/*_simple_discrete_*.yaml) and keep their own NPE samples and result CSVs.
+check_metrics	experiment_1	rdm_simple_discrete_lower
+check_metrics	experiment_1	rdm_simple_discrete_upper
+check_metrics	experiment_1	rdm_simple_discrete_full
+check_metrics	experiment_1	rdm_simple_discrete_fixed
+check_metrics	experiment_1	rdm_simple_discrete_full_no_num_obs
+check_metrics	experiment_1	lba_simple
+# The same five arms, as above.
+check_metrics	experiment_1	lba_simple_discrete_lower
+check_metrics	experiment_1	lba_simple_discrete_upper
+check_metrics	experiment_1	lba_simple_discrete_full
+check_metrics	experiment_1	lba_simple_discrete_fixed
+check_metrics	experiment_1	lba_simple_discrete_full_no_num_obs
+check_metrics	experiment_2	rdm_simple_lower
+check_metrics	experiment_2	rdm_simple_medium
+check_metrics	experiment_2	rdm_simple_upper
+check_metrics	experiment_2	rdm_simple_meta
+check_metrics	experiment_2	rdm_simple_meta_lower
+check_metrics	experiment_2	rdm_simple_meta_upper
+check_metrics	experiment_2	lba_simple_lower
+check_metrics	experiment_2	lba_simple_medium
+check_metrics	experiment_2	lba_simple_upper
+check_metrics	experiment_2	lba_simple_meta
+check_metrics	experiment_2	lba_simple_meta_lower
+check_metrics	experiment_2	lba_simple_meta_upper
+check_metrics	experiment_3	rdm_sat_medium
+check_metrics	experiment_3	rdm_sat_lower
+check_metrics	experiment_3	rdm_sat_upper
+check_metrics	experiment_3	rdm_sat_meta
+check_metrics	experiment_3	rdm_sat_meta_lower
+check_metrics	experiment_3	rdm_sat_meta_upper
+check_metrics	experiment_3	lba_sat_medium
+check_metrics	experiment_3	lba_sat_lower
+check_metrics	experiment_3	lba_sat_upper
+check_metrics	experiment_3	lba_sat_meta
+check_metrics	experiment_3	lba_sat_meta_lower
+check_metrics	experiment_3	lba_sat_meta_upper
+check_metrics	experiment_5	rdm_simple_meta_acc_low
+check_metrics	experiment_5	rdm_simple_meta_acc_medium
+check_metrics	experiment_5	rdm_simple_meta_acc_high
+check_metrics	experiment_5	rdm_simple_meta_acc_full
+check_metrics	experiment_5	lba_simple_meta_acc_low
+check_metrics	experiment_5	lba_simple_meta_acc_medium
+check_metrics	experiment_5	lba_simple_meta_acc_high
+check_metrics	experiment_5	lba_simple_meta_acc_full
+check_metrics	experiment_6	rdm_simple_meta_rt_tight
+check_metrics	experiment_6	rdm_simple_meta_rt_medium
+check_metrics	experiment_6	rdm_simple_meta_rt_wide
+check_metrics	experiment_6	rdm_simple_meta_rt_full
+check_metrics	experiment_6	lba_simple_meta_rt_tight
+check_metrics	experiment_6	lba_simple_meta_rt_medium
+check_metrics	experiment_6	lba_simple_meta_rt_wide
+check_metrics	experiment_6	lba_simple_meta_rt_full
+check_summary_stats	experiment_1	rdm_simple
+# Study 1's five arms differ from the base model only in what training said about the trial
+# count, so they read its held-out data and its MCMC fits (`model_family` in
+# conf/model/*_simple_discrete_*.yaml) and keep their own NPE samples and result CSVs.
+check_summary_stats	experiment_1	rdm_simple_discrete_lower
+check_summary_stats	experiment_1	rdm_simple_discrete_upper
+check_summary_stats	experiment_1	rdm_simple_discrete_full
+check_summary_stats	experiment_1	rdm_simple_discrete_fixed
+check_summary_stats	experiment_1	rdm_simple_discrete_full_no_num_obs
+check_summary_stats	experiment_1	lba_simple
+# The same five arms, as above.
+check_summary_stats	experiment_1	lba_simple_discrete_lower
+check_summary_stats	experiment_1	lba_simple_discrete_upper
+check_summary_stats	experiment_1	lba_simple_discrete_full
+check_summary_stats	experiment_1	lba_simple_discrete_fixed
+check_summary_stats	experiment_1	lba_simple_discrete_full_no_num_obs
+check_summary_stats	experiment_2	rdm_simple_lower
+check_summary_stats	experiment_2	rdm_simple_medium
+check_summary_stats	experiment_2	rdm_simple_upper
+check_summary_stats	experiment_2	rdm_simple_meta
+check_summary_stats	experiment_2	rdm_simple_meta_lower
+check_summary_stats	experiment_2	rdm_simple_meta_upper
+check_summary_stats	experiment_2	lba_simple_lower
+check_summary_stats	experiment_2	lba_simple_medium
+check_summary_stats	experiment_2	lba_simple_upper
+check_summary_stats	experiment_2	lba_simple_meta
+check_summary_stats	experiment_2	lba_simple_meta_lower
+check_summary_stats	experiment_2	lba_simple_meta_upper
+check_summary_stats	experiment_4	rdm_simple_lower
+check_summary_stats	experiment_4	rdm_simple_upper
+check_summary_stats	experiment_4	rdm_simple_meta
+check_summary_stats	experiment_4	rdm_simple_meta_lower
+check_summary_stats	experiment_4	rdm_simple_meta_upper
+check_summary_stats	experiment_4	rdm_simple_meta_acc_low
+check_summary_stats	experiment_4	rdm_simple_meta_acc_medium
+check_summary_stats	experiment_4	rdm_simple_meta_acc_high
+check_summary_stats	experiment_4	rdm_simple_meta_acc_full
+check_summary_stats	experiment_4	lba_simple_lower
+check_summary_stats	experiment_4	lba_simple_upper
+check_summary_stats	experiment_4	lba_simple_meta
+check_summary_stats	experiment_4	lba_simple_meta_lower
+check_summary_stats	experiment_4	lba_simple_meta_upper
+check_summary_stats	experiment_4	lba_simple_meta_acc_low
+check_summary_stats	experiment_4	lba_simple_meta_acc_medium
+check_summary_stats	experiment_4	lba_simple_meta_acc_high
+check_summary_stats	experiment_4	lba_simple_meta_acc_full
+check_summary_stats	experiment_3	rdm_sat_medium
+check_summary_stats	experiment_3	rdm_sat_lower
+check_summary_stats	experiment_3	rdm_sat_upper
+check_summary_stats	experiment_3	rdm_sat_meta
+check_summary_stats	experiment_3	rdm_sat_meta_lower
+check_summary_stats	experiment_3	rdm_sat_meta_upper
+check_summary_stats	experiment_3	lba_sat_medium
+check_summary_stats	experiment_3	lba_sat_lower
+check_summary_stats	experiment_3	lba_sat_upper
+check_summary_stats	experiment_3	lba_sat_meta
+check_summary_stats	experiment_3	lba_sat_meta_lower
+check_summary_stats	experiment_3	lba_sat_meta_upper
+check_summary_stats	experiment_5	rdm_simple_meta_acc_low
+check_summary_stats	experiment_5	rdm_simple_meta_acc_medium
+check_summary_stats	experiment_5	rdm_simple_meta_acc_high
+check_summary_stats	experiment_5	rdm_simple_meta_acc_full
+check_summary_stats	experiment_5	lba_simple_meta_acc_low
+check_summary_stats	experiment_5	lba_simple_meta_acc_medium
+check_summary_stats	experiment_5	lba_simple_meta_acc_high
+check_summary_stats	experiment_5	lba_simple_meta_acc_full
+check_summary_stats	experiment_6	rdm_simple_meta_rt_tight
+check_summary_stats	experiment_6	rdm_simple_meta_rt_medium
+check_summary_stats	experiment_6	rdm_simple_meta_rt_wide
+check_summary_stats	experiment_6	rdm_simple_meta_rt_full
+check_summary_stats	experiment_6	lba_simple_meta_rt_tight
+check_summary_stats	experiment_6	lba_simple_meta_rt_medium
+check_summary_stats	experiment_6	lba_simple_meta_rt_wide
+check_summary_stats	experiment_6	lba_simple_meta_rt_full
+check_robustness	experiment_1	rdm_simple
+# Study 1's five arms differ from the base model only in what training said about the trial
+# count, so they read its held-out data and its MCMC fits (`model_family` in
+# conf/model/*_simple_discrete_*.yaml) and keep their own NPE samples and result CSVs.
+check_robustness	experiment_1	rdm_simple_discrete_lower
+check_robustness	experiment_1	rdm_simple_discrete_upper
+check_robustness	experiment_1	rdm_simple_discrete_full
+check_robustness	experiment_1	rdm_simple_discrete_fixed
+check_robustness	experiment_1	rdm_simple_discrete_full_no_num_obs
+check_robustness	experiment_1	lba_simple
+# The same five arms, as above.
+check_robustness	experiment_1	lba_simple_discrete_lower
+check_robustness	experiment_1	lba_simple_discrete_upper
+check_robustness	experiment_1	lba_simple_discrete_full
+check_robustness	experiment_1	lba_simple_discrete_fixed
+check_robustness	experiment_1	lba_simple_discrete_full_no_num_obs
+check_robustness	experiment_2	rdm_simple_lower
+check_robustness	experiment_2	rdm_simple_medium
+check_robustness	experiment_2	rdm_simple_upper
+check_robustness	experiment_2	rdm_simple_meta
+check_robustness	experiment_2	rdm_simple_meta_lower
+check_robustness	experiment_2	rdm_simple_meta_upper
+check_robustness	experiment_2	lba_simple_lower
+check_robustness	experiment_2	lba_simple_medium
+check_robustness	experiment_2	lba_simple_upper
+check_robustness	experiment_2	lba_simple_meta
+check_robustness	experiment_2	lba_simple_meta_lower
+check_robustness	experiment_2	lba_simple_meta_upper
+check_robustness	experiment_4	rdm_simple_lower
+check_robustness	experiment_4	rdm_simple_upper
+check_robustness	experiment_4	rdm_simple_meta
+check_robustness	experiment_4	rdm_simple_meta_lower
+check_robustness	experiment_4	rdm_simple_meta_upper
+check_robustness	experiment_4	rdm_simple_meta_acc_low
+check_robustness	experiment_4	rdm_simple_meta_acc_medium
+check_robustness	experiment_4	rdm_simple_meta_acc_high
+check_robustness	experiment_4	rdm_simple_meta_acc_full
+check_robustness	experiment_4	lba_simple_lower
+check_robustness	experiment_4	lba_simple_upper
+check_robustness	experiment_4	lba_simple_meta
+check_robustness	experiment_4	lba_simple_meta_lower
+check_robustness	experiment_4	lba_simple_meta_upper
+check_robustness	experiment_4	lba_simple_meta_acc_low
+check_robustness	experiment_4	lba_simple_meta_acc_medium
+check_robustness	experiment_4	lba_simple_meta_acc_high
+check_robustness	experiment_4	lba_simple_meta_acc_full
+check_robustness	experiment_3	rdm_sat_medium
+check_robustness	experiment_3	rdm_sat_lower
+check_robustness	experiment_3	rdm_sat_upper
+check_robustness	experiment_3	rdm_sat_meta
+check_robustness	experiment_3	rdm_sat_meta_lower
+check_robustness	experiment_3	rdm_sat_meta_upper
+check_robustness	experiment_3	lba_sat_medium
+check_robustness	experiment_3	lba_sat_lower
+check_robustness	experiment_3	lba_sat_upper
+check_robustness	experiment_3	lba_sat_meta
+check_robustness	experiment_3	lba_sat_meta_lower
+check_robustness	experiment_3	lba_sat_meta_upper
+check_robustness	experiment_5	rdm_simple_meta_acc_low
+check_robustness	experiment_5	rdm_simple_meta_acc_medium
+check_robustness	experiment_5	rdm_simple_meta_acc_high
+check_robustness	experiment_5	rdm_simple_meta_acc_full
+check_robustness	experiment_5	lba_simple_meta_acc_low
+check_robustness	experiment_5	lba_simple_meta_acc_medium
+check_robustness	experiment_5	lba_simple_meta_acc_high
+check_robustness	experiment_5	lba_simple_meta_acc_full
+check_robustness	experiment_6	rdm_simple_meta_rt_tight
+check_robustness	experiment_6	rdm_simple_meta_rt_medium
+check_robustness	experiment_6	rdm_simple_meta_rt_wide
+check_robustness	experiment_6	rdm_simple_meta_rt_full
+check_robustness	experiment_6	lba_simple_meta_rt_tight
+check_robustness	experiment_6	lba_simple_meta_rt_medium
+check_robustness	experiment_6	lba_simple_meta_rt_wide
+check_robustness	experiment_6	lba_simple_meta_rt_full
+check_posterior_predictive	experiment_4	rdm_simple_lower
+check_posterior_predictive	experiment_4	rdm_simple_upper
+check_posterior_predictive	experiment_4	rdm_simple_meta
+check_posterior_predictive	experiment_4	rdm_simple_meta_lower
+check_posterior_predictive	experiment_4	rdm_simple_meta_upper
+check_posterior_predictive	experiment_4	rdm_simple_meta_acc_low
+check_posterior_predictive	experiment_4	rdm_simple_meta_acc_medium
+check_posterior_predictive	experiment_4	rdm_simple_meta_acc_high
+check_posterior_predictive	experiment_4	rdm_simple_meta_acc_full
+check_posterior_predictive	experiment_4	lba_simple_lower
+check_posterior_predictive	experiment_4	lba_simple_upper
+check_posterior_predictive	experiment_4	lba_simple_meta
+check_posterior_predictive	experiment_4	lba_simple_meta_lower
+check_posterior_predictive	experiment_4	lba_simple_meta_upper
+check_posterior_predictive	experiment_4	lba_simple_meta_acc_low
+check_posterior_predictive	experiment_4	lba_simple_meta_acc_medium
+check_posterior_predictive	experiment_4	lba_simple_meta_acc_high
+check_posterior_predictive	experiment_4	lba_simple_meta_acc_full

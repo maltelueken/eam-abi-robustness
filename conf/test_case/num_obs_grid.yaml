@@ -1,0 +1,10 @@
+# @package _global_
+
+# Study 1: sweep the number of observations per dataset.
+test_case:
+  _target_: cases.num_obs_grid
+  values:
+    _target_: numpy.arange
+    start: 50
+    stop: 1250
+    step: 50

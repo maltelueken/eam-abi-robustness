@@ -1,0 +1,7 @@
+# @package _global_
+
+defaults:
+- override /simulator: lba_meta
+- override /mcmc: lba_meta
+- override /approximator/adapter: lba_simple
+- override /architecture: lba

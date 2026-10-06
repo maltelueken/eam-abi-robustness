@@ -1,0 +1,13 @@
+# Study 1's unconditioned arm: `lba_simple`'s six inference variables and its summary
+# variables, but no `inference_conditions` at all.
+#
+# Every other adapter hands the inference network `sqrt(num_obs)` alongside the summary
+# network's embedding of `x`. Omitting the key drops that input, the broadcast that shapes it
+# and the `inference_conditions` tensor itself (see `simulation.create_data_adapter`), so
+# whatever the network knows about the size of the set it is looking at has to come out of the
+# summary network's pooling. Paired with `random_num_obs_discrete_full` -- training covers the
+# whole test sweep, and the only thing taken away is being *told* the count.
+_target_: simulation.create_data_adapter
+inference_variables: ["v_intercept", "v_slope", "s_true", "A", "B", "t0"]
+summary_variables:
+- x

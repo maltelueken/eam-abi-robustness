@@ -14,5 +14,7 @@ sample_fn:
   t0_scale: 0.2
   t0_lower: 0.0
   rng:
-    _target_: numpy.random.default_rng
+    _target_: rdm_jax.SplittableKey
     seed: ${seed}
+    stream: 1  # one per simulator role: experiment 0, prior 1, design 2, meta 3
+is_batched: true # one call draws the whole batch; see the priors module docstring

@@ -1,0 +1,8 @@
+# @package _global_
+
+# Study 4: one case per empirical data file. Sorted, so the case order -- which the
+# convergence masks rely on to align MCMC and NPE samples -- is stable.
+test_case:
+  _target_: cases.subject_files
+  directory: ${test_data_path}/test_data
+  pattern: "*.txt"

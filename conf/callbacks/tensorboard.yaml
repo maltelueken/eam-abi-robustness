@@ -1,3 +1,5 @@
+# keras.callbacks.TensorBoard writes event files via tensorflow.summary, so this
+# group requires tensorflow to be installed (it is not a project dependency).
 - _target_: keras.callbacks.TensorBoard
   write_graph: false
 - _target_: keras.callbacks.ModelCheckpoint
@@ -5,6 +7,6 @@
   save_weights_only: false
   monitor: loss
   mode: min
-  save_best_only: true
+  save_best_only: false
 - _target_: keras.callbacks.CSVLogger
   filename: history.csv

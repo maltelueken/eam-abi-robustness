@@ -1,0 +1,5 @@
+# @package _global_
+
+defaults:
+- lba_simple
+- override /simulator/prior_simulator: lba_upper

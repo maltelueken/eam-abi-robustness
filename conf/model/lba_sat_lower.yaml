@@ -1,0 +1,5 @@
+# @package _global_
+
+defaults:
+- lba_sat
+- override /simulator/prior_simulator: lba_sat_lower

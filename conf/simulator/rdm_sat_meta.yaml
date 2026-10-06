@@ -1,0 +1,5 @@
+defaults:
+  - rdm_sat
+  - meta_simulator: random_prior_meta_continuous_sat
+
+_target_: simulation.CustomMetaSimulator

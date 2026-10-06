@@ -1,0 +1,6 @@
+# @package _global_
+
+# The LBA twin of rdm_simple_medium.
+defaults:
+- lba_simple
+- override /simulator/prior_simulator: lba_medium

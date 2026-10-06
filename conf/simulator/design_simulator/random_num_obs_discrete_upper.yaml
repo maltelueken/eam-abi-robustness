@@ -1,0 +1,14 @@
+_target_: bayesflow.simulators.LambdaSimulator
+sample_fn:
+  _target_: design.random_num_obs_discrete
+  _partial_: true
+  values:
+    _target_: numpy.arange
+    start: 1000
+    stop: 1250
+    step: 50
+  rng:
+    _target_: rdm_jax.SplittableKey
+    seed: ${seed}
+    stream: 2  # one per simulator role: experiment 0, prior 1, design 2, meta 3
+is_batched: true

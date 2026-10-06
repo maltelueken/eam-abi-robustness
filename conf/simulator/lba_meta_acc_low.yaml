@@ -1,0 +1,9 @@
+# Study 5 training condition: the prior is study 2's full meta prior, unchanged, and only the
+# *data* are restricted -- `simulation` keeps drawing until every dataset in the batch has an
+# empirical accuracy in this band. Trained only on chance-level performance, so most of the
+# test grid lies outside the accuracy range this approximator has ever seen.
+defaults:
+- lba_meta
+
+acc_lower: 0.5
+acc_upper: 0.6

@@ -1,0 +1,10 @@
+# `B_diff` -- the increase in the threshold gap under the accuracy instruction -- is inferred
+# alongside the simple LBA's six parameters. The condition indicator travels as a third channel
+# of `x` (see lba_jax.lba_experiment_sat_jax) rather than as an inference condition, because it
+# varies within a dataset rather than between datasets.
+_target_: simulation.create_data_adapter
+inference_variables: ["v_intercept", "v_slope", "s_true", "A", "B", "B_diff", "t0"]
+inference_conditions:
+- num_obs
+summary_variables:
+- x

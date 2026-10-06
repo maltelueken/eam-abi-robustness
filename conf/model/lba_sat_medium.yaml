@@ -1,0 +1,16 @@
+# @package _global_
+
+# Study 3's medium-fixed arm: a point prior on `threshold_diff_loc` at the *centre* grid point
+# of conf/test_case/threshold_diff_grid.yaml -- the one cell where the test prior and the
+# training prior agree. Named to match study 2's `lba_simple_medium`, and the condition the
+# bare `lba_sat` used to serve.
+#
+# It overrides nothing, unlike its study-2 counterpart, and that asymmetry is deliberate:
+# study 2's base `lba_simple` sits at 1.5 -- the *third* of nine points -- because studies 1,
+# 4, 5 and 6 train on it and study 4 borrows its checkpoint outright, so study 2 needed a
+# separate prior file at 2.3 to reach its grid centre. Nothing outside study 3 trains on
+# `lba_sat`, so that base was moved to the grid centre instead, and this arm only has to give
+# the condition its own name and its own artifacts. `tests/test_config.py` pins both studies'
+# medium-fixed arms to their grid centre, so a moved base cannot silently move the arm.
+defaults:
+- lba_sat

@@ -28,8 +28,12 @@
 #
 # How to read the result (printed at the end of the job, kept in $out/results.csv):
 #
-# * `status`: `oom` means the architecture does not fit this GPU at that trial count. In the
-#   sweep, that aborts the whole `--multirun`.
+# * `status`: `oom` means the architecture did not fit at that trial count under this job's
+#   allocator settings, and in the sweep that aborts the whole `--multirun`. It does not always
+#   mean the GPU is too small. A pool grown on demand (`preallocate=false`) is made of separate
+#   regions, and XLA asks for a step's whole temp buffer as one block, which no region may hold
+#   while `pool_gib` is still well below `limit_gib`. Compare the failed request in the run's
+#   log ("trying to allocate ...") with `limit_gib - peak_gib` before blaming the GPU.
 # * `peak_gib` against `limit_gib`: how much of XLA's pool a run needed. `capacity_gib -
 #   pool_gib` is all the CUDA driver had left over, which is where CUDA graphs are instantiated.
 #   A graph that could not be instantiated is what killed a sweep trial before.
@@ -121,10 +125,20 @@ module load 2025
 
 export PATH="${PATH}:${HOME}/.local/bin"
 
-# Exactly slurm/sweep.sh's settings -- see there for why each is needed. A ceiling of 95% of
-# the device, grown on demand rather than reserved up front.
-export XLA_CLIENT_MEM_FRACTION=0.95
-export XLA_PYTHON_CLIENT_PREALLOCATE=false
+# By default, exactly slurm/sweep.sh's settings -- see there for why each is needed. A ceiling
+# of 95% of the device, grown on demand rather than reserved up front. Job 27639662 showed the
+# cost of growing on demand: on the MIG slice the top corner failed to get one 12.76 GiB block
+# with at most 5.6 GiB ever in use.
+#
+# Overridable from the submitting shell, which sbatch passes through, so another allocator setup
+# can be tested without editing anything here:
+#
+#   XLA_PYTHON_CLIENT_PREALLOCATE=true XLA_CLIENT_MEM_FRACTION=0.90 sbatch slurm/gpu_budget.sh single
+#
+# XLA_PYTHON_CLIENT_ALLOCATOR passes through the same way. Each row of results.csv records the
+# settings it ran under.
+export XLA_CLIENT_MEM_FRACTION=${XLA_CLIENT_MEM_FRACTION:-0.95}
+export XLA_PYTHON_CLIENT_PREALLOCATE=${XLA_PYTHON_CLIENT_PREALLOCATE:-false}
 
 if [ "${SLURM_JOB_PARTITION:-}" != "$expected_partition" ]; then
     echo "WARNING: mode '${mode}' is meant for ${expected_partition}, but this job runs on" \
@@ -132,6 +146,8 @@ if [ "${SLURM_JOB_PARTITION:-}" != "$expected_partition" ]; then
 fi
 
 echo "[$(date -Is)] gpu budget | ${mode} | ${experiment} | ${model} | presets: ${presets} | extra: $*"
+echo "allocator: ${XLA_PYTHON_CLIENT_ALLOCATOR:-default} | preallocate=${XLA_PYTHON_CLIENT_PREALLOCATE}" \
+    "| fraction=${XLA_CLIENT_MEM_FRACTION}"
 nvidia-smi -L || true
 
 printf "preset\tphase\texit\twarnings\tlog\n" > "$out/warnings.tsv"
@@ -175,8 +191,8 @@ echo
 
 # Absent only if every run died before measuring anything -- e.g. JAX found no GPU.
 if [ -f "$out/results.csv" ]; then
-    echo "== device"
-    cut -d, -f6 "$out/results.csv" | sed -n 2p
+    echo "== device and allocator"
+    cut -d, -f6,23 "$out/results.csv" | sed -n 2p
 
     echo
     echo "== results (${out}/results.csv)"

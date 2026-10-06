@@ -97,6 +97,10 @@ FIELDS = (
     "status",
     "message",
     "architecture",
+    # XLA's allocator, whether it preallocates, and the fraction of the device it is capped at.
+    # Growing on demand fragments the pool into regions that cannot hold one large block, so the
+    # same architecture can fit under one setting and not another.
+    "allocator",
 )
 
 
@@ -136,6 +140,13 @@ class Results:
             writer.writerow(row)
 
         logger.info("%s", " | ".join(f"{key}={row.get(key, '')}" for key in FIELDS[6:21]))
+
+
+def allocator_settings():
+    """The allocator settings the CUDA client was started with, as one cell of the results."""
+    allocator = os.environ.get("XLA_PYTHON_CLIENT_ALLOCATOR", "default")
+    preallocate = os.environ.get("XLA_PYTHON_CLIENT_PREALLOCATE", "true")
+    return f"{allocator} preallocate={preallocate} fraction={memory_fraction()}"
 
 
 def memory_fraction():
@@ -519,6 +530,7 @@ def main():
             "model": args.model,
             "device": device.device_kind,
             "architecture": describe_architecture(cfg),
+            "allocator": allocator_settings(),
         },
     )
 

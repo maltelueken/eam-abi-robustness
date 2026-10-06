@@ -112,10 +112,9 @@ export PATH="${PATH}:${HOME}/.local/bin"
 # Preallocate 90% of the MIG slice as one contiguous pool, rather than the CUDA client's default
 # 75%. The summary network's attention scores are `(batch, 4 heads, num_obs, num_obs)` and
 # materialize, so memory is dominated by `summary_embed_depth` at the top of
-# `random_num_obs_discrete`'s grid: at three blocks and the widest point of the search space, a
-# train step at 1000 trials asks XLA for one 12.8 GiB block and the trial peaks at 13.3 GiB
-# (slurm/gpu_budget.sh, job 27663035); the fourth block the search space allows extrapolates to
-# ~17 GiB. The default 75% of the slice leaves 14.7 GiB, too little for either, and
+# `random_num_obs_discrete`'s grid: at the top corner of the search space a train step at 1000
+# trials asks XLA for one 12.8 GiB block, and the trial peaks at 13.3 GiB (slurm/gpu_budget.sh,
+# job 27663035). The default 75% of the slice leaves 14.7 GiB, too little for comfort, and
 # because a failed job aborts the whole `--multirun`, one such trial costs the sweep, not just
 # itself.
 #
@@ -128,9 +127,9 @@ export PATH="${PATH}:${HOME}/.local/bin"
 #   driver error.
 # * Growing the pool on demand (`XLA_PYTHON_CLIENT_PREALLOCATE=false`) builds it from separate
 #   regions, and a large block cannot span two of them. XLA asks for a step's whole temp buffer as
-#   one block, so three blocks at the widest point failed to get their 12.8 GiB with at most
-#   5.6 GiB ever in use (job 27639662, reproduced in 27653578), and two blocks failed the
-#   same way in their diagnostics. Preallocated, the same architectures pass, at the same step
+#   one block, so the top corner failed to get its 12.8 GiB with at most 5.6 GiB ever in use
+#   (job 27639662, reproduced in 27653578), and `summary_embed_depth: 2` at width 2^8 failed the
+#   same way in its diagnostics. Preallocated, the same architectures pass, at the same step
 #   times, and compiling with XLA's memory limit lifted changes neither the plan nor the speed.
 #
 # Disabling command buffers instead (`--xla_gpu_enable_command_buffer=`) also avoids the driver

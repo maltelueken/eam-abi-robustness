@@ -125,20 +125,24 @@ module load 2025
 
 export PATH="${PATH}:${HOME}/.local/bin"
 
-# By default, exactly slurm/sweep.sh's settings -- see there for why each is needed. A ceiling
-# of 95% of the device, grown on demand rather than reserved up front. Job 27639662 showed the
-# cost of growing on demand: on the MIG slice the top corner failed to get one 12.76 GiB block
-# with at most 5.6 GiB ever in use.
+# By default, exactly slurm/sweep.sh's settings -- see there for why: 90% of the device,
+# preallocated as one contiguous pool. Job 27639662 showed the cost of growing on demand instead:
+# on the MIG slice the top corner failed to get one 12.76 GiB block with at most 5.6 GiB ever in
+# use; preallocated at 90% (job 27663035) every corner passed.
 #
 # Overridable from the submitting shell, which sbatch passes through, so another allocator setup
 # can be tested without editing anything here:
 #
-#   XLA_PYTHON_CLIENT_PREALLOCATE=true XLA_CLIENT_MEM_FRACTION=0.90 sbatch slurm/gpu_budget.sh single
+#   sbatch --export=ALL,XLA_PYTHON_CLIENT_PREALLOCATE=false,XLA_CLIENT_MEM_FRACTION=0.95 \
+#          slurm/gpu_budget.sh single
+#
+# Name the variables in `--export` rather than only in front of sbatch: job 27653578 ran under
+# the defaults although the variables had been set for the submission.
 #
 # XLA_PYTHON_CLIENT_ALLOCATOR passes through the same way. Each row of results.csv records the
 # settings it ran under.
-export XLA_CLIENT_MEM_FRACTION=${XLA_CLIENT_MEM_FRACTION:-0.95}
-export XLA_PYTHON_CLIENT_PREALLOCATE=${XLA_PYTHON_CLIENT_PREALLOCATE:-false}
+export XLA_CLIENT_MEM_FRACTION=${XLA_CLIENT_MEM_FRACTION:-0.90}
+export XLA_PYTHON_CLIENT_PREALLOCATE=${XLA_PYTHON_CLIENT_PREALLOCATE:-true}
 
 if [ "${SLURM_JOB_PARTITION:-}" != "$expected_partition" ]; then
     echo "WARNING: mode '${mode}' is meant for ${expected_partition}, but this job runs on" \

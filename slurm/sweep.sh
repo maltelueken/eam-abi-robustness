@@ -109,25 +109,37 @@ module load 2025
 # empty above.
 export PATH="${PATH}:${HOME}/.local/bin"
 
-# Take the whole MIG slice rather than the 75% the CUDA client preallocates by default. The
-# summary network's attention scores are `(batch, 4 heads, num_obs, num_obs)` and materialize:
-# at `train_npe`'s batch of 64 and the 1000 of `random_num_obs_discrete`'s grid that is ~3.7 GiB
-# per `summary_embed_depth` block once the backward pass holds them, so the top of the search
-# space needs ~17 GiB against a 20 GiB slice. The default 75% leaves 15 and the trial dies --
-# and because a failed job aborts the whole `--multirun`, one such trial costs the sweep, not
-# just itself. `summary_embed_depth` is capped for the same reason; see
-# `conf/summary-method/set_transformer.yaml`. Harmless on a larger GPU.
-export XLA_CLIENT_MEM_FRACTION=0.95
-
-# The price of that fraction is paid outside XLA's pool: the 5% left over is all the CUDA driver
-# has, and XLA's command buffers (CUDA graphs) are instantiated there, not in the pool. A sweep
-# trial died of exactly that -- `CUDA_ERROR_OUT_OF_MEMORY` instantiating a graph for a `jit_add`
-# while converting diagnostic samples, on an architecture whose own tensors need well under
-# 1 GiB. Disabling command buffers keeps the driver's footprint flat at the cost of some
-# kernel-launch overhead, which is what the error itself recommends alongside a lower fraction
-# -- and a lower fraction is what the paragraph above rules out. Appended rather than assigned,
-# so flags set by the module environment survive.
-export XLA_FLAGS="${XLA_FLAGS:-} --xla_gpu_enable_command_buffer="
+# Preallocate 90% of the MIG slice as one contiguous pool, rather than the CUDA client's default
+# 75%. The summary network's attention scores are `(batch, 4 heads, num_obs, num_obs)` and
+# materialize, so memory is dominated by `summary_embed_depth` at the top of
+# `random_num_obs_discrete`'s grid: at three blocks and the widest point of the search space, a
+# train step at 1000 trials asks XLA for one 12.8 GiB block and the trial peaks at 13.3 GiB
+# (slurm/gpu_budget.sh, job 27663035); the fourth block the search space allows extrapolates to
+# ~17 GiB. The default 75% of the slice leaves 14.7 GiB, too little for either, and
+# because a failed job aborts the whole `--multirun`, one such trial costs the sweep, not just
+# itself.
+#
+# Two neighbouring settings fail, in opposite directions:
+#
+# * 95% preallocated leaves the CUDA driver ~1 GiB outside the pool, and XLA's command buffers
+#   (CUDA graphs) are instantiated there: a trial died of `CUDA_ERROR_OUT_OF_MEMORY` instantiating
+#   a graph while sampling its diagnostics, on an architecture whose own tensors need well under
+#   1 GiB. 90% leaves ~2 GiB, and every corner of the search space ran its diagnostics without a
+#   driver error.
+# * Growing the pool on demand (`XLA_PYTHON_CLIENT_PREALLOCATE=false`) builds it from separate
+#   regions, and a large block cannot span two of them. XLA asks for a step's whole temp buffer as
+#   one block, so three blocks at the widest point failed to get their 12.8 GiB with at most
+#   5.6 GiB ever in use (job 27639662, reproduced in 27653578), and two blocks failed the
+#   same way in their diagnostics. Preallocated, the same architectures pass, at the same step
+#   times, and compiling with XLA's memory limit lifted changes neither the plan nor the speed.
+#
+# Disabling command buffers instead (`--xla_gpu_enable_command_buffer=`) also avoids the driver
+# error but is far worse: the flow-matching integrator is a `while_loop` of small kernels, and
+# without graphs every iteration is launched from -- and its predicate read back to -- the host,
+# which made diagnostic sampling launch-bound and many times slower.
+#
+# Preallocation is the CUDA client's default, so only the fraction is set here.
+export XLA_CLIENT_MEM_FRACTION=0.90
 
 echo "[$(date -Is)] sweep | ${family} | ${experiment} | ${model} | extra: $*"
 

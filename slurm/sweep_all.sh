@@ -20,12 +20,11 @@
 # costs training time. It is also the conservative direction for the claim -- if the varying arm
 # still loses at an architecture chosen for it, that is not the architecture's doing.
 #
-# experiment_2 carries a second advantage the sweep wants for its own sake: `diag_batch_size` is
-# 1000 there against experiment_1's 100, so the three objectives `train_npe` returns are
-# estimated on ten times the datasets. `sweeper.select_best_trial` picks the Pareto-front member
-# nearest the ideal point, which is exactly where estimation noise moves the answer. It also
-# makes each trial's diagnostic sampling ten times as long -- check the `diagnostics` rows of one
-# trial's `timing/train_npe.csv` against slurm/sweep.sh's `--time` before committing 20 trials.
+# The sweep also scores its trials on ten times the diagnostic datasets the studies train with:
+# slurm/sweep.sh passes `diag_batch_size=1000` against the configured 100, because
+# `sweeper.select_best_trial` picks the Pareto-front member nearest the ideal point, which is
+# exactly where estimation noise moves the answer. Check the `diagnostics` rows of one trial's
+# `timing/train_npe.csv` against slurm/sweep.sh's `--time` before committing 20 trials.
 #
 set -euo pipefail
 

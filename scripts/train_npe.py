@@ -86,8 +86,8 @@ def train_npe(cfg: DictConfig):
                 conditions=diag_sample,
                 # Sequentially, `diag_sample_batch_size` datasets at a time, because the whole
                 # batch at once does not fit: the summary network's attention over a dataset's
-                # trials is quadratic in `num_obs`, so at experiment_2's batch of 1000 and the
-                # top of `diag_num_obs` it asks for ~15 GiB in one allocation. Chunking slices
+                # trials is quadratic in `num_obs`, so at the sweep's batch of 1000 and the top
+                # of `diag_num_obs` it asks for ~15 GiB in one allocation. Chunking slices
                 # the conditions and nothing else -- the summary network and the integrator
                 # both see whole datasets -- so this costs wall-clock, not diagnostics.
                 batch_size=cfg["diag_sample_batch_size"],

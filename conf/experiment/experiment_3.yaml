@@ -7,7 +7,5 @@ defaults:
 - experiment_1
 - override /test_case: threshold_diff_grid
 
-diag_batch_size: 1000
-
 # Split evenly between the speed and the accuracy condition, so 250 trials each.
 test_num_obs: 500

@@ -4,6 +4,4 @@ defaults:
 - experiment_1
 - override /test_case: drift_slope_grid
 
-diag_batch_size: 1000
-
 test_num_obs: 500

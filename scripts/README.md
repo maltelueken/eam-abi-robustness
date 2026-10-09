@@ -18,6 +18,7 @@ studies differ only in configuration, not in code.
 | `check_robustness.py` | Maximum mean discrepancy between the NPE and MCMC posteriors, per ensemble member. |
 | `check_posterior_predictive.py` | Posterior predictive RT quantiles and accuracy. |
 | `select_architecture.py` | Pick the best trial of a family's sweep and write it into `conf/architecture/`. |
+| `rescore_integrators.py` | Re-score a sweep's checkpoints under several ODE integrators, to choose the sweep's. |
 | `convert_hdf5_to_netcdf.py` | One-off migration for artifacts produced before the NetCDF switch. |
 
 ## Running
@@ -61,8 +62,8 @@ The sweep is hosted on the family's **full-varying** arm (`<family>_simple_meta`
 experiment_2), not on its plainest fixed-prior model. One architecture serves every arm, and the
 fixed-prior task is a strict sub-problem of the varying one, so selecting on a fixed arm risks
 under-capacity on the varying ones — degradation that would be read as study 2's result rather
-than as an artifact. experiment_2 also scores the objectives on `diag_batch_size: 1000` rather
-than experiment_1's 100. Nothing is scored outside the swept model's own training distribution:
+than as an artifact. `slurm/sweep.sh` also scores the objectives on `diag_batch_size=1000` rather
+than the 100 every study trains with. Nothing is scored outside the swept model's own training distribution:
 the meta simulator draws `drift_slope_loc` per batch element, so a diagnostic batch already
 averages over the whole trained range, and `diag_num_obs` stays inside the design simulator's
 grid. See the header of `slurm/sweep_all.sh`.

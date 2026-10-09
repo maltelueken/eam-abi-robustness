@@ -16,7 +16,21 @@ subnet_kwargs:
 # which puts ~63% of training on the noise half of the path (t < 0.5) and ~7% on the last tenth,
 # near the posterior, where the velocity field for a strongly contracted posterior has to be sharpest.
 time_power_law_alpha: 0.0
+# The integrator plays no part in training -- the flow-matching loss regresses the velocity field
+# directly -- so this only sets how a trained network is sampled. It is stored in the checkpoint,
+# which is how `predict_npe` picks it up. Adaptive tsit5 is what the experiments sample with:
+# Euler at 100 steps is much faster but scored visibly worse diagnostics on the same networks.
+# The architecture sweep is the one place that overrides it (slurm/sweep.sh), since adaptive
+# stepping on a poorly trained network can run for hours.
+#
+# `max_steps` caps the cost of one call. BayesFlow's default is 10_000, and the step size is
+# shared by the whole batch -- `_error_ratio` takes the max over every dataset and draw -- so a
+# single stiff trajectory, which an out-of-distribution case is the likeliest to produce, sets
+# the step for all of them. The cap is a silent one: steps are forced larger as it is
+# approached, so a case that hits it is integrated less accurately rather than failing. Check
+# `timing/predict_npe.csv` on the far end of a sweep before trusting 1000.
 integrate_kwargs:
   _target_: builtins.dict
-  method: euler
-  steps: 100
+  method: tsit5
+  steps: adaptive
+  max_steps: 1000

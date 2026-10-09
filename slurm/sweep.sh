@@ -33,6 +33,26 @@
 # the members share it. So this is the one place that passes
 # `approximator=continuous_approximator`.
 #
+# The sweep also samples its diagnostics with a fixed-step integrator rather than the adaptive
+# tsit5 in `conf/approximator/inference_network/flow_matching.yaml`. Adaptive stepping costs
+# what the network's velocity field demands, and a poorly trained architecture demands so much
+# that sampling one condition took six hours -- a cost borne by exactly the trials the sweep is
+# meant to discard. The integrator does not enter training, so this changes only how a trial is
+# scored, never what it trained. Fixed-step tsit5 rather than Euler: at 20 steps of ~6 velocity
+# evaluations it costs about what Euler at 100 does, but with 5th- rather than 1st-order error,
+# so the ranking is far less a ranking of how curved each architecture's velocity field is. The
+# override goes on the train_npe call only; select_architecture.py reads the search space, which
+# it does not touch. Re-scoring the winner under the adaptive integrator before training the
+# experiments on it is still worth doing.
+#
+# The diagnostic batch is raised to 1000 datasets here, against the 100 every study trains with.
+# `sweeper.select_best_trial` picks the Pareto-front member nearest the ideal point, which is
+# exactly where estimation noise moves the answer, and calibration error -- built from coverage
+# estimates over the batch, with absolute deviations that noise inflates rather than averages
+# out -- is the objective it bites hardest. At the fixed-step integrator above it is cheap: the
+# diagnostics were ~8% of a trial in the Euler sweep. `diag_batch_size` is in
+# `override_dirname.exclude_keys`, so it adds no segment to the trials' run directories.
+#
 # Nothing has to be copied by hand afterwards. `scripts/select_architecture.py` runs as the last
 # step of this job and overwrites `conf/architecture/<family>.yaml`, which every model of that
 # family composes -- so `slurm/submit.sh` trains the ensemble at the selected architecture with
@@ -146,6 +166,8 @@ uv run --frozen python scripts/train_npe.py \
     --multirun \
     sweeper=optuna \
     approximator=continuous_approximator \
+    approximator.inference_network.integrate_kwargs.steps=20 \
+    diag_batch_size=1000 \
     experiment="${experiment}" \
     model="${model}" \
     "$@"

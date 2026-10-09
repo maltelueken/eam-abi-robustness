@@ -40,6 +40,10 @@ hydra:
           # changes no result, so a node that needs a smaller one must not send `predict_npe`
           # looking for a model in a directory `train_npe` never wrote to.
           - diag_sample_batch_size
+          # And for the diagnostic batch itself, which slurm/sweep.sh raises to 1000 for the
+          # sweep alone: it sizes a logged score, not the network, so it must not give the sweep's
+          # trials -- or a run that tunes it -- a run directory of their own.
+          - diag_batch_size
   job_logging:
     handlers:
       file:
@@ -51,6 +55,11 @@ seed: 2024
 # wide the rt_min/rt_max rows of its table can reach. The training diagnostics use diag_num_obs.
 eval_num_obs: 1000
 
+# How many datasets `train_npe` scores its diagnostics on, per trial count. Every study trains
+# at 100: outside the sweep the scores are only logged, while their cost is paid once per trial
+# count and per ensemble member, under the adaptive integrator the experiments sample with. The
+# sweep is the one place they *select* something, and slurm/sweep.sh raises this to 1000 there
+# (see its header for why).
 diag_batch_size: 100
 diag_num_posterior_samples: 1000
 
@@ -58,8 +67,8 @@ diag_num_posterior_samples: 1000
 # two tensors that grow with this count and that no architecture the sweep can pick makes small:
 # the summary network's self-attention over a dataset's trials, quadratic in `num_obs` at four
 # heads, and the inference network's activations over
-# `diag_sample_batch_size * diag_num_posterior_samples` rows. At `experiment_2`'s batch of 1000
-# and the top of `diag_num_obs` the attention alone is ~15 GiB, which the MIG slice the sweep
+# `diag_sample_batch_size * diag_num_posterior_samples` rows. At the sweep's batch of 1000 and
+# the top of `diag_num_obs` the attention alone is ~15 GiB, which the MIG slice the sweep
 # runs on does not have -- so the trial dies rather than scoring badly. Chunking is sequential
 # and exact: `sample` slices the conditions, so what moves is which draws the seed generator
 # yields, not their distribution. Left at the batch size the test stages already use.

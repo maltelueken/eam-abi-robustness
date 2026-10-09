@@ -19,6 +19,4 @@ defaults:
 - experiment_1
 - override /test_case: rt_windows
 
-diag_batch_size: 1000
-
 test_num_obs: 500

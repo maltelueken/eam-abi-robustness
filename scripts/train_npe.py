@@ -4,6 +4,8 @@ import logging
 
 import bayesflow as bf
 import hydra
+import jax
+import keras
 import matplotlib.pyplot as plt
 import numpy as np
 from hydra.utils import instantiate
@@ -96,6 +98,17 @@ def train_npe(cfg: DictConfig):
         summary = diagnostic_summary(posterior_samples, diag_sample, get_param_names(cfg))
         logger.info("Diagnostics at num_obs=%s: %s", num_obs, summary)
         scores.append(summary)
+
+    # Hand this trial's compiled programs back before the next one starts. The sweep runs every
+    # trial in this one process, and each trial compiles its own train step and sampler, whose
+    # kernels and CUDA graphs live in the driver's memory, outside XLA's preallocated pool. JAX's
+    # jit caches and the Keras model keep them alive, so they accumulate trial after trial in
+    # the ~10% of the slice slurm/sweep.sh leaves the driver -- until a late, small trial dies
+    # instantiating a graph (`CUDA_ERROR_OUT_OF_MEMORY` in `jit_greater`, trial 20 of 20) though
+    # every corner of the search space passes in a job of its own. Harmless outside the sweep.
+    del approximator, history
+    keras.backend.clear_session()
+    jax.clear_caches()
 
     # Returned as a tuple of floats so the Optuna sweeper can optimize against these three
     # objectives; plain floats because the sweeper stores what it is handed.

@@ -7,15 +7,18 @@
 # overwrites the file. The keys are exactly the ones the sweeper searches over, and the
 # network nodes under conf/approximator/*_network/ interpolate them.
 #
-# study:     not yet swept -- these are the values the single shared architecture carried
-#            before the sweep was split per family. Run `slurm/sweep.sh experiment_2
-#            rdm_simple_meta` to replace them.
+# study:     train_npe-rdm-flow_matching-set_transformer  (sqlite:///multirun/train_npe_trials_rdm.db)
+# swept on:  experiment_2 / rdm_simple_meta
+# trial:     15 of 21, Pareto front of 6
+# objective: rmse=0.2896, contraction=0.8896, calibration_error=0.008814
+# selected:  nearest ideal point, weights (1.0, 1.0, 1.0), distance 0.5616
+# written:   2026-10-10T10:53:17+00:00
 architecture_family: rdm
 
 inference_mlp_depth: 6
-inference_mlp_width: 8
-summary_dim: 16
+inference_mlp_width: 9
+summary_dim: 29
 summary_embed_depth: 2
-summary_embed_width: 6
-summary_expansion_factor: 4
-summary_num_seeds: 4
+summary_embed_width: 4
+summary_expansion_factor: 2
+summary_num_seeds: 3

@@ -247,18 +247,28 @@ def fit_mcmc_cpu_batch(
     def one_device(keys, dataset_indices, all_data):
         return jax.vmap(one_unit, in_axes=(0, 0, None))(keys, dataset_indices, all_data)
 
-    positions, infos = jax.pmap(one_device, in_axes=(0, 0, None), devices=devices)(
+    sharded = jax.pmap(one_device, in_axes=(0, 0, None), devices=devices)(
         unit_keys[slots], unit_datasets[slots], data,
     )
+
+    # Off the devices before anything reshapes it. The `pmap` output is sharded one slice per
+    # device, and a `jnp` reshape across that axis compiles to an all-gather -- a collective
+    # XLA's CPU backend queues behind every device's fit and aborts the process for if its
+    # participants do not all arrive within 40 seconds of each other. NUTS units finish far
+    # more unevenly than that (the hierarchical models above all), so the collective killed
+    # whole jobs after the sampling had finished. `device_get` waits for every device and
+    # copies each shard to the host on its own, with no collective at all.
+    positions, infos = jax.device_get(sharded)
 
     # (device, slot, draw, 1, ...) -> (dataset, draw, chain, ...): flatten the slots back into
     # units, drop the padding and the within-unit chain axis of length 1, then split the units
     # into (chain, dataset) and move the chain axis into place. The same moves are right for
-    # every diagnostic leaf too, whatever trailing axes it carries.
+    # every diagnostic leaf too, whatever trailing axes it carries. Back onto a single default
+    # device afterwards, so callers get the JAX arrays they always did.
     def to_dataset_major(leaf):
-        leaf = jnp.squeeze(leaf, axis=3)
+        leaf = np.squeeze(np.asarray(leaf), axis=3)
         leaf = leaf.reshape(-1, *leaf.shape[2:])[:num_units]
-        return jnp.moveaxis(leaf.reshape(num_chains, num_datasets, *leaf.shape[1:]), 0, 2)
+        return jnp.asarray(np.moveaxis(leaf.reshape(num_chains, num_datasets, *leaf.shape[1:]), 0, 2))
 
     return to_dataset_major(positions), jax.tree.map(to_dataset_major, infos)
 

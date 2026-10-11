@@ -544,6 +544,45 @@ def test_the_medium_fixed_arms_sit_on_their_sweeps_centre_point(experiment, mode
 
 
 @pytest.mark.parametrize(
+    ("experiment", "prefix", "hyperparameter"),
+    [
+        ("experiment_2", "{family}_simple", "drift_slope_loc"),
+        ("experiment_3", "{family}_sat", "threshold_diff_loc"),
+    ],
+)
+@pytest.mark.parametrize(("end", "inner_edge"), [("_lower", "max_value"), ("_upper", "min_value")])
+@pytest.mark.parametrize("family", ["rdm", "lba"])
+def test_the_low_and_high_fixed_arms_sit_on_their_varying_partners_inner_edge(
+    experiment, prefix, hyperparameter, end, inner_edge, family,
+):
+    """Each fixed arm is trained at the edge of its varying partner's range that faces the
+    rest of the sweep: low-fixed at the top of the low-varying range, high-fixed at the bottom of
+    the high-varying one.
+
+    That is what makes the pair comparable. On every case outside the varying range both arms
+    then extrapolate the same distance from the same point, and differ only in whether training
+    also covered the band behind it. At the *outer* edge -- where these arms used to sit -- the
+    varying arm starts every such case a third of the grid closer, and the fixed-vs-varying
+    contrast measures reach as much as prior spread. Nothing structural ties the two files
+    together, and a drift would be silent: every stage still runs.
+
+    The low-fixed arm in study 2 lands on 1.5, which is also `{family}_simple`'s value; the
+    point of the separate prior file is that study 1's base can move without moving this arm.
+    """
+    prefix = prefix.format(family=family)
+    fixed = build([f"experiment={experiment}", f"model={prefix}{end}"])
+    varying = build([f"experiment={experiment}", f"model={prefix}_meta{end}"])
+
+    trained_at = fixed["simulator"]["prior_simulator"]["sample_fn"][hyperparameter]
+    meta = varying["simulator"]["meta_simulator"]["sample_fn"]
+    assert list(meta["name"]) == [hyperparameter]
+    assert np.isclose(trained_at, meta[inner_edge][0]), (prefix, end, trained_at, meta[inner_edge])
+
+    grid = np.asarray(instantiate(fixed["test_case"]["values"]))
+    assert np.isclose(grid, trained_at).any(), "the fixed arm should sit on a grid point"
+
+
+@pytest.mark.parametrize(
     "model",
     [f"{family}_simple_meta{suffix}" for family in ("rdm", "lba") for suffix in ("", "_lower", "_upper")],
 )

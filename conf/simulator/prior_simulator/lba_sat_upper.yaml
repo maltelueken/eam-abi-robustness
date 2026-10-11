@@ -1,6 +1,6 @@
-# Study 3 for the LBA, trained at the top of the swept range: this approximator only ever sees
-# a large speed-accuracy effect (mean threshold-gap difference 2.0), so every test case below
-# the last lies outside its training prior. lba_sat.yaml is the centred version.
+# Study 3's high-fixed arm: a point prior at threshold_diff_loc 1.6, the *inner* edge of the
+# high-varying arm's U(1.6, 2.0), for the reason given in lba_lower.yaml. lba_sat.yaml is
+# the centred version and explains the mean/sd parameterization.
 _target_: bayesflow.simulators.LambdaSimulator
 sample_fn:
   _target_: priors.lba_prior_sat
@@ -15,7 +15,7 @@ sample_fn:
   sp_max_scale: 0.1
   threshold_shape: 8
   threshold_scale: 0.15
-  threshold_diff_loc: 2.0
+  threshold_diff_loc: 1.6
   threshold_diff_sd: 0.245
   t0_loc: 0.3
   t0_scale: 0.2

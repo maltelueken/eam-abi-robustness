@@ -1,10 +1,13 @@
+# Study 2's high-fixed arm: a point prior at drift_slope_loc 3.1, the *inner* edge of the
+# high-varying arm's U(3.1, 3.9). See rdm_lower.yaml for why the inner edge rather than the
+# outer one (3.9, where this used to sit).
 _target_: bayesflow.simulators.LambdaSimulator
 sample_fn:
   _target_: priors.rdm_prior_simple
   _partial_: true
   drift_intercept_loc: 1
   drift_intercept_scale: 0.5
-  drift_slope_loc: 3.9
+  drift_slope_loc: 3.1
   drift_slope_scale: 0.5
   sd_true_shape: 12
   sd_true_scale: 0.1

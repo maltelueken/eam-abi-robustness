@@ -211,9 +211,9 @@ fit_mcmc_cpu	experiment_2	lba_simple_meta_upper
 # narrowed drift-slope arms plus the full-varying one, and study 5's four accuracy bands -- so
 # `npe_path` in conf/experiment/experiment_4.yaml resolves through `npe_experiment`, which the band
 # models set to experiment_5 and everything else inherits as experiment_2. Nothing is copied
-# between runs. Its held-out data are the subject files, placed in
-# outputs/experiment_4/<model>/test_data/ by hand (once per directory below, including the shared
-# <family>_acc one), so there is no generate_test_data row either -- and no check_metrics row,
+# between runs. Its held-out data are the subject files, placed by hand in
+# outputs/experiment_4/test_data/ -- one directory every model reads (`subject_data_path`), so
+# there is no generate_test_data row either -- and no check_metrics row,
 # since empirical data have no simulating parameters to score against.
 #
 # Every study-2 arm trains under a different prior, and conf/mcmc/*.yaml interpolates the prior

@@ -61,14 +61,22 @@ def subject_files(directory, pattern="*.txt"):
     Sorted, unlike the `os.listdir` this replaces: the convergence masks that align MCMC
     and NPE samples depend on a stable case order, and `os.listdir` does not provide one.
     The pattern also stops stray files in the directory from being picked up as cases.
+
+    Raises when nothing matches: the files are placed by hand rather than generated, and an
+    empty case list would otherwise let every stage run to completion having done nothing.
     """
+    paths = sorted(glob(os.path.join(directory, pattern)))
+    if not paths:
+        msg = f"No subject files matching {pattern!r} in {directory!r}."
+        raise FileNotFoundError(msg)
+
     return [
         Case(
             key=os.path.splitext(os.path.basename(path))[0],
             labels={"name": os.path.splitext(os.path.basename(path))[0]},
             source_path=path,
         )
-        for path in sorted(glob(os.path.join(directory, pattern)))
+        for path in paths
     ]
 
 

@@ -41,6 +41,15 @@ def test_subject_files_are_sorted_and_filtered(tmp_path):
     assert cases[0].source_path.endswith("FF1.txt")
 
 
+def test_subject_files_raise_when_the_directory_holds_none(tmp_path):
+    # The files are placed by hand, so a missing copy must fail loudly rather than leave every
+    # stage looping over zero cases.
+    (tmp_path / "notes.md").write_text("")
+
+    with pytest.raises(FileNotFoundError, match="No subject files"):
+        subject_files(str(tmp_path))
+
+
 def test_case_is_immutable():
     # Frozen so a script cannot accidentally rewrite a case's key mid-loop and desynchronise
     # the artifacts written for it. (Not hashable: labels and sim_kwargs are dicts.)

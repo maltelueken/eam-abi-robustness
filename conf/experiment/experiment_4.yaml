@@ -20,3 +20,10 @@ npe_experiment: experiment_2
 # Keyed on the model choice rather than model_family: the family is about which held-out data a
 # run shares, whereas the network is always the one trained for this model.
 npe_path: ${hydra:runtime.cwd}/outputs/${npe_experiment}/${hydra:runtime.choices.model}/${hydra:runtime.choices.inference-method}
+
+# Where the empirical subject files are read from: one directory for every model, keyed on the
+# study alone. The subject data are the same whichever network is applied to them, so they are
+# not addressed through `test_data_path`, which moves with `model_family` -- that left one copy
+# of the files per arm to be placed by hand. MCMC fits still go under `test_data_path`, since
+# each arm's reference posterior depends on its own training prior.
+subject_data_path: ${hydra:runtime.cwd}/outputs/${hydra:runtime.choices.experiment}/test_data

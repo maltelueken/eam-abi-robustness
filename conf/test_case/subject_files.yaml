@@ -1,8 +1,9 @@
 # @package _global_
 
 # Study 4: one case per empirical data file. Sorted, so the case order -- which the
-# convergence masks rely on to align MCMC and NPE samples -- is stable.
+# convergence masks rely on to align MCMC and NPE samples -- is stable. Every model reads the
+# same directory (`subject_data_path`, conf/experiment/experiment_4.yaml).
 test_case:
   _target_: cases.subject_files
-  directory: ${test_data_path}/test_data
+  directory: ${subject_data_path}
   pattern: "*.txt"

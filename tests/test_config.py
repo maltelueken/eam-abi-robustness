@@ -262,6 +262,28 @@ def test_the_empirical_study_reads_networks_the_simulation_studies_trained():
     assert os.path.normpath(simulated) == os.path.join("checkpoints", "model.keras")
 
 
+@pytest.mark.parametrize("model", ["rdm_simple_meta_acc_low", "lba_simple_upper"])
+def test_every_empirical_model_reads_the_subject_files_from_one_directory(model):
+    """The subject files are the same data whatever network is applied to them.
+
+    They used to be read from `test_data_path`, which moves with `model_family`, so every arm --
+    and the shared `<family>_acc` directory -- needed its own hand-placed copy. The MCMC fits stay
+    there, since each arm's reference depends on its own prior; only the input is shared.
+    """
+    def paths(model):
+        # Resolved before the next `build`: each one replaces the HydraConfig singleton that
+        # the `${hydra:...}` interpolations read from.
+        cfg = build(["experiment=experiment_4", f"model={model}"])
+        return cfg["test_case"]["directory"], cfg["test_data_path"]
+
+    directory, shared_root = paths(model)
+    reference_directory, reference_shared_root = paths("rdm_simple_meta")
+
+    assert directory == reference_directory
+    assert directory.endswith(os.path.join("outputs", "experiment_4", "test_data"))
+    assert shared_root != reference_shared_root
+
+
 def test_approximator_instantiates_for_the_default_config():
     cfg = build([])
 

@@ -7,14 +7,17 @@
 # overwrites the file. The keys are exactly the ones the sweeper searches over, and the
 # network nodes under conf/approximator/*_network/ interpolate them.
 #
-# study:     not yet swept -- these are the values the single shared architecture carried
-#            before the sweep was split per family. Run `slurm/sweep.sh experiment_2
-#            lba_simple_meta` to replace them.
+# study:     train_npe-lba-flow_matching-set_transformer  (sqlite:///multirun/train_npe_trials_lba.db)
+# swept on:  experiment_2 / lba_simple_meta
+# trial:     10 of 20, Pareto front of 8
+# objective: rmse=0.609, contraction=0.5904, calibration_error=0.0107
+# selected:  nearest ideal point, weights (1.0, 1.0, 1.0), distance 0.01597
+# written:   2026-10-13T19:48:18+00:00
 architecture_family: lba
 
-inference_mlp_depth: 6
+inference_mlp_depth: 7
 inference_mlp_width: 8
-summary_dim: 16
+summary_dim: 21
 summary_embed_depth: 2
 summary_embed_width: 6
 summary_expansion_factor: 4
